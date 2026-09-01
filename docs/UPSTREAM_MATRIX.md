@@ -43,5 +43,6 @@ are recorded in [SOURCES.md](SOURCES.md).
 | Suspend / resume / wake | Legacy ClearPad transitions observed | Generic frameworks only | Full wake-source and rail sequencing | Build a wake-source inventory before any target claim. |
 
 Rows marked “not established” are intentionally `UNKNOWN`, not negative proof.
-The target implementation remains `UNKNOWN`/`NOT_STARTED` in
+The target implementation lifecycle is `IMPLEMENTING` because an offline
+first-boot artifact now builds, but each target subsystem remains `UNKNOWN` in
 [`status/hardware.yaml`](../status/hardware.yaml).

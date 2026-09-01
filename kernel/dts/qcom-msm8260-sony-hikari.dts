@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: GPL-2.0
+/dts-v1/;
+
+#include "qcom-msm8660.dtsi"
+
+/ {
+	model = "Sony Xperia acro S (Hikari)";
+	compatible = "sony,hikari", "qcom,msm8660";
+
+	/*
+	 * These are the two ranges named System RAM by the observed legacy BSP.
+	 * They are intentionally not a claim about every byte of the nominal 1 GiB;
+	 * see docs/FIRST_BOOT_MEMORY.md before any deployment.
+	 */
+	memory {
+		reg = <0x40200000 0x02c00000>,
+		      <0x48000000 0x26600000>;
+	};
+};

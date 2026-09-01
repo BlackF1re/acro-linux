@@ -1,6 +1,9 @@
 # First native-Linux boot: proposal gate, not execution authorization
 
-No kernel, DTS, image, fastboot `boot`, or flash operation has been performed. This plan selects an evidence-based candidate only after the next owner review.
+No kernel, fastboot `boot`, flash, or other phone deployment has been
+performed. A local-only upstream kernel, Hikari DTB, native initramfs and Sony
+ELF prototype have been built and validated; this plan still selects no device
+deployment route until the owner reviews it.
 
 ## Candidate ranking
 
@@ -15,11 +18,40 @@ Thus the safest present action is **further offline recovery-path research**, no
 
 ## Required artifact contract
 
-1. Use a Sony ELF32 ARM container compatible with the verified Hikari p3 structure. The current legacy reference has zImage at `0x40208000`, ramdisk at `0x41800000`, and RPM-marked payload at `0x00020000`; any deviation needs new evidence, not analogy.
-2. Build the smallest diagnostic ARMv7 kernel and initramfs only after an implementation phase is approved. Include no Android userspace.
-3. Establish the required firmware payloads and their licensing/provenance; do not blindly reuse the private legacy p3 RPM payload.
-4. Include early console plus a planned target ramoops/pstore region. Legacy `ram_console` is a lead, not a target reservation. Preserve USB/physical serial diagnostics as an independent channel.
-5. Record artifact SHA-256, exact size and program headers before deployment.
+1. Use a Sony ELF32 ARM container compatible with the verified Hikari p3 structure. The current legacy reference has zImage at `0x40208000`, ramdisk at `0x41800000`, and RPM-marked payload at `0x00020000`; these are the strongest known-compatible starting candidates, not immutable mainline requirements. Any selection must validate decompressor, DTB, initramfs, firmware, reserved-memory and segment non-overlap.
+2. Use `kernel/dts/qcom-msm8260-sony-hikari.dts` with
+   `kernel/configs/hikari-firstboot.fragment`: an appended DTB, ARM ATAG-to-DT
+   compatibility and native diagnostic initramfs. The exact legacy cmdline
+   producer is still unknown. The prototype deliberately supplies no new
+   `CONFIG_CMDLINE`; it preserves a bootloader ATAG command line only if one
+   exists through `CONFIG_ARM_ATAG_DTB_COMPAT_CMDLINE_EXTEND`.
+3. Build the smallest diagnostic ARMv7 kernel and initramfs only after an implementation phase is approved. Include no Android userspace.
+4. Establish the required firmware payloads and their licensing/provenance; do not blindly reuse the private legacy p3 RPM payload.
+5. Use the MSM serial-console configuration only as a diagnostic candidate:
+   no physical serial route is yet verified. The initramfs emits an
+   unmistakable marker on its active console. No target ramoops/pstore region
+   is enabled until memory ownership is proven; legacy `ram_console` is only a
+   lead. Preserve USB/physical serial diagnostics as an independent channel.
+6. Record artifact SHA-256, exact size and program headers before deployment.
+
+## Current local-only prototype
+
+- Upstream source: Linus Linux `786262be6048deab760f68c8acc2c85607165894`.
+- DTB method: appended `qcom-msm8260-sony-hikari.dtb`; the input tail is
+  checked byte-for-byte by the host-only validator.
+- Initramfs: native static BusyBox diagnostic `/init`, SHA-256
+  `b290c36ae4595e4d37a851221d92bef14821ccf877910b4df177a62bfb3103c5`.
+- Private local RPM input: the original p3 segment only; it is not in Git and
+  has not been sent to the phone.
+- ELF32 prototype: `11,937,690` bytes, SHA-256
+  `cecf280c62023619274bff43ea370619c9d59f3272e0e4436ab2895481461f0e`.
+  Segment 0 is the appended-DTB zImage at `0x40208000` (`0xa380e0` bytes),
+  segment 1 is the initramfs at `0x41800000` (`0x10c2d2` bytes), and segment 2
+  is the private RPM ELF at `0x00020000` (`0x1d3e8` bytes). It is within the
+  20 MiB p3 capacity and has no ELF load-address overlap.
+
+These are local format checks, not proof that the decompressor, bootloader or
+target memory reservation accepts the artifact.
 
 ## Rollback and abort gate
 
