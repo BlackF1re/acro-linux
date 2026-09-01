@@ -1,0 +1,23 @@
+ro.product.brand=SEMC
+ro.product.manufacturer=Sony
+ro.product.model=LT26W
+ro.product.device=LT26w
+ro.product.name=LT26w_1266-2038
+ro.product.board=fuji
+ro.board.platform=msm8660
+ro.hardware=semc
+ro.boot.hardware=semc
+ro.boot.baseband=msm
+ro.bootmode=unknown
+ro.build.fingerprint=SEMC/LT26w_1266-2038/LT26w:4.4.2/6.4.B.1.00/n7v_zg:user/release-keys
+ro.build.id=KOT49H
+ro.build.display.id=ScrubbModRom KK4.4.2 v.1.4.1
+ro.build.version.release=4.4.2
+ro.build.version.sdk=19
+ro.build.version.incremental=383e43c5a8
+ro.build.type=userdebug
+ro.build.tags=test-keys
+
+Linux version 3.4.0-Elite-1.5+ (deedwar@xperia) (gcc version 4.7.4 20140107
+(prerelease) (crosstool-NG hg+default-529a71ea091e - Linaro GCC 2014.01) )
+#1 SMP PREEMPT Tue Feb 18 15:09:17 EST 2014

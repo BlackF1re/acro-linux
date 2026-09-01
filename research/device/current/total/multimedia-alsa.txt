@@ -1,0 +1,9 @@
+ 0 [msmaudio       ]: msm-audio - msm-audio
+                      msm-audio
+
+  0: [ 0]   : control
+ 16: [ 0- 0]: digital audio playback
+ 17: [ 0- 1]: digital audio playback
+ 24: [ 0- 0]: digital audio capture
+ 25: [ 0- 1]: digital audio capture
+ 33:        : timer

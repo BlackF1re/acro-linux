@@ -1,0 +1,5 @@
+# Sanitized, role-bearing lines only from /init.semc.rc (read-only, 2026-09-01)
+mount ext4 /dev/block/mmcblk0p10 /data/idd nosuid nodev noatime barrier=0
+insmod /system/lib/modules/bcm4330.ko nvram_path=/system/etc/wifi/calibration iface_name=wlan0
+--no2bytes --baudrate 3000000 --patchram /system/etc/firmware/BCM4330.hcd \
+service tad /system/bin/tad /dev/block/mmcblk0p1 <redacted-arguments>

@@ -1,0 +1,18 @@
+# Sanitized Qualcomm socinfo evidence
+
+# Read through existing root solely from safe read-only kernel interfaces on
+# 2026-09-01.  No serial_num attribute was read or retained.
+soc0/id=70
+soc0/version=2.1
+soc0/raw_id=1057
+socinfo.raw_ver=2
+soc0/build_id=M8660A-AABQNLYM-3.1.4003T
+legacy.ro.board.platform=msm8660
+
+# The following are absent from this legacy soc0 directory and are therefore
+# deliberately not invented:
+# soc0/machine
+# soc0/family
+
+# Matching boot-log record:
+socinfo_init: v6, id=70, ver=2.1, raw_id=1057, raw_ver=2
