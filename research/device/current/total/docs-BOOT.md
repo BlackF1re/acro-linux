@@ -39,8 +39,22 @@ That is a design recommendation, not a change made in this pass.
 The read-only legacy fstab evidence maps `mmcblk0p3` to `/boot` in the
 recovery-only stanza.  That establishes a legacy boot role for p3; it does
 not identify a recovery partition or authorize reading any partition content.
-The physical bootloader state, lock state, exact load addresses, boot image
-payload layout, and persistent boot-log recovery route are still UNKNOWN.
+Physical fastboot is now directly observed: Sony S1Boot enumerates as
+`0fce:0dde`, implements fastboot protocol `0.5`, reports version
+`CRH1099189_R10C008`, and returns `secure: no`. Its `unlocked`,
+`max-download-size`, and boot partition query variables are empty; an empty
+legacy variable is not a negative attestation. See the canonical sanitized
+fastboot record in `research/device/current/boot/fastboot-summary.md`.
+
+Owner-provided history says the bootloader was previously unlocked and a custom
+ROM/root were installed. This is not substituted for device attestation, but
+is consistent with the observed fastboot result and custom legacy kernel.
+
+The p3 artifact has now been inspected offline under explicit owner approval.
+It is a Sony-style ARM ELF with a zImage at `0x40208000`, a gzip ramdisk at
+`0x41800000`, and an RPM-marked ELF payload at `0x00020000`. See the canonical
+`docs/BOOT_FORMAT.md`. Cmdline handling and temporary `fastboot boot` support
+remain UNKNOWN.
 
 The later read-only runtime check found no common Android recovery descriptor,
 install script, recovery patch, or pending recovery command at the checked
@@ -48,9 +62,9 @@ paths.  It also found no `/dev/block/mmcblk0boot0`, `mmcblk0boot1`, or
 `mmcblk0rpmb` device node.  This limits the accessible golden backup to the
 eMMC user area; it does not identify the bootloader's own storage model.
 
-`ro.bootloader` currently returns `unknown`.  This is a legacy-ROM property
-value, not evidence of either a locked or unlocked Sony bootloader.  No
-fastboot-mode observation has been made, and none is implied here.
+`ro.bootloader` currently returns `unknown`. This is a legacy-ROM property
+value, not evidence of either a locked or unlocked Sony bootloader. It is
+separate from the direct S1Boot fastboot observation documented above.
 See the [sanitized runtime check](../research/device/current/boot/recovery-runtime-check.txt)
 for the exact checked paths and property values.
 
@@ -71,16 +85,16 @@ but its MSM8960 example must never be substituted for MSM8260/Hikari addresses.
 | --- | --- | --- |
 | p3 is legacy `/boot` | `fstab-semc-extract.txt` | It is a protected, never-blindly-overwrite target. |
 | Sony ELF container was used by historical LT26 build configuration | AOSP LT26 commit above | Future artifact research needs an ELF-capable, reproducible tool. |
-| Exact Hikari load addresses, RPM inclusion and cmdline format | UNKNOWN | Must be derived from a permitted source artifact or a non-destructive inspection. |
-| Recovery partition identity and recovery route | UNKNOWN | Cannot be assumed from p2/p5–p11. |
-| TWRP presence | UNKNOWN; no TWRP artifact was found at checked running-system paths | Do not label a recovery implementation without booting or permitted image analysis. |
-| Bootloader lock/unlock state | `ro.bootloader=unknown` only | Requires a separately approved, non-destructive evidence plan. |
+| Current Hikari legacy artifact layout | `VERIFIED_DEVICE` through private offline p3 copy | Documented in canonical `docs/BOOT_FORMAT.md`; not a target-Linux artifact specification. |
+| Recovery partition identity and recovery route | UNKNOWN | TWRP was observed, but cannot be assumed independent of p3. |
+| TWRP presence | `VERIFIED_DEVICE`: TWRP 2.6.3.0 recovery runtime | It is not yet a proven independent rollback route. |
+| Bootloader state | `secure: no`; empty legacy `unlocked` variable | Owner history and evidence are consistent with an unlocked state, but no standard unlocked attestation exists. |
 | Persistent logs | legacy ram_console at `0x7ffe0000` was observed | A target kernel must be designed to preserve/retrieve logs only after approval. |
 
 ## Safest first experimental-boot path (not authorized or executed)
 
-Do not flash, fastboot-boot, reboot or modify the device under the current
-read-only authorization.  Before any experimental boot, the owner must
+Do not flash or fastboot-boot under the current authorization. Before any
+experimental boot, the owner must
 explicitly approve a plan that first verifies exact device identity, bootloader
 state, partition sizes, a recoverable signed backup path, artifact hashes and
 the expected Sony ELF layout.  The initial artifact should be the smallest

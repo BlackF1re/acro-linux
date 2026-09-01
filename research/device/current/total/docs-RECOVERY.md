@@ -19,9 +19,11 @@ A follow-up read-only check found the legacy `/fstab.semc` and
 evidence only that those common Android recovery artifacts are absent from the
 checked paths; it neither proves nor rules out a Sony FOTAKernel-style route,
 a separate recovery partition, or recovery code embedded in another boot path.
-There is no evidence of TWRP, and it must not be named as present.
-The sanitized runtime result is retained in
-[`recovery-runtime-check.txt`](../research/device/current/boot/recovery-runtime-check.txt).
+One owner-approved, non-destructive recovery entry has now been observed. It
+is **TWRP 2.6.3.0**, directly identified by its recovery binary and runtime
+log; `ro.twrp.boot=1` was also present. See the canonical sanitized recovery
+characterization in `research/device/current/boot/recovery-characterization.md`.
+The older Android-path check remains useful negative evidence only.
 
 The known partition-role evidence is intentionally narrow: p3 is referenced as
 legacy `/boot`; p1 has a legacy `tad` reference; p10, p12–p15 have the roles
@@ -29,10 +31,15 @@ documented in [PARTITIONS.md](PARTITIONS.md).  All other unconfirmed roles are
 UNKNOWN.  This is not enough to authorize any write.
 
 The running Android property `ro.bootloader=unknown` is not a lock-state
-attestation.  It establishes neither locked nor unlocked status.  A reboot to
-fastboot/recovery, a bootloader unlock, raw-partition inspection, or any TA
-access remains outside this read-only stage and requires separate owner
-approval.
+attestation. A later physical fastboot session did observe `secure: no`, but
+the legacy S1Boot `unlocked` variable is empty. Owner-provided unlock history
+is consistent evidence, not a replacement for a standard attestation.
+
+Current TWRP does **not** yet prove a separate recovery partition, FOTAKernel,
+or a path independent of p3. Historical LT26 sources say recovery is triggered
+from a boot image, and this TWRP binary has injection-related code, but the
+installation layout of this handset remains UNKNOWN. It must not be used as the
+sole rollback guarantee for a p3 replacement.
 
 ## Mandatory gate before a future write
 

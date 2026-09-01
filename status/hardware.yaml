@@ -26,6 +26,39 @@ target_linux:
   implementation: UNKNOWN
   lifecycle: NOT_STARTED
   notes: No target-native-Linux kernel has been built, deployed, booted, or probed.
+boot_chain:
+  fastboot:
+    physical:
+      evidence: VERIFIED_DEVICE
+      usb_vid_pid: "0fce:0dde"
+      transport: Sony Ericsson S1Boot Fastboot
+      protocol_version: "0.5"
+      bootloader_version: CRH1099189_R10C008
+      secure: "no"
+      notes: Empty unlocked/max-download-size/partition boot metadata variables are unsupported or absent legacy responses, not negative evidence.
+    target_linux:
+      temporary_fastboot_boot: UNKNOWN
+  owner_provided_history:
+    bootloader_previously_unlocked: true
+    custom_rom_previously_installed: MoKee
+    current_root_reported: true
+    notes: Owner-provided historical evidence, not an automatically read bootloader attestation.
+  current_legacy_p3:
+    physical:
+      evidence: VERIFIED_DEVICE
+      format: Sony-style ELF32 ARM
+      kernel_load_address: "0x40208000"
+      ramdisk_load_address: "0x41800000"
+      rpm_load_address: "0x00020000"
+      cmdline_segment: ABSENT
+      notes: Extracted offline only from the private golden backup; exact cmdline handling remains UNKNOWN.
+  recovery:
+    physical:
+      evidence: VERIFIED_DEVICE
+      implementation: TWRP 2.6.3.0
+      notes: Recovery runtime was observed over ADB. Storage location and independence from p3 remain UNKNOWN.
+    target_linux:
+      rollback_route: UNKNOWN
 subsystems:
   cpu_smp: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   storage_emmc: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }

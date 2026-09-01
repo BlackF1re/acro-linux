@@ -1,9 +1,25 @@
 # Phase D plan: non-destructive bootloader and recovery characterization
 
-This plan is deliberately not execution authorization.  It excludes reboot,
-fastboot, recovery boot, unlock, flashing, building a kernel, and any write to
-the phone.  The C2 private backup must remain verified and available before any
-later owner-approved experiment.
+This plan began as a non-destructive characterization proposal. D1 fastboot
+and the first owner-approved recovery observation are now complete; they remain
+strictly read-only/no-write results. Unlock, flashing, building a kernel, and
+any write to the phone remain excluded. The C2 private backup must remain
+verified and available before any later owner-approved experiment.
+
+## Completed D1 evidence
+
+- Sony S1Boot fastboot: `0fce:0dde`, protocol `0.5`,
+  `CRH1099189_R10C008`, `secure: no`.
+- Fastboot reached Android again through ordinary `fastboot reboot`.
+- Current recovery was directly identified as TWRP 2.6.3.0. Its read-only
+  characterization completed. `adb reboot` did not complete the transition and
+  no safe recovery CLI reboot command was identified; the owner then selected
+  the ordinary `Reboot System` UI action. Android returned to the same observed
+  LT26w/fuji ScrubbModRom legacy baseline.
+- Current p3 was inspected offline only and is a three-segment Sony ELF.
+
+The unresolved gate is recovery-path independence from p3 and the exact
+semantics/support of a non-persistent `fastboot boot` command.
 
 ## Questions to resolve
 

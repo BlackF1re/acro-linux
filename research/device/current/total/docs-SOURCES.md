@@ -26,6 +26,19 @@ official vendor provenance lead for Phase B source archaeology. It does **not**
 by itself establish the physical SoC SKU; no Sony document directly asserting
 MSM8260 has yet been recovered in this pass.
 
+## Boot / fastboot / recovery sources (checked 2026-09-01)
+
+| Source | Revision / authority | What it establishes | Use and confidence |
+| --- | --- | --- | --- |
+| [Sony useful key combinations](https://developer.sony.com/open-source/aosp-on-xperia-open-devices/get-started/flash-tool/useful-key-combinations) | Sony Developer World, current page checked 2026-09-01 | Volume Up while connecting USB enters fastboot; Volume Down enters Flashmode. | `VERIFIED_VENDOR_SOURCE` for key semantics; it does not replace physical enumeration. |
+| [AOSP LT26 custombootimg.mk](https://android.googlesource.com/device/sony/lt26/%2B/8213cd2eabf386629f56cc1ac6b8102ffd0671eb/custombootimg.mk) | Android Open Source Project commit `8213cd2eabf386629f56cc1ac6b8102ffd0671eb`; historical LT26 reference | Sony ELF construction order: kernel, ramdisk marked `ramdisk`, RPM marked `rpm`; historical LT26 addresses. | `HISTORICAL_SOURCE`; current Hikari p3 addresses take precedence where they differ. |
+| [AOSP LT26 mkelf.py introduction](https://android.googlesource.com/device/sony/lt26/%2B/b644924c93b3c89e0e6f3aeeb85fb9a23147350f%5E!/) | AOSP commit `b644924c93b3c89e0e6f3aeeb85fb9a23147350f`, Sony Mobile copyright notice | SEMC ELF flags: RAMDISK `0x80000000`, CMDLINE `0x20000000`, Qualcomm MSM8x60 RPM `0x01000000`; segments are laid from `0x1000` in input order. | `HISTORICAL_SOURCE` used to interpret the exact flags in the offline p3 metadata. |
+| [AOSP Android-building LT26 discussion](https://groups.google.com/g/android-building/c/zji_sQGN9Oo/m/MoaS0xidmRMJ) | Historical project discussion, checked 2026-09-01 | Reports LT26 recovery triggering from a boot image and legacy S1Boot family context. | `HISTORICAL_SOURCE` only; current handset recovery storage remains `UNKNOWN`. |
+
+No authoritative source or direct non-persistent test was found that proves
+`fastboot boot` support for S1Boot `CRH1099189_R10C008`. Its status is therefore
+`UNKNOWN`; the host client's command set is not evidence of bootloader support.
+
 ## Source archaeology inventory (2026-09-01)
 
 All revisions below were retrieved as metadata only.  “Reference” means that

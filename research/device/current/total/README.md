@@ -1,20 +1,18 @@
 # Current-device read-only inventory
 
-Collected from the connected Sony Xperia acro S LT26w through ADB during two
-read-only reconnaissance passes (2026-09-01). The phone was neither rebooted
-nor flashed; no settings or filesystem state was changed.  A later
-owner-authorized backup streamed the complete eMMC user area to private
-recovery media outside the repository.  Sensitive partition bytes are present
-only in that private raw stream and were not separately inspected, parsed,
-interpreted, exposed, or committed.
-No raw block-device contents are stored in this inventory.
+Collected from the connected Sony Xperia acro S LT26w through read-only ADB,
+fastboot and offline evidence work (2026-09-01). No flash, unlock, image
+download, partition write, settings change, or filesystem modification was
+performed by the project. Owner-approved C2 work sequentially read the
+accessible eMMC user area into private backup media; later offline analysis was
+limited to confirmed p3 (`/boot`).
 
 The files contain non-secret metadata only. ADB and hardware serials, Android
 ID, IMEI/IMSI/ICCID, MAC addresses, credentials, TA/radio/NV/calibration data,
 and boot-command-line values that identify this particular handset are omitted.
-User/private data and TA, radio/NV, calibration, and other protected-partition
-contents were not separately inspected outside that owner-authorized raw
-backup stream. Some non-secret system configuration, module, and generic
+Sensitive partition bytes are physically present only in the private backup;
+they were not separately inspected, parsed, interpreted, extracted, exposed,
+or committed. Some non-secret system configuration, module, and generic
 firmware files were read only to record narrow metadata, names, hashes or
 provenance; no proprietary blob was copied. Presence of an interface or bound
 legacy driver is not an acceptance test. This is evidence of a modified Android

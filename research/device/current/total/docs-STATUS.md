@@ -9,6 +9,21 @@ In particular, a 1890 MHz CPU setting observed in this custom kernel is not a
 Sony-approved OPP and must not be carried into a target kernel without
 independent evidence and validation.
 
+## Boot and recovery characterization
+
+Physical fastboot is `VERIFIED_DEVICE`: Sony S1Boot Fastboot appears as
+`0fce:0dde`, protocol `0.5`, version `CRH1099189_R10C008`, with `secure: no`.
+The old S1Boot returns empty `unlocked` and boot-partition metadata variables;
+this is unsupported/absent metadata, not evidence of a locked bootloader.
+Owner history independently records an earlier unlock, custom ROM installation,
+and root; it is retained as owner-provided history rather than an attestation.
+
+The currently installed recovery is `VERIFIED_DEVICE` as TWRP 2.6.3.0. Its
+storage/boot-path relationship to p3, and hence its independence as a rollback
+route, remain `UNKNOWN`. The current p3 legacy `/boot` artifact is a verified
+Sony ELF layout documented in canonical `docs/BOOT_FORMAT.md`; target Linux
+has not been built or booted.
+
 ## Status domains
 
 status/hardware.yaml deliberately separates physical hardware evidence, the
