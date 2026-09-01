@@ -44,3 +44,21 @@ watch -n 0.2 lsusb
 After the normal Sony fastboot key sequence, a blue LED and `0fce:0dde ... S1Boot Fastboot` are the expected signs. Use ordinary `fastboot devices` and approved `fastboot getvar ...` commands. The installed modern host fastboot does not accept the obsolete `-i 0x0fce` option, so do not use it.
 
 The Sony physical key guidance is: with the phone off, hold Volume Up while connecting USB for fastboot; Volume Down is Flashmode, not fastboot. See [Sony’s key-combination documentation](https://developer.sony.com/open-source/aosp-on-xperia-open-devices/get-started/flash-tool/useful-key-combinations).
+
+## Forced recovery from a hung experimental kernel
+
+`VERIFIED_DEVICE` operational observation on this handset: after the first
+experimental native-kernel attempt hung on a black screen, an ordinary Power
+hold and volume buttons did not recover it. Holding **Power + Volume Up**
+together forced a reset/shutdown and made the handset recoverable again.
+
+This is distinct from fastboot entry:
+
+```text
+Power + Volume Up                 -> forced reset/shutdown
+phone off + Volume Up + USB cable -> S1Boot fastboot
+```
+
+After a forced reset, use the documented phone-off Volume-Up USB sequence and
+confirm `0fce:0dde` before any approved recovery action. This path does not
+depend on Android userspace having booted.

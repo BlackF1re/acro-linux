@@ -1,7 +1,9 @@
-# First physical Hikari boot procedure
+# First physical Hikari boot procedure and result
 
-This is an operational proposal only.  It requires a new explicit owner
-approval before any command in the write or reboot sections is run.
+The exact approved first attempt below was executed on 2026-09-02. It produced
+no unmistakable mainline proof of life and was rolled back successfully. It
+must not be repeated; a later attempt requires a new approved artifact and a
+new owner approval.
 
 ## Preflight
 
@@ -18,12 +20,14 @@ approval before any command in the write or reboot sections is run.
    transition, and confirm the recorded p3 capacity remains 20 MiB.
 6. Confirm the experimental ELF below is 11,937,605 bytes and SHA-256
    `467d08a2fbafe86c61f5422946115a899f3bfa559f429d79dd13f9867ceb046f`.
-7. Re-run the host-only artifact validator.  It must report
-   `FIRST_BOOT_MEMORY_SAFETY=PASS` and no ELF/DTB/p3 validation failure.
+7. The then-current host-only validator reported `FIRST_BOOT_MEMORY_SAFETY=PASS`
+   before the attempt. Post-attempt review invalidated that gate because it did
+   not require MSM8x60 SMEM reservation; do not use this historical result for
+   another write.
 
-## Proposed single-partition experiment
+## Executed single-partition experiment
 
-Only after the owner approves this exact artifact and preflight result:
+The approved artifact was written once through the only permitted target:
 
 ```sh
 fastboot flash boot /home/paul/xperia/build/hikari-artifacts-g3/hikari-firstboot.elf
@@ -35,7 +39,7 @@ The first artifact uses a native BusyBox initramfs and emits
 kernel console.  It does not rely on display, GPU, touch, a guessed ramoops
 region, or Android userspace.
 
-## Rollback
+## Executed rollback
 
 Hardware entry is independent of Android:
 
@@ -45,7 +49,10 @@ phone off/reset → hold Volume Up → connect USB
 → verify the original restore SHA-256 on the host
 ```
 
-Then, and only with owner approval, restore just p3's `boot` target:
+The original p3 was then restored through just p3's `boot` target. S1Boot
+reported `Flash operation complete`, and Android returned to the recorded
+legacy baseline. The exact sanitized command result is in
+[`first-mainline-rollback-sanitized.txt`](../research/device/current/boot/first-mainline-rollback-sanitized.txt).
 
 ```sh
 fastboot flash boot /home/paul/xperia/backups/hikari/20260901T111716Z/hikari-golden-backup-20260901T190000Z/hikari-original-p3-restore.elf
@@ -53,9 +60,22 @@ fastboot reboot
 ```
 
 Never use `erase`, `flashall`, a partition-table command, or another partition
-in either direction.  This restore mapping is strongly supported by historical
-LT26 evidence but has not yet been write-tested on this handset; see
+in either direction. This restore mapping is now `VERIFIED_DEVICE`; see
 [ROLLBACK.md](ROLLBACK.md).
+
+## Observed result and forced recovery
+
+S1Boot accepted the experimental ELF and reported a successful `boot` flash.
+After `fastboot reboot`, the host observed no ADB, fastboot, new target USB
+device, or project boot marker during 120 seconds; no Linux display output was
+observed. The owner observed a black screen and an unresponsive handset.
+This does not identify a kernel panic or a specific failure stage.
+
+An ordinary Power hold did not recover the hung handset. **Power + Volume Up**
+forced reset/shutdown (`VERIFIED_DEVICE` operational observation). This differs
+from S1Boot entry, which remains phone off + Volume Up + USB. See
+[HOST_USB.md](HOST_USB.md). The complete sanitized attempt record is
+[`first-mainline-boot-attempt-sanitized.txt`](../research/device/current/boot/first-mainline-boot-attempt-sanitized.txt).
 
 ## Abort conditions
 

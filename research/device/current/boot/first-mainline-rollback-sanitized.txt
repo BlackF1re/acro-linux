@@ -1,0 +1,37 @@
+# First physical p3 rollback after failed native-Linux attempt (sanitized)
+
+date=2026-09-02
+evidence=VERIFIED_DEVICE
+restore_artifact=hikari-original-p3-restore.elf
+restore_size_bytes=20971520
+restore_sha256=c59be74873aa32a8422adf9b5402254b2acae619f7dc97bd50fc0e120984d0c1
+
+[fastboot_flash_boot]
+Warning: skip copying boot image avb footer (boot partition size: 0, boot image size: 20971520).
+Sending 'boot' (20480 KB)
+(bootloader) USB download speed was 19562kB/s
+OKAY [  1.088s]
+Writing 'boot'
+(bootloader) Flash of partition 'boot' requested
+(bootloader) S1 partID 0x00000003, block 0x00002000-0x0000bfff
+(bootloader) Erase operation complete, 0 bad blocks encountered
+(bootloader) Flashing...
+(bootloader) Flash operation complete
+OKAY [  2.026s]
+Finished. Total time: 3.145s
+
+[fastboot_reboot]
+Rebooting
+OKAY [  0.003s]
+Finished. Total time: 0.405s
+
+[android_baseline_after_rollback]
+device=LT26w
+platform=msm8660
+display_id=ScrubbModRom KK4.4.2 v.1.4.1
+kernel=Linux localhost 3.4.0-Elite-1.5+ SMP PREEMPT armv7l
+
+result=PHYSICAL_FASTBOOT_P3_RESTORE_VERIFIED_DEVICE
+result=FAILED_MAINLINE_BOOT_ROLLBACK_VERIFIED_DEVICE
+
+No serial number, IMEI, MAC address, or private payload is recorded here.
