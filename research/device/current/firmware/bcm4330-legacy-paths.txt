@@ -1,0 +1,9 @@
+# Sanitized names and metadata observed read-only on 2026-09-01.
+# No firmware, module, or calibration content is included here.
+/system/lib/modules/bcm4330.ko: 4857355 bytes
+/system/etc/firmware/BCM4330.hcd: 51526 bytes
+/system/etc/wifi/calibration: 1000 bytes; path recorded only; not opened or hashed
+
+# init.semc.rc reference:
+insmod /system/lib/modules/bcm4330.ko nvram_path=/system/etc/wifi/calibration iface_name=wlan0
+--patchram /system/etc/firmware/BCM4330.hcd

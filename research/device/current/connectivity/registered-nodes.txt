@@ -1,0 +1,11 @@
+module: bcm4330 373801 bytes, out-of-tree, Live
+wifi interface: wlan0
+SDIO functions: mmc2:0001:1, mmc2:0001:2
+Bluetooth platform devices: bcm_bt_lpm.0, bt_power.0 (rfkill0)
+USB platform devices: android_usb, msm_hsusb, msm_otg, msm_hsusb_host.0
+HDMI platform devices: hdmi_msm.0, hdmi_msm.1
+network interface names: dummy0 lo rmnet0 rmnet1 rmnet2 rmnet3 rmnet4 rmnet5
+rmnet6 rmnet7 sit0 ip6tnl0 wlan0
+
+No MAC addresses, SSIDs, credentials, pairing material, or radio state were
+queried.

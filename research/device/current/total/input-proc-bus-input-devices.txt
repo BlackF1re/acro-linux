@@ -1,0 +1,41 @@
+N: Name="keypad-pmic-fuji"
+S: Sysfs=/devices/platform/msm_ssbi.0/pm8058-core/input/input0
+H: Handlers=kbd event0
+
+N: Name="fuji-keypad"
+S: Sysfs=/devices/platform/msm_ssbi.0/pm8058-core/pm8xxx-keypad/input/input1
+H: Handlers=kbd event1 intelliplug
+
+N: Name="clearpad"
+S: Sysfs=/devices/virtual/input/input2
+H: Handlers=kbd event2
+
+N: Name="gpio-key"
+S: Sysfs=/devices/virtual/input/input3
+H: Handlers=kbd event3
+
+N: Name="pmic8xxx_pwrkey"
+S: Sysfs=/devices/platform/msm_ssbi.0/pm8058-core/pm8xxx-pwrkey/input/input4
+H: Handlers=kbd event4
+
+N: Name="bma250"
+S: Sysfs=/devices/virtual/input/input5
+H: Handlers=event5
+
+N: Name="compass"
+S: Sysfs=/devices/virtual/input/input6
+H: Handlers=event6
+
+N: Name="apds9702"
+S: Sysfs=/devices/virtual/input/input7
+H: Handlers=event7
+
+N: Name="simple_remote"
+S: Sysfs=/devices/virtual/input/input8
+H: Handlers=kbd event8
+
+N: Name="simple_remote_appkey"
+S: Sysfs=/devices/virtual/input/input9
+H: Handlers=event9
+
+All `Uniq` fields were omitted.

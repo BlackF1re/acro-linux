@@ -1,0 +1,61 @@
+schema_version: 3
+device:
+  target: sony-hikari
+  model: Sony Xperia acro S LT26w
+  physical:
+    evidence: VERIFIED_DEVICE
+    notes: Identity was observed over ADB/USB. This evidence domain never represents target-Linux progress.
+  silicon:
+    family: { value: Qualcomm MSM8x60 / Snapdragon S3, evidence: VERIFIED_DEVICE }
+    exact_sku:
+      value: MSM8260
+      evidence: VERIFIED_DEVICE
+      provenance: physical soc0 ID 70 plus upstream QCOM_ID_MSM8260 = 70.
+    socinfo: { id: 70, version: "2.1", raw_id: 1057, raw_ver: 2, build_id: M8660A-AABQNLYM-3.1.4003T }
+    legacy_bsp_platform_string:
+      value: msm8660
+      evidence: VERIFIED_DEVICE
+      notes: Legacy Android property only; not a silicon-SKU identifier.
+legacy_baseline:
+  environment: ScrubbModRom KK4.4.2 v1.4.1
+  android_build: Android 4.4.2 userdebug/test-keys
+  kernel: 3.4.0-Elite-1.5+
+  implementation: BOOTS
+  notes: Modified Android baseline, not Sony stock. Its exposed 1890 MHz frequency is not a Sony-approved OPP.
+target_linux:
+  implementation: UNKNOWN
+  lifecycle: NOT_STARTED
+  notes: No target-native-Linux kernel has been built, deployed, booted, or probed.
+subsystems:
+  cpu_smp: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  storage_emmc: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  storage_microsd: { physical: { evidence: UNKNOWN }, legacy_baseline: { implementation: PROBES, notes: Slot/controller registered; no card inserted. }, target_linux: { implementation: UNKNOWN } }
+  display: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  touchscreen: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  gpu: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  wifi: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  bluetooth: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  usb_device: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  usb_otg_host: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  hdmi: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  audio: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  camera: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  modem: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  gnss: { physical: { evidence: UNKNOWN }, legacy_baseline: { implementation: UNKNOWN }, target_linux: { implementation: UNKNOWN } }
+  nfc: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  fm_radio: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  battery_charging: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  thermal: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  rtc: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  watchdog: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  sensors: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  leds_haptics: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+legacy_runtime_observations:
+  wifi: ["DHD legacy driver reports firmware up; no association acceptance test was run."]
+  modem: ["PIL brought modem out of reset.", "APR runtime log reports modem up."]
+  charging: ["BQ24160 log records charge-current/state transitions.", "BQ27520 log records capacity changes and fully-charged indication."]
+  camera: ["Main and front modules probed; legacy CSI configuration logged for both."]
+  touchscreen: ["ClearPad logged runtime power-off on early suspend and power-on on late resume."]
+notes:
+  - Legacy runtime observations are not target-Linux VERIFIED states and are not formal acceptance tests.
+  - VERIFIED for a target subsystem requires a function-specific acceptance test on the physical Xperia.

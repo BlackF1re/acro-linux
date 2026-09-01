@@ -1,0 +1,6 @@
+# Sanitized, role-bearing lines only from /fstab.semc (read-only, 2026-09-01)
+/dev/block/mmcblk0p3  /boot  emmc  defaults  recoveryonly
+/dev/block/mmcblk0p12  /system  ext4  ro,barrier=1  wait
+/dev/block/mmcblk0p13  /cache   ext4  noatime,nosuid,nodev,barrier=1,data=ordered  wait,check
+/dev/block/mmcblk0p14  /data    ext4  noatime,nosuid,nodev,barrier=1,data=ordered,noauto_da_alloc  wait,check,encryptable=footer
+/devices/platform/msm_sdcc.1/mmc_host/mmc0  auto  vfat  noatime,nosuid,noexec,nodiratime,rw  voldmanaged=sdcard0:15,nonremovable,noemulatedsd
