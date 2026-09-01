@@ -59,9 +59,9 @@ approval.
 
 ## Next diagnostic boundary
 
-Do not build or deploy a third artifact yet. The one recommended technical
-change is correction and host-side validation of the probable double-applied
-SMEM offset described in [FIRST_BOOT_MEMORY.md](FIRST_BOOT_MEMORY.md). A later
-attempt must additionally have a physically usable diagnostics route; the
-historical Hikari mainline trace identifies `ttyMSM0` at `0x19c40000` as a
-possible route, but no accessible Hikari UART path has yet been proven.
+The third local-only iteration corrects and host-side validates the probable
+double-applied SMEM offset described in
+[FIRST_BOOT_MEMORY.md](FIRST_BOOT_MEMORY.md). A later physical attempt still
+needs explicit owner approval and a stronger diagnostics route; the historical
+Hikari mainline trace identifies `ttyMSM0` at `0x19c40000` as a possible
+route, but no accessible Hikari UART path has yet been proven.

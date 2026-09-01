@@ -37,7 +37,7 @@ for input in "$kernel_build/.config" "$kernel_build/vmlinux" \
 done
 
 config=$kernel_build/.config
-grep -qx 'CONFIG_PHYS_OFFSET=0x40200000' "$config" || { echo "PHYS_OFFSET is not the verified Hikari RAM base" >&2; exit 1; }
+grep -qx 'CONFIG_PHYS_OFFSET=0x40000000' "$config" || { echo "PHYS_OFFSET is not the MSM8x60 physical RAM-base candidate" >&2; exit 1; }
 grep -qx '# CONFIG_ARCH_MULTIPLATFORM is not set' "$config" || { echo "ARCH_MULTIPLATFORM must be disabled to make the explicit decompressor address effective" >&2; exit 1; }
 grep -qx '# CONFIG_AUTO_ZRELADDR is not set' "$config" || { echo "AUTO_ZRELADDR must be disabled for this unaligned RAM base" >&2; exit 1; }
 grep -qx 'CONFIG_ARCH_QCOM_RESERVE_SMEM=y' "$config" || { echo "ARCH_QCOM_RESERVE_SMEM is required by upstream for MSM8x60; rebuild before deployment" >&2; exit 1; }
@@ -77,7 +77,7 @@ def show(name, start, end):
 def overlap(a, b):
     return a[0] < b[1] and b[0] < a[1]
 
-ram_start, ram_end = 0x40200000, 0x42e00000
+ram_start, ram_end = 0x40000000, 0x42e00000
 smem_end = ram_start + 0x00200000
 page_offset = 0xc0000000
 zimage_load = int(kernel_load, 0)
@@ -85,8 +85,8 @@ ramdisk_start = int(ramdisk_addr, 0)
 rpm_start = 0x00020000
 
 # ARCH_QCOM_RESERVE_SMEM selects TEXT_OFFSET=0x00208000 in the pinned
-# upstream ARM Makefile.  Keep the loaded zImage 32 KiB beyond the 2 MiB
-# SMEM reservation; a different address needs a separately reviewed model.
+# upstream ARM Makefile.  That is 2 MiB plus 32 KiB after the physical
+# MSM8x60 RAM base.  A different address needs a separately reviewed model.
 expected_load = smem_end + 0x8000
 if zimage_load != expected_load:
     raise SystemExit(
@@ -135,7 +135,7 @@ for name in ('compressed zImage input', 'appended DTB input', 'decompressed kern
              'relocated decompressor + appended DTB', 'initramfs'):
     start, end = ranges[name]
     if not (smem_end <= start < end <= ram_end):
-        raise SystemExit(f'{name} is not wholly inside the verified first RAM bank outside SMEM')
+        raise SystemExit(f'{name} is not wholly inside the modeled first RAM bank outside SMEM')
 if rpm_end > ram_start:
     raise SystemExit('RPM payload unexpectedly reaches System RAM')
 
@@ -159,5 +159,5 @@ for name in ('Qualcomm SMEM reserve', 'compressed zImage input', 'appended DTB i
     show(name, *ranges[name])
 print(f'compressed relocation reserve: {reloc_reserve} bytes')
 print('ARM_ZIMAGE_SELF_RELOCATION=REQUIRED_AND_ACCOUNTED_FOR')
-print('SECOND_BOOT_MEMORY_SAFETY=PASS')
+print('THIRD_BOOT_MEMORY_SAFETY=PASS')
 PY

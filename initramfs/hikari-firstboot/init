@@ -7,7 +7,7 @@ mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
 
-echo "HIKARI MAINLINE BOOT #2"
+echo "HIKARI MAINLINE BOOT #3"
 echo "HIKARI INITRAMFS STARTED"
 uname -a
 echo "--- /proc/cpuinfo ---"

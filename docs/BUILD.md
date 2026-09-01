@@ -54,3 +54,14 @@ kernel outputs and ELF prototype are never added to Git.
 This establishes local build integrity only. It is neither a boot test nor
 authorization to deploy any artifact. The current deployment gate is in
 [FIRST_BOOT_PLAN.md](FIRST_BOOT_PLAN.md).
+
+## Corrected third local build
+
+Following post-mortem analysis, the third local build uses the physical MSM8x60
+low-memory base `0x40000000`, reserves its first 2 MiB through
+`CONFIG_ARCH_QCOM_RESERVE_SMEM=y`, and uses the resulting upstream
+`0x40208000` zImage load candidate.  Its initramfs is deliberately moved to
+`0x42a00000`.  The exact artifact and code-derived range checks are recorded in
+[THIRD_BOOT_PLAN.md](THIRD_BOOT_PLAN.md) and
+[FIRST_BOOT_MEMORY.md](FIRST_BOOT_MEMORY.md).  It has not been sent to the
+phone.

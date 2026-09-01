@@ -27,12 +27,20 @@ grep -qx 'CONFIG_ARCH_QCOM_RESERVE_SMEM=y' "$build_dir/.config" || {
   echo "Hikari boot build requires CONFIG_ARCH_QCOM_RESERVE_SMEM=y" >&2
   exit 1
 }
+grep -qx 'CONFIG_PHYS_OFFSET=0x40000000' "$build_dir/.config" || {
+  echo "Hikari boot build requires the MSM8x60 physical RAM base 0x40000000" >&2
+  exit 1
+}
 if [[ -n "$initramfs_source" ]]; then
   test -f "$initramfs_source" || { echo "INITRAMFS_SOURCE is not a regular file" >&2; exit 1; }
   "$kernel_src/scripts/config" --file "$build_dir/.config" --set-str INITRAMFS_SOURCE "$initramfs_source"
   make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" olddefconfig
   grep -qx 'CONFIG_ARCH_QCOM_RESERVE_SMEM=y' "$build_dir/.config" || {
     echo "Hikari boot build lost CONFIG_ARCH_QCOM_RESERVE_SMEM" >&2
+    exit 1
+  }
+  grep -qx 'CONFIG_PHYS_OFFSET=0x40000000' "$build_dir/.config" || {
+    echo "Hikari boot build lost CONFIG_PHYS_OFFSET=0x40000000" >&2
     exit 1
   }
 fi

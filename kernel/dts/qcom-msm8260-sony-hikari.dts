@@ -9,15 +9,18 @@
 	compatible = "sony,hikari", "qcom,msm8660";
 
 	/*
-	 * These are the two ranges named System RAM by the observed legacy BSP.
-	 * They are intentionally not a claim about every byte of the nominal 1 GiB;
-	 * see docs/FIRST_BOOT_MEMORY.md before any deployment.
+	 * The low bank starts at the historical MSM8x60 shared-memory physical
+	 * base.  CONFIG_ARCH_QCOM_RESERVE_SMEM then retains its first 2 MiB for
+	 * SMEM, leaving 0x40200000 as the first normal Linux address.  The legacy
+	 * resource view starts at that latter address; see FIRST_BOOT_MEMORY.md.
+	 * This remains a deliberately minimal bring-up memory description, not a
+	 * claim that every byte of nominal RAM is currently understood.
 	 */
 };
 
 /* Override the placeholder System RAM node supplied by qcom-msm8660.dtsi. */
 &{/memory@0} {
-	reg = <0x40200000 0x02c00000>,
+	reg = <0x40000000 0x02e00000>,
 	      <0x48000000 0x26600000>;
 };
 

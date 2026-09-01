@@ -117,4 +117,4 @@ notes:
   - Legacy runtime observations are not target-Linux VERIFIED states and are not formal acceptance tests.
   - VERIFIED for a target subsystem requires a function-specific acceptance test on the physical Xperia.
   - Power + Volume Up is a VERIFIED_DEVICE forced-reset/shutdown action for a hung experimental kernel; phone off + Volume Up + USB is the separate S1Boot entry action.
-  - The second layout's SMEM placement at 0x40200000 is a HYPOTHESIS-level probable double offset, not target-kernel evidence; no third artifact is authorized until corrected offline.
+  - The second layout's SMEM placement at 0x40200000 is a HYPOTHESIS-level probable double offset, not target-kernel evidence. The third local build corrects it to a 0x40000000 physical-base model with upstream SMEM reservation; no new physical deployment is implied.

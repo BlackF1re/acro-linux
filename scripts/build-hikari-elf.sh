@@ -5,15 +5,15 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-kernel_build=${KERNEL_BUILD:-/home/paul/xperia/build/linux-hikari-second}
-initramfs=${INITRAMFS:-/home/paul/xperia/build/hikari-initramfs-second/hikari-secondboot.cpio.gz}
-initramfs_build=${INITRAMFS_BUILD:-/home/paul/xperia/build/hikari-initramfs-second}
+kernel_build=${KERNEL_BUILD:-/home/paul/xperia/build/linux-hikari}
+initramfs=${INITRAMFS:-/home/paul/xperia/build/hikari-initramfs/hikari-firstboot.cpio.gz}
+initramfs_build=${INITRAMFS_BUILD:-/home/paul/xperia/build/hikari-initramfs}
 initramfs_name=${INITRAMFS_NAME:-$(basename -- "$initramfs")}
 rpm=${RPM_PAYLOAD:-/home/paul/xperia/p3-offline-analysis.rSjNfb/rpm.segment}
-artifact_dir=${ARTIFACT_DIR:-/home/paul/xperia/build/hikari-artifacts-g4}
-output=${OUTPUT:-$artifact_dir/hikari-secondboot.elf}
+artifact_dir=${ARTIFACT_DIR:-/home/paul/xperia/build/hikari-artifacts}
+output=${OUTPUT:-$artifact_dir/hikari-firstboot.elf}
 ramdisk_addr=${RAMDISK_ADDR:-0x42a00000}
-kernel_addr=${KERNEL_ADDR:-0x40408000}
+kernel_addr=${KERNEL_ADDR:-0x40208000}
 p3_limit=$((20 * 1024 * 1024))
 
 case "$artifact_dir" in /home/paul/xperia/build/*) ;; *) echo "ARTIFACT_DIR must be below /home/paul/xperia/build" >&2; exit 1;; esac
@@ -55,11 +55,12 @@ python3 "$repo_root/tools/sony_elf.py" build \
   --kernel "$kernel_with_dtb" --ramdisk "$initramfs" --rpm "$rpm" \
   --output "$output" --kernel-addr "$kernel_addr" --ramdisk-addr "$ramdisk_addr" \
   --rpm-addr 0x00020000 --limit "$p3_limit"
-python3 - "$output" "$zimage" "$dtb" <<'PY'
+python3 - "$output" "$zimage" "$dtb" "$kernel_addr" <<'PY'
 import struct
 import sys
 
-artifact, zimage, dtb = sys.argv[1:]
+artifact, zimage, dtb, kernel_addr = sys.argv[1:]
+kernel_addr = int(kernel_addr, 0)
 with open(artifact, 'rb') as f:
     data = f.read()
 with open(zimage, 'rb') as f:
@@ -73,9 +74,9 @@ segments = []
 for index in range(phnum):
     offset = phoff + index * phentsize
     segments.append(struct.unpack_from('<IIIIIIII', data, offset))
-kernel = next((entry for entry in segments if entry[0] == 1 and entry[2] == 0x40408000), None)
+kernel = next((entry for entry in segments if entry[0] == 1 and entry[2] == kernel_addr), None)
 if kernel is None:
-    raise SystemExit('Sony ELF has no kernel segment at the configured Hikari load address')
+    raise SystemExit(f'Sony ELF has no kernel segment at configured load address 0x{kernel_addr:08x}')
 _, offset, _, _, filesz, _, _, _ = kernel
 payload = data[offset:offset + filesz]
 if payload != zdata + ddata:

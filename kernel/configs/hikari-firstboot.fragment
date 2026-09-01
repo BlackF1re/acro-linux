@@ -1,11 +1,11 @@
 CONFIG_ARCH_QCOM=y
 CONFIG_SMP=y
-# The verified legacy RAM bank begins at 0x40200000.  AUTO_ZRELADDR would
-# mask a zImage loaded above it down to 0x40000000, outside that bank.
-# Keep the decompressor destination explicit for this bring-up prototype.
+# Historical MSM8x60 code puts physical RAM/SMEM at 0x40000000.  Upstream
+# reserves its first 2 MiB below, so the legacy-compatible zImage destination
+# becomes 0x40208000.  Keep the decompressor destination explicit.
 # CONFIG_ARCH_MULTIPLATFORM is not set
 # CONFIG_AUTO_ZRELADDR is not set
-CONFIG_PHYS_OFFSET=0x40200000
+CONFIG_PHYS_OFFSET=0x40000000
 # MSM8x60 needs the first 2 MiB of System RAM retained for Qualcomm SMEM.
 # This also makes the ARM zImage decompressor use TEXT_OFFSET=0x00208000.
 CONFIG_ARCH_QCOM_RESERVE_SMEM=y

@@ -23,11 +23,41 @@ offset**. It is not directly proven by a secondboot kernel log: the only
 captured TWRP `last_kmsg` belongs to a later legacy boot; see
 [secondboot post-mortem](../research/device/current/boot/secondboot-postmortem.md).
 
-The next proposed technical change is deliberately one change: model the
-physical RAM base at `0x40000000` (without claiming all later holes), let the
-upstream SMEM reservation consume `0x40000000-0x401fffff`, and revalidate a
-new kernel text/load candidate of `0x40208000`. No third artifact or device
-write is authorized by this analysis.
+The corrective third local build models the physical RAM base at
+`0x40000000` (without claiming all later holes), lets the upstream SMEM
+reservation consume `0x40000000-0x401fffff`, and revalidates a kernel
+text/load candidate of `0x40208000`. This is supported by the current
+upstream Kconfig/Makefile semantics, historical MSM8x60 board code and the
+legacy p3 load address. It remains a target-layout hypothesis until a physical
+boot produces evidence. Local artifact creation is not authorization to write
+the phone.
+
+## Third local artifact validation
+
+The corrected local artifact was built without contacting the phone.  Its
+memory gate reads the actual current `vmlinux` end and ARM compressed-kernel
+symbols, rather than estimating the final kernel extent from a source setting.
+
+| Object | Range | Size |
+| --- | --- | ---: |
+| Qualcomm SMEM reserve | `0x40000000-0x401fffff` | 2,097,152 |
+| zImage input | `0x40208000-0x40c3e6d7` | 10,708,696 |
+| appended Hikari DTB | `0x40c3e6d8-0x40c405e5` | 7,950 |
+| final decompressed kernel | `0x40208000-0x41d23c83` | 28,425,348 |
+| relocated decompressor, appended DTB and 128 KiB margin | `0x41d24600-0x4277cb25` | 10,847,526 |
+| native initramfs | `0x42a00000-0x42b0c33b` | 1,098,556 |
+| private RPM payload (outside System RAM) | `0x00020000-0x0003d3e7` | 119,784 |
+
+The native initramfs begins after the relocation interval.  The compressed
+input overlaps its ultimate decompressed-kernel range, which the current ARM
+`head.S` explicitly handles by backwards self-relocating the
+`restart..r6` interval; `r6` includes the appended DTB.  The checker accounts
+for this path, its 2,304-byte relocation-code reserve, and an additional
+128 KiB margin.
+
+`THIRD_BOOT_MEMORY_SAFETY=PASS` means the listed local artifact satisfies this
+code-derived overlap model.  It does not prove that S1Boot will execute it or
+that target Linux will boot on the handset.
 
 ## Historical second-artifact ranges (superseded)
 
