@@ -1,0 +1,25 @@
+Phase I local-only second boot prototype (sanitized)
+
+upstream_linux_commit=786262be6048deab760f68c8acc2c85607165894
+first_elf_sha256=467d08a2fbafe86c61f5422946115a899f3bfa559f429d79dd13f9867ceb046f
+second_elf=hikari-secondboot.elf
+second_elf_size=11938586
+second_elf_sha256=f9379ed17705bb20390c7e276fe121fc2183f4ec0fd77565ed5834ec85de82d4
+zimage_size=10708200
+zimage_sha256=e6792e970c3b7112ffbd6b8bee0b49fa1b8803a940f2ce5553630f07b9683e6a
+dtb_size=7950
+dtb_sha256=83b40069099a8f5bcc5189524fa656caff87c86889b17b14636ee61732c86ff8
+initramfs_size=1098556
+initramfs_sha256=f616aad6fc068b20871727eaca8276d5ee77952bb51022d5a019cdfb022a12e0
+config_arch_qcom_reserve_smem=y
+config_arm_appended_dtb=y
+config_arm_atag_dtb_compat=y
+kernel_segment=offset:0x1000,paddr:0x40408000,size:0xa383f6
+ramdisk_segment=offset:0xa393f6,paddr:0x42a00000,size:0x10c33c
+rpm_segment=offset:0xb45732,paddr:0x00020000,size:0x1d3e8
+second_boot_memory_safety=PASS
+sony_elf_appended_dtb=PASS
+sony_elf_validator=PASS
+artifact_under_p3_limit=PASS
+dtbs_check_hikari=PASS
+dt_validate_hikari=PASS

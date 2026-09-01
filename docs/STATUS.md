@@ -39,6 +39,11 @@ logical `boot`; and the ScrubbModRom baseline returned normally. This proves
 the p3 rollback route for this device and artifact, without generalizing it to
 other partitions. `fastboot boot` remains `UNKNOWN`. See [ROLLBACK.md](ROLLBACK.md).
 
+The second local-only candidate corrects the missing upstream MSM8x60 SMEM
+reservation and moves the initramfs past the measured ARM decompressor
+self-relocation interval. Its host-side memory, Sony ELF, appended-DTB and
+target-DTB schema gates pass; it has not been sent to the phone.
+
 ## Status domains
 
 status/hardware.yaml deliberately separates physical hardware evidence, the

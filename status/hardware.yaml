@@ -47,6 +47,8 @@ boot_chain:
       temporary_fastboot_boot: UNKNOWN
       p3_restore:
         evidence: VERIFIED_DEVICE
+        fastboot_boot_partition_restore: VERIFIED_DEVICE
+        rollback_route: VERIFIED_DEVICE
         physical_write_test: VERIFIED_DEVICE
         physical_fastboot_p3_restore: VERIFIED_DEVICE
         failed_mainline_boot_rollback: VERIFIED_DEVICE

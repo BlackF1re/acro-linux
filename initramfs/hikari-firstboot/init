@@ -7,12 +7,23 @@ mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
 
-echo "HIKARI MAINLINE EARLY BOOT"
+echo "HIKARI MAINLINE BOOT #2"
 echo "HIKARI INITRAMFS STARTED"
 uname -a
 echo "--- /proc/cpuinfo ---"
 cat /proc/cpuinfo
 echo "--- /proc/meminfo ---"
 cat /proc/meminfo
+echo "--- /proc/cmdline ---"
+cat /proc/cmdline
+echo "--- device-tree model ---"
+tr -d '\000' </proc/device-tree/model 2>/dev/null || true
+echo
+echo "--- /proc/uptime ---"
+cat /proc/uptime
+echo "--- /dev ---"
+ls -la /dev
+echo "--- mounts ---"
+mount
 echo "Native diagnostic shell; no Android userspace is present."
 exec /bin/sh

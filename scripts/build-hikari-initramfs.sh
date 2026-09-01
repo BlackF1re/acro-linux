@@ -6,6 +6,7 @@ repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 busybox_src=${BUSYBOX_SRC:-/home/paul/xperia/src/busybox}
 busybox_build=${BUSYBOX_BUILD:-/home/paul/xperia/build/busybox-hikari}
 initramfs_build=${INITRAMFS_BUILD:-/home/paul/xperia/build/hikari-initramfs}
+initramfs_name=${INITRAMFS_NAME:-hikari-firstboot.cpio.gz}
 cross_compile=${CROSS_COMPILE:-arm-linux-gnueabihf-}
 jobs=${JOBS:-"$(nproc)"}
 source_date_epoch=${SOURCE_DATE_EPOCH:-0}
@@ -15,6 +16,7 @@ case "$initramfs_build" in /home/paul/xperia/build/*) ;; *) echo "INITRAMFS_BUIL
 test -f "$busybox_src/Makefile" || { echo "missing external BusyBox source tree" >&2; exit 1; }
 test -f "$repo_root/initramfs/hikari-firstboot/init" || { echo "missing project init" >&2; exit 1; }
 [[ "$source_date_epoch" =~ ^[0-9]+$ ]] || { echo "SOURCE_DATE_EPOCH must be an integer" >&2; exit 1; }
+[[ "$initramfs_name" != */* && "$initramfs_name" = *.cpio.gz ]] || { echo "INITRAMFS_NAME must be a .cpio.gz filename" >&2; exit 1; }
 
 mkdir -p "$busybox_build" "$initramfs_build"
 if [[ ! -f "$busybox_build/.config" ]]; then
@@ -45,7 +47,7 @@ find "$root" -exec touch -h -d "@$source_date_epoch" {} +
 (
   cd "$root"
   find . -print0 | LC_ALL=C sort -z | cpio --null -o -H newc --reproducible --quiet
-) > "$initramfs_build/hikari-firstboot.cpio"
-gzip -n -f -9 "$initramfs_build/hikari-firstboot.cpio"
-sha256sum "$initramfs_build/hikari-firstboot.cpio.gz"
-echo "initramfs: $initramfs_build/hikari-firstboot.cpio.gz"
+) > "$initramfs_build/${initramfs_name%.gz}"
+gzip -n -f -9 "$initramfs_build/${initramfs_name%.gz}"
+sha256sum "$initramfs_build/$initramfs_name"
+echo "initramfs: $initramfs_build/$initramfs_name"
