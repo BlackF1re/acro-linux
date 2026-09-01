@@ -3,8 +3,14 @@
 ## Current position
 
 This repository contains only read-only reconnaissance.  No recovery image,
-partition contents, bootloader state, TA contents, radio/NV data or calibration
-contents have been read.  No recovery route is therefore proven today.
+bootloader state, or sensitive partition payload has been separately
+inspected, parsed, interpreted, extracted, exposed, or committed.  Later C2
+work did sequentially read the complete accessible `/dev/block/mmcblk0` user
+area into private recovery media, so p1--p15 (including potentially
+TA-related, radio/NV, or calibration-bearing bytes) are physically covered by
+that private stream.  The legacy kernel did not expose eMMC boot0, boot1, or
+RPMB nodes; those areas are not covered.  No recovery route is therefore
+proven today.
 
 A follow-up read-only check found the legacy `/fstab.semc` and
 `/init.semc.rc`, but no `/system/etc/recovery.fstab`,

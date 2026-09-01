@@ -1,8 +1,15 @@
 # Boot observations and diagnostics
 
 The handset was already booted into the custom Android legacy baseline when
-collection began. No reboot, recovery, fastboot, flashing, mount change, or
-block-device read/write was performed.
+collection began. The initial reconnaissance performed no reboot, recovery,
+fastboot, flashing, mount change, or raw partition inspection. Later C2 work,
+with explicit owner authorization, sequentially read the complete accessible
+eMMC user area (`/dev/block/mmcblk0`) into a private raw backup. Thus p1--p15
+and potentially sensitive TA-related, radio/NV, and calibration-bearing bytes
+are physically present in private recovery media, but were not separately
+inspected, parsed, interpreted, extracted, exposed, or committed. The legacy
+kernel did not expose eMMC boot0, boot1, or RPMB nodes, so those areas were not
+covered.
 
 The legacy kernel is board-file based: it exposes neither
 /sys/firmware/devicetree nor /proc/config.gz. That is evidence about this

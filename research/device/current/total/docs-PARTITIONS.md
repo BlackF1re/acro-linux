@@ -5,7 +5,7 @@ starts came from sysfs; roles came only from mounted filesystems and fstab.semc.
 
 | Partition | Start (512-byte sectors) | Size | Established legacy role |
 | --- | ---: | ---: | --- |
-| p1 | 1 | 2 MiB | Opaque TA-related storage reference: legacy tad receives this block device. Contents not read. |
+| p1 | 1 | 2 MiB | Opaque TA-related storage reference: legacy tad receives this block device. Contents not separately inspected; its bytes are only present in the private sequential raw backup. |
 | p2 | 4097 | 512 KiB | UNKNOWN |
 | p3 | 8192 | 20 MiB | boot (fstab.semc, recovery-only entry) |
 | p4 | 49152 | 1 KiB | UNKNOWN |
