@@ -1,0 +1,24 @@
+# Sanitized p3 bootrec evidence
+# Source: private offline extraction of confirmed mmcblk0p3 only.
+# No p11, TA, radio/NV, calibration, or other unknown partition was read.
+
+[p3]
+source_partition=mmcblk0p3
+sha256=c59be74873aa32a8422adf9b5402254b2acae619f7dc97bd50fc0e120984d0c1
+
+[bootrec_controller]
+location=outer_p3_ramdisk:/sbin/init.sh
+external_recovery_device=/dev/block/mmcblk0p11
+external_recovery_name=BOOTREC_FOTA
+decision_inputs=hardware_key_event_or_/cache/recovery/boot
+recovery_action=extract_elf_ramdisk_from_p11_then_exec_extracted_/init
+
+[embedded_material]
+outer_p3_ramdisk_contains=ramdisk-recovery.cpio
+embedded_recovery_identity=TeamWin markers in the packaged CPIO archive
+qualification=the controller replaces this path from p11 during recovery boot
+
+[conclusion]
+twrp_storage_relation=REFERENCES_EXTERNAL_STORAGE
+what_is_proven=p3's recovery controller references p11 as an external FOTA/recovery payload
+what_is_not_proven=current_p11_payload_identity; p11_partition_contents; recovery_independence_from_p3; rollback_suitability

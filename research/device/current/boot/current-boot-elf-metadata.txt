@@ -1,0 +1,58 @@
+# Sanitized offline metadata for the current legacy boot artifact
+# Source: private C2 golden backup only, not the phone. Extraction was limited to confirmed p3 (legacy /boot) and was performed outside the repository.
+
+[partition]
+source_partition=mmcblk0p3
+start_sector_512=8192
+sector_count_512=40960
+byte_offset=4194304
+byte_size=20971520
+
+[artifact]
+sha256=c59be74873aa32a8422adf9b5402254b2acae619f7dc97bd50fc0e120984d0c1
+file=ELF 32-bit LSB executable, ARM, statically linked, no section header
+elf_class=ELF32
+endianness=little
+elf_type=ET_EXEC
+machine=ARM
+entry=0x40208000
+program_header_offset=52
+program_header_count=3
+section_headers=absent
+
+[segment_0]
+offset=0x001000
+vaddr=0x40208000
+paddr=0x40208000
+file_size=0x662d90
+memory_size=0x662d90
+flags=0x00000000
+identification=Linux_ARM_zImage
+sha256=7a44bd0911d962e60af0017e530399b7b4e34363ac935c6615a2fdaead708b2e
+
+[segment_1]
+offset=0x663d90
+vaddr=0x41800000
+paddr=0x41800000
+file_size=0x396549
+memory_size=0x396549
+flags=0x80000000
+identification=gzip_ramdisk; SEMC RAMDISK flag according to historical mkelf.py
+sha256=aaeec156102bc25d4531c15df238eeaf46b1902df72bb8392884afc5060bb5d0
+
+[segment_2]
+offset=0x9fa2d9
+vaddr=0x00020000
+paddr=0x00020000
+file_size=0x1d3e8
+memory_size=0x1d3e8
+flags=0x01000000
+identification=ARM ELF payload; SEMC RPM flag according to historical mkelf.py
+sha256=96426cdf25b9bbd83b2f918fac89c739ab205107a0f15d4ebe1271dbf2e67e29
+inner_elf_entry=0x00020000
+
+[cmdline]
+standalone_cmdline_segment=absent
+note=No PT_NOTE/P_FLAGS_CMDLINE program header exists in this artifact. Exact cmdline source/handling remains UNKNOWN.
+
+# No payload bytes, strings, ramdisk files, or unique identifiers are retained.

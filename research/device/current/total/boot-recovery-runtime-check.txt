@@ -1,0 +1,38 @@
+# Sanitized read-only recovery and bootloader runtime check
+# Collected: 2026-09-01
+# Environment: legacy Android baseline; root used only to read paths/properties.
+
+[properties]
+ro.bootloader=unknown
+ro.boot.baseband=msm
+ro.boot.hardware=semc
+ro.product.device=LT26w
+ro.product.board=fuji
+ro.build.type=userdebug
+ro.build.tags=test-keys
+ro.secure=1
+ro.debuggable=1
+
+[checked-paths]
+PRESENT /fstab.semc
+PRESENT /init.semc.rc
+ABSENT /system/etc/recovery.fstab
+ABSENT /system/etc/install-recovery.sh
+ABSENT /system/recovery-from-boot.p
+ABSENT /recovery.fstab
+ABSENT /cache/recovery/command
+
+[relevant-existing-config-lines]
+/fstab.semc: /dev/block/mmcblk0p3 /boot emmc defaults recoveryonly
+/init.semc.rc: service tad /system/bin/tad /dev/block/mmcblk0p1 0,16,256
+
+[emmc-special-device-nodes]
+ABSENT /dev/block/mmcblk0boot0
+ABSENT /dev/block/mmcblk0boot1
+ABSENT /dev/block/mmcblk0rpmb
+
+# This runtime check did not separately inspect partition contents.
+# A later owner-authorized sequential raw backup includes sensitive bytes only
+# in private recovery media; they were not separately parsed, interpreted,
+# exposed, or committed.  `ro.bootloader=unknown` is not a bootloader lock-state
+# determination.

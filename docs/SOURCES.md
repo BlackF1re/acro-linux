@@ -25,3 +25,50 @@ lists an “Xperia acro S driver for ICS” release dated 2012-07-30. This is an
 official vendor provenance lead for Phase B source archaeology. It does **not**
 by itself establish the physical SoC SKU; no Sony document directly asserting
 MSM8260 has yet been recovered in this pass.
+
+## Boot / fastboot / recovery sources (checked 2026-09-01)
+
+| Source | Revision / authority | What it establishes | Use and confidence |
+| --- | --- | --- | --- |
+| [Sony useful key combinations](https://developer.sony.com/open-source/aosp-on-xperia-open-devices/get-started/flash-tool/useful-key-combinations) | Sony Developer World, current page checked 2026-09-01 | Volume Up while connecting USB enters fastboot; Volume Down enters Flashmode. | `VERIFIED_VENDOR_SOURCE` for key semantics; it does not replace physical enumeration. |
+| [AOSP LT26 custombootimg.mk](https://android.googlesource.com/device/sony/lt26/%2B/8213cd2eabf386629f56cc1ac6b8102ffd0671eb/custombootimg.mk) | Android Open Source Project commit `8213cd2eabf386629f56cc1ac6b8102ffd0671eb`; historical LT26 reference | Sony ELF construction order: kernel, ramdisk marked `ramdisk`, RPM marked `rpm`; historical LT26 addresses. | `HISTORICAL_SOURCE`; current Hikari p3 addresses take precedence where they differ. |
+| [AOSP LT26 mkelf.py introduction](https://android.googlesource.com/device/sony/lt26/%2B/b644924c93b3c89e0e6f3aeeb85fb9a23147350f%5E!/) | AOSP commit `b644924c93b3c89e0e6f3aeeb85fb9a23147350f`, Sony Mobile copyright notice | SEMC ELF flags: RAMDISK `0x80000000`, CMDLINE `0x20000000`, Qualcomm MSM8x60 RPM `0x01000000`; segments are laid from `0x1000` in input order. | `HISTORICAL_SOURCE` used to interpret the exact flags in the offline p3 metadata. |
+| [AOSP Android-building LT26 discussion](https://groups.google.com/g/android-building/c/zji_sQGN9Oo/m/MoaS0xidmRMJ) | Historical project discussion, checked 2026-09-01 | Reports LT26 recovery triggering from a boot image and legacy S1Boot family context. | `HISTORICAL_SOURCE` only; current handset recovery storage remains `UNKNOWN`. |
+
+No authoritative source or direct non-persistent test was found that proves
+`fastboot boot` support for S1Boot `CRH1099189_R10C008`. Its status is therefore
+`UNKNOWN`; the host client's command set is not evidence of bootloader support.
+
+## Source archaeology inventory (2026-09-01)
+
+All revisions below were retrieved as metadata only.  “Reference” means that
+the tree can explain legacy wiring or history, not that its code is suitable
+for production.  “Candidate” means maintained upstream-oriented material that
+may be evaluated later; it is not yet selected or integrated.
+
+| Source | Revision / branch checked | Licence | Authority and role | Hikari relevance |
+| --- | --- | --- | --- | --- |
+| [Linus Linux](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git) | `786262be6048deab760f68c8acc2c85607165894` (HEAD) | GPL-2.0-only (kernel) | Primary upstream; candidate code | `qcom-msm8660.dtsi`, PM8058 DT description, DRM/MSM A2xx and many generic drivers. |
+| [BusyBox](https://git.busybox.net/busybox/) | `74ac096e895acd6b02976bb010e9b3511234e899` | GPL-2.0-only | Local first-boot initramfs userspace source | Static diagnostic shell only; not Android userspace and not a production userspace selection. |
+| [linux-next](https://git.kernel.org/pub/scm/linux/kernel/git/next/linux-next.git) | `89c07d98716a13454ec3fd9f97689e812cc71bd4` (HEAD) | GPL-2.0-only (kernel) | Upstream integration snapshot; candidate/review source | Check pending MSM and DRM work before implementation. |
+| [DRM/MSM lore archive](https://lore.kernel.org/dri-devel/) | searched 2026-09-01 | per submitted patch | Authoritative mailing-list record for unmerged/revised work | Current A2xx–A4xx maintenance must be checked here, rather than copied from forks. |
+| [Mesa](https://gitlab.freedesktop.org/mesa/mesa) | `eaa8cb690243d25c9b5ccc40e11a0d0d5a836d0f` (HEAD) | mixed; inspect files used | Primary userspace graphics source; candidate | Freedreno userspace counterpart to DRM/MSM; Adreno 220 viability requires real-device validation. |
+| [Sony Open Devices driver archive](https://developer.sony.com/open-source/aosp-on-xperia-open-devices/downloads/drivers) | Xperia acro S ICS listing, 2012-07-30 | archive-specific; not yet inspected | Official vendor source lead; reference | Potential Sony/Fuji BSP provenance.  No archive content was imported. |
+| [OpenSEMC Sony MSM8x60 kernel](https://github.com/OpenSEMC/android_kernel_sony_msm8x60) | `kk_chocolate_rmfx` / `c4784b04c08d30f799b8b14b597aeb2124d2e6e1` | repository metadata: NOASSERTION; individual kernel files must be checked | Historical community legacy reference | Contains Fuji/Hikari board files for camera, touch, NFC, audio, charger, LEDs, GPIO and regulators. |
+| [LineageOS Sony MSM8x60 kernel](https://github.com/LineageOS/android_kernel_sony_msm8x60) | `lineage-18.1` / `e52cfeafb72d86941552af50afeb21407fb96778` | repository metadata: NOASSERTION; individual files must be checked | Historical Android-derived reference | Legacy MSM8660 configuration and R63306 panel code; not upstream production code. |
+| [postmarketOS pmaports](https://gitlab.postmarketos.org/postmarketOS/pmaports) | `8628ff6159f10b168535ce3b9ccbd7e70acf2e7f` (HEAD) | inspect repository/package licences before reuse | Current distribution packaging reference | No current `sony-hikari` port was established by this metadata pass; do not infer support from related ports. |
+
+The following requested names were searched as Git remotes but did not yield a
+usable authoritative Hikari tree at the checked guessed locations:
+FreeXperia and nAOSP `android_kernel_sony_msm8x60`.  This is a negative lookup,
+not evidence that no historical work exists.  It must be revisited with a
+specific archived URL if one is found.
+
+## Exact source paths used as legacy references
+
+OpenSEMC’s `arch/arm/mach-msm/board-fuji-camera.c` names the two legacy camera
+I2C devices and their power/reset sequencing.  `touch-fuji_hikari.c`,
+`nfc-fuji.c`, `qdsp6v2/board-semc_fuji-audio.c`, `charger-fuji_hikari.c`, and
+`leds-fuji_hikari.c` are the corresponding Hikari/Fuji reference paths.
+They support the mappings in [BOARD_TO_DT.md](BOARD_TO_DT.md); they are not
+proof of exact silicon beyond the physical evidence cited there.
