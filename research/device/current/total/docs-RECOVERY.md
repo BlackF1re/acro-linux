@@ -2,15 +2,18 @@
 
 ## Current position
 
-This repository contains only read-only reconnaissance.  No recovery image,
-bootloader state, or sensitive partition payload has been separately
-inspected, parsed, interpreted, extracted, exposed, or committed.  Later C2
-work did sequentially read the complete accessible `/dev/block/mmcblk0` user
-area into private recovery media, so p1--p15 (including potentially
+The physical-device work was read-only. No external recovery-partition
+payload, bootloader-state payload, or sensitive partition payload has been
+separately inspected, parsed, interpreted, extracted, exposed, or committed.
+Offline p3 analysis did extract its non-sensitive bootrec controller and the
+packaged recovery ramdisk solely to characterize the recovery path; it did not
+inspect p11. Later C2 work sequentially read the complete accessible
+`/dev/block/mmcblk0` user area into private recovery media, so p1--p15 (including potentially
 TA-related, radio/NV, or calibration-bearing bytes) are physically covered by
 that private stream.  The legacy kernel did not expose eMMC boot0, boot1, or
-RPMB nodes; those areas are not covered.  No recovery route is therefore
-proven today.
+RPMB nodes; those areas are not covered. The recovery *environment* is
+reachable, but its storage layout and suitability as an independent rollback
+route were not established by that capture.
 
 A follow-up read-only check found the legacy `/fstab.semc` and
 `/init.semc.rc`, but no `/system/etc/recovery.fstab`,
@@ -21,8 +24,8 @@ checked paths; it neither proves nor rules out a Sony FOTAKernel-style route,
 a separate recovery partition, or recovery code embedded in another boot path.
 One owner-approved, non-destructive recovery entry has now been observed. It
 is **TWRP 2.6.3.0**, directly identified by its recovery binary and runtime
-log; `ro.twrp.boot=1` was also present. See the canonical sanitized recovery
-characterization in `research/device/current/boot/recovery-characterization.md`.
+log; `ro.twrp.boot=1` was also present. See the sanitized [recovery
+characterization](../research/device/current/boot/recovery-characterization.md).
 The older Android-path check remains useful negative evidence only.
 
 The known partition-role evidence is intentionally narrow: p3 is referenced as
@@ -35,10 +38,18 @@ attestation. A later physical fastboot session did observe `secure: no`, but
 the legacy S1Boot `unlocked` variable is empty. Owner-provided unlock history
 is consistent evidence, not a replacement for a standard attestation.
 
-Current TWRP does **not** yet prove a separate recovery partition, FOTAKernel,
-or a path independent of p3. Historical LT26 sources say recovery is triggered
-from a boot image, and this TWRP binary has injection-related code, but the
-installation layout of this handset remains UNKNOWN. It must not be used as the
+Offline analysis of the confirmed p3 image shows a bootrec controller in its
+ramdisk. On a recovery decision it reads an ELF from `mmcblk0p11`, extracts its
+ramdisk, and executes that ramdisk's `/init`. p3 also contains a packaged
+TeamWin recovery ramdisk, but the controller explicitly replaces it from p11
+on this path. p11 itself was not read or extracted. This proves an external
+FOTA/recovery-payload reference, not the current p11 payload's identity, a
+separate recovery partition, or a route independent of p3. See the
+[sanitized p3 bootrec evidence](../research/device/current/boot/p3-bootrec-sanitized.txt).
+
+TWRP is therefore `VERIFIED_DEVICE` as a reachable recovery environment, while
+its physical storage, whether it survives a p3 replacement, and whether it is
+an independent rollback route remain `UNKNOWN`. It must not be used as the
 sole rollback guarantee for a p3 replacement.
 
 ## Mandatory gate before a future write

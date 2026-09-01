@@ -30,7 +30,7 @@ Historical Sony `mkelf.py` defines `0x80000000` as the RAMDISK flag and `0x01000
 
 The current p3 has exactly three `PT_LOAD` program headers. It has no `PT_NOTE` segment carrying Sony's `P_FLAGS_CMDLINE` flag, so a standalone ELF cmdline segment is absent. The exact source and handling of the current kernel command line are therefore `UNKNOWN`; no command-line payload was retained.
 
-The historical LT26 AOSP configuration constructs an analogous `boot.elf` as kernel, gzip ramdisk, and RPM firmware using `mkelf.py`. It provides useful format provenance, but its ramdisk address (`0x41300000`) conflicts with this Hikari p3's directly observed `0x41800000`. Future Hikari artifacts must use the verified Hikari value unless later physical evidence supersedes it.
+The historical LT26 AOSP configuration constructs an analogous `boot.elf` as kernel, gzip ramdisk, and RPM firmware using `mkelf.py`. It provides useful format provenance, but its ramdisk address (`0x41300000`) conflicts with this Hikari p3's directly observed `0x41800000`. The Hikari addresses are the strongest known-compatible starting point, not an eternal target-Linux rule: a future artifact must validate the kernel decompressor, DTB, initramfs, firmware, reserved-memory layout, and every segment range before selecting them.
 
 ## Implications, not authorization
 

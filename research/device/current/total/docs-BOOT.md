@@ -43,8 +43,8 @@ Physical fastboot is now directly observed: Sony S1Boot enumerates as
 `0fce:0dde`, implements fastboot protocol `0.5`, reports version
 `CRH1099189_R10C008`, and returns `secure: no`. Its `unlocked`,
 `max-download-size`, and boot partition query variables are empty; an empty
-legacy variable is not a negative attestation. See the canonical sanitized
-fastboot record in `research/device/current/boot/fastboot-summary.md`.
+legacy variable is not a negative attestation. See the [sanitized fastboot
+record](../research/device/current/boot/fastboot-summary.md).
 
 Owner-provided history says the bootloader was previously unlocked and a custom
 ROM/root were installed. This is not substituted for device attestation, but
@@ -52,9 +52,9 @@ is consistent with the observed fastboot result and custom legacy kernel.
 
 The p3 artifact has now been inspected offline under explicit owner approval.
 It is a Sony-style ARM ELF with a zImage at `0x40208000`, a gzip ramdisk at
-`0x41800000`, and an RPM-marked ELF payload at `0x00020000`. See the canonical
-`docs/BOOT_FORMAT.md`. Cmdline handling and temporary `fastboot boot` support
-remain UNKNOWN.
+`0x41800000`, and an RPM-marked ELF payload at `0x00020000`. See
+[BOOT_FORMAT.md](BOOT_FORMAT.md). Cmdline handling and temporary `fastboot boot`
+support remain UNKNOWN.
 
 The later read-only runtime check found no common Android recovery descriptor,
 install script, recovery patch, or pending recovery command at the checked
@@ -62,7 +62,7 @@ paths.  It also found no `/dev/block/mmcblk0boot0`, `mmcblk0boot1`, or
 `mmcblk0rpmb` device node.  This limits the accessible golden backup to the
 eMMC user area; it does not identify the bootloader's own storage model.
 
-`ro.bootloader` currently returns `unknown`. This is a legacy-ROM property
+`ro.bootloader` currently returns `unknown`.  This is a legacy-ROM property
 value, not evidence of either a locked or unlocked Sony bootloader. It is
 separate from the direct S1Boot fastboot observation documented above.
 See the [sanitized runtime check](../research/device/current/boot/recovery-runtime-check.txt)
@@ -85,7 +85,7 @@ but its MSM8960 example must never be substituted for MSM8260/Hikari addresses.
 | --- | --- | --- |
 | p3 is legacy `/boot` | `fstab-semc-extract.txt` | It is a protected, never-blindly-overwrite target. |
 | Sony ELF container was used by historical LT26 build configuration | AOSP LT26 commit above | Future artifact research needs an ELF-capable, reproducible tool. |
-| Current Hikari legacy artifact layout | `VERIFIED_DEVICE` through private offline p3 copy | Documented in canonical `docs/BOOT_FORMAT.md`; not a target-Linux artifact specification. |
+| Current Hikari legacy artifact layout | `VERIFIED_DEVICE` through private offline p3 copy | Documented in `BOOT_FORMAT.md`; not a target-Linux artifact specification. |
 | Recovery partition identity and recovery route | UNKNOWN | TWRP was observed, but cannot be assumed independent of p3. |
 | TWRP presence | `VERIFIED_DEVICE`: TWRP 2.6.3.0 recovery runtime | It is not yet a proven independent rollback route. |
 | Bootloader state | `secure: no`; empty legacy `unlocked` variable | Owner history and evidence are consistent with an unlocked state, but no standard unlocked attestation exists. |

@@ -49,6 +49,7 @@ may be evaluated later; it is not yet selected or integrated.
 | Source | Revision / branch checked | Licence | Authority and role | Hikari relevance |
 | --- | --- | --- | --- | --- |
 | [Linus Linux](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git) | `786262be6048deab760f68c8acc2c85607165894` (HEAD) | GPL-2.0-only (kernel) | Primary upstream; candidate code | `qcom-msm8660.dtsi`, PM8058 DT description, DRM/MSM A2xx and many generic drivers. |
+| [BusyBox](https://git.busybox.net/busybox/) | `74ac096e895acd6b02976bb010e9b3511234e899` | GPL-2.0-only | Local first-boot initramfs userspace source | Static diagnostic shell only; not Android userspace and not a production userspace selection. |
 | [linux-next](https://git.kernel.org/pub/scm/linux/kernel/git/next/linux-next.git) | `89c07d98716a13454ec3fd9f97689e812cc71bd4` (HEAD) | GPL-2.0-only (kernel) | Upstream integration snapshot; candidate/review source | Check pending MSM and DRM work before implementation. |
 | [DRM/MSM lore archive](https://lore.kernel.org/dri-devel/) | searched 2026-09-01 | per submitted patch | Authoritative mailing-list record for unmerged/revised work | Current A2xx–A4xx maintenance must be checked here, rather than copied from forks. |
 | [Mesa](https://gitlab.freedesktop.org/mesa/mesa) | `eaa8cb690243d25c9b5ccc40e11a0d0d5a836d0f` (HEAD) | mixed; inspect files used | Primary userspace graphics source; candidate | Freedreno userspace counterpart to DRM/MSM; Adreno 220 viability requires real-device validation. |

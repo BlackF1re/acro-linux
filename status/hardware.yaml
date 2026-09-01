@@ -21,11 +21,14 @@ legacy_baseline:
   android_build: Android 4.4.2 userdebug/test-keys
   kernel: 3.4.0-Elite-1.5+
   implementation: BOOTS
+  root_access:
+    evidence: VERIFIED_DEVICE
+    observation: "adb shell su -c id returned uid=0(root) during read-only reconnaissance."
   notes: Modified Android baseline, not Sony stock. Its exposed 1890 MHz frequency is not a Sony-approved OPP.
 target_linux:
-  implementation: UNKNOWN
-  lifecycle: NOT_STARTED
-  notes: No target-native-Linux kernel has been built, deployed, booted, or probed.
+  implementation: IMPLEMENTING
+  lifecycle: IMPLEMENTING
+  notes: A local-only upstream kernel/DTB/initramfs/ELF prototype was built. It has not been deployed, booted, or probed on the device.
 boot_chain:
   fastboot:
     physical:
@@ -51,18 +54,20 @@ boot_chain:
       ramdisk_load_address: "0x41800000"
       rpm_load_address: "0x00020000"
       cmdline_segment: ABSENT
-      notes: Extracted offline only from the private golden backup; exact cmdline handling remains UNKNOWN.
+      notes: Extracted offline only from the private golden backup. Addresses are verified legacy starting candidates; a target artifact must validate decompressor, DTB, initramfs, firmware and reserved-memory compatibility. Exact cmdline handling remains UNKNOWN.
   recovery:
     physical:
       evidence: VERIFIED_DEVICE
       implementation: TWRP 2.6.3.0
-      notes: Recovery runtime was observed over ADB. Storage location and independence from p3 remain UNKNOWN.
+      reachable: VERIFIED_DEVICE
+      twrp_storage_relation: REFERENCES_EXTERNAL_STORAGE
+      notes: Recovery runtime was observed over ADB and owner returned to Android. Offline p3 bootrec references p11 as FOTA/recovery payload, but p11 was not read; storage location, p3 independence and rollback suitability remain UNKNOWN.
     target_linux:
       rollback_route: UNKNOWN
 subsystems:
   cpu_smp: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   storage_emmc: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
-  storage_microsd: { physical: { evidence: UNKNOWN }, legacy_baseline: { implementation: PROBES, notes: Slot/controller registered; no card inserted. }, target_linux: { implementation: UNKNOWN } }
+  storage_microsd: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: WORKING, notes: Separate mmcblk1/mmcblk1p1 SD path was mounted, wrote the C2 raw-backup stream, and its parts passed hash validation. }, target_linux: { implementation: UNKNOWN } }
   display: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   touchscreen: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   gpu: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }

@@ -15,7 +15,7 @@ starts came from sysfs; roles came only from mounted filesystems and fstab.semc.
 | p8 | 69632 | 3 MiB | UNKNOWN |
 | p9 | 77824 | 5 MiB | UNKNOWN |
 | p10 | 90112 | 8 MiB | /data/idd, ext4 |
-| p11 | 106496 | 16 MiB | UNKNOWN |
+| p11 | 106496 | 16 MiB | FOTA/recovery payload referenced by the p3 bootrec controller; p11 payload itself was not read |
 | p12 | 139264 | 1 GiB | /system, ext4 |
 | p13 | 2236416 | 250 MiB | /cache, ext4 |
 | p14 | 2748416 | 2 GiB | /data, ext4 |
