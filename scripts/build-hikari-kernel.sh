@@ -23,10 +23,18 @@ case "$build_dir" in /home/paul/xperia/build/*) ;; *) echo "BUILD_DIR must be be
 make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" qcom_defconfig
 "$kernel_src/scripts/kconfig/merge_config.sh" -m -O "$build_dir" "$build_dir/.config" "$repo_root/kernel/configs/hikari-firstboot.fragment"
 make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" olddefconfig
+grep -qx 'CONFIG_ARCH_QCOM_RESERVE_SMEM=y' "$build_dir/.config" || {
+  echo "Hikari boot build requires CONFIG_ARCH_QCOM_RESERVE_SMEM=y" >&2
+  exit 1
+}
 if [[ -n "$initramfs_source" ]]; then
   test -f "$initramfs_source" || { echo "INITRAMFS_SOURCE is not a regular file" >&2; exit 1; }
   "$kernel_src/scripts/config" --file "$build_dir/.config" --set-str INITRAMFS_SOURCE "$initramfs_source"
   make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" olddefconfig
+  grep -qx 'CONFIG_ARCH_QCOM_RESERVE_SMEM=y' "$build_dir/.config" || {
+    echo "Hikari boot build lost CONFIG_ARCH_QCOM_RESERVE_SMEM" >&2
+    exit 1
+  }
 fi
 make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" -j"$jobs" zImage qcom/qcom-msm8260-sony-hikari.dtb
 echo "zImage: $build_dir/arch/arm/boot/zImage"

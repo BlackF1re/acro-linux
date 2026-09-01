@@ -1,8 +1,8 @@
 CONFIG_ARCH_QCOM=y
 CONFIG_SMP=y
 # The verified legacy RAM bank begins at 0x40200000.  AUTO_ZRELADDR would
-# mask a zImage loaded at 0x40208000 down to 0x40000000, outside that bank.
-# Keep the decompressor destination explicit for this first-board prototype.
+# mask a zImage loaded above it down to 0x40000000, outside that bank.
+# Keep the decompressor destination explicit for this bring-up prototype.
 # CONFIG_ARCH_MULTIPLATFORM is not set
 # CONFIG_AUTO_ZRELADDR is not set
 CONFIG_PHYS_OFFSET=0x40200000
@@ -23,4 +23,5 @@ CONFIG_INITRAMFS_SOURCE=""
 CONFIG_RD_GZIP=y
 CONFIG_SERIAL_MSM=y
 CONFIG_SERIAL_MSM_CONSOLE=y
+CONFIG_SERIAL_EARLYCON=y
 # CONFIG_DEBUG_INFO is not set
