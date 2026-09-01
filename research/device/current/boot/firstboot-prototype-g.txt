@@ -1,0 +1,29 @@
+First-boot local prototype G (sanitized metadata)
+================================================
+
+Scope: host-side build and validation only.  No device transport, reboot,
+fastboot operation, or flash was performed for this artifact.
+
+Linux source commit: 786262be6048deab760f68c8acc2c85607165894
+Project baseline revision: a8c45f71a0b640b5758e1f77575b06ae7ebfd802
+The artifact was built with the reviewed, uncommitted G changes.
+
+Artifact path (outside Git):
+/home/paul/xperia/build/hikari-artifacts-g3/hikari-firstboot.elf
+
+artifact size: 11937605 bytes
+artifact SHA-256: 467d08a2fbafe86c61f5422946115a899f3bfa559f429d79dd13f9867ceb046f
+
+zImage SHA-256: efd4091a0269fb0c37d3759d44f4b53850aa38254cdfdb7fc1287ead47af934e
+DTB SHA-256: 83b40069099a8f5bcc5189524fa656caff87c86889b17b14636ee61732c86ff8
+initramfs SHA-256: 03e6d9597a613f6218de756ef8000661f611f1ef678ee278fbdf976af6a1a855
+private RPM SHA-256: 96426cdf25b9bbd83b2f918fac89c739ab205107a0f15d4ebe1271dbf2e67e29
+
+segment 0: offset=0x1000 paddr=0x40208000 filesz=0xa3807e flags=0x00000000
+segment 1: offset=0xa3907e paddr=0x42400000 filesz=0x10c2df flags=0x80000000
+segment 2: offset=0xb4535d paddr=0x00020000 filesz=0x1d3e8 flags=0x01000000
+
+Appended-DTB test: PASS (built zImage prefix, FDT bytes d0 0d fe ed at the
+boundary, and built DTB tail all match byte-for-byte).
+Memory/decompressor range gate: PASS.  See docs/FIRST_BOOT_MEMORY.md.
+ELF validator and 20 MiB p3-capacity gate: PASS.

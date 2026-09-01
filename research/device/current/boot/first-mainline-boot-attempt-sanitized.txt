@@ -1,0 +1,39 @@
+# First physical native-Linux boot attempt (sanitized)
+
+date=2026-09-02
+evidence=VERIFIED_DEVICE
+artifact=hikari-firstboot.elf
+artifact_size_bytes=11937605
+artifact_sha256=467d08a2fbafe86c61f5422946115a899f3bfa559f429d79dd13f9867ceb046f
+
+[fastboot_flash_boot]
+Warning: skip copying boot image avb footer (boot partition size: 0, boot image size: 11937605).
+Sending 'boot' (11657 KB)
+(bootloader) USB download speed was 18858kB/s
+OKAY [  0.650s]
+Writing 'boot'
+(bootloader) Flash of partition 'boot' requested
+(bootloader) S1 partID 0x00000003, block 0x00002000-0x0000bfff
+(bootloader) Erase operation complete, 0 bad blocks encountered
+(bootloader) Flashing...
+(bootloader) Flash operation complete
+OKAY [  1.472s]
+Finished. Total time: 2.152s
+
+[fastboot_reboot]
+Rebooting
+OKAY [  0.003s]
+Finished. Total time: 0.405s
+
+[observation]
+host_observation_window_seconds=120
+adb_detected=no
+fastboot_detected=no
+new_usb_target_detected=no
+mainline_marker_detected=no
+display_linux_output=not_observed
+owner_observation=black_screen; ordinary_power_or_volume_did_not_recover; Power+Volume_Up_forced_reset_or_shutdown_succeeded
+result=FIRST_MAINLINE_BOOT_NOT_VERIFIED
+failure_stage=UNKNOWN
+
+No serial number, IMEI, MAC address, or private payload is recorded here.

@@ -1,0 +1,31 @@
+# Second physical Hikari mainline boot attempt (sanitized)
+
+[artifact]
+filename=hikari-secondboot.elf
+size_bytes=11938586
+sha256=f9379ed17705bb20390c7e276fe121fc2183f4ec0fd77565ed5834ec85de82d4
+
+[flash]
+logical_target=boot
+result=SUCCESS
+bootloader_message=Flash of partition 'boot' requested
+bootloader_part_id=0x00000003
+bootloader_blocks=0x00002000-0x0000bfff
+bootloader_result=Flash operation complete
+
+[observation]
+reboot_command=fastboot reboot
+observation_window_seconds=120
+target_marker=NOT_OBSERVED
+adb=NOT_OBSERVED
+fastboot=NOT_OBSERVED
+new_target_usb=NOT_OBSERVED
+owner_observation=black_screen_and_unresponsive_handset
+boot_proof=NOT_OBSERVED
+result=SECOND_MAINLINE_BOOT_NOT_VERIFIED
+failure_stage=UNKNOWN
+
+[recovery]
+forced_reset=Power_plus_Volume_Up
+original_p3_restore=SUCCESS
+android_baseline_after_restore=VERIFIED_DEVICE

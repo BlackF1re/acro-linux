@@ -17,6 +17,9 @@ The old S1Boot returns empty `unlocked` and boot-partition metadata variables;
 this is unsupported/absent metadata, not evidence of a locked bootloader.
 Owner history independently records an earlier unlock, custom ROM installation,
 and root; it is retained as owner-provided history rather than an attestation.
+Following the first failed native-Linux attempt, **Power + Volume Up** was
+observed to force reset/shutdown; this is distinct from phone-off Volume-Up USB
+entry to S1Boot.
 
 The currently installed recovery is `VERIFIED_DEVICE` as a reachable TWRP
 2.6.3.0 runtime: `adb reboot recovery` reached it and the owner returned to
@@ -24,9 +27,34 @@ Android normally. Offline p3 analysis shows that its bootrec controller refers
 to p11 as an external FOTA/recovery payload, but p11 has not been read. Thus
 its physical storage, relationship to p3, and independence as a rollback route
 remain `UNKNOWN`. The current p3 legacy `/boot` artifact is a verified Sony ELF
-layout documented in [BOOT_FORMAT.md](BOOT_FORMAT.md). A local-only upstream
-Hikari kernel/DTB/initramfs/ELF prototype has been built; target Linux has not
-been sent to the device, booted, or probed.
+layout documented in [BOOT_FORMAT.md](BOOT_FORMAT.md). The first local-only
+upstream Hikari kernel/DTB/initramfs/ELF prototype was physically written once:
+S1Boot accepted it, but no target-Linux proof of life appeared during the
+120-second observation window. `FIRST_MAINLINE_BOOT` is therefore
+`NOT_VERIFIED`, not a kernel-panic diagnosis.
+
+The rollback model is now `VERIFIED_DEVICE`: after the failed attempt, hardware
+S1Boot entry remained available; the exact original p3 ELF was flashed through
+logical `boot`; and the ScrubbModRom baseline returned normally. This proves
+the p3 rollback route for this device and artifact, without generalizing it to
+other partitions. `fastboot boot` remains `UNKNOWN`. See [ROLLBACK.md](ROLLBACK.md).
+
+The second candidate was physically written once and S1Boot accepted the
+expected logical `boot`/p3 mapping. After reboot, the 120-second observation
+had no target-Linux marker, ADB, fastboot, or new USB target; the owner
+observed a black, unresponsive handset and used the verified **Power + Volume
+Up** forced reset. The original p3 was restored and Android returned. Thus
+`SECOND_MAINLINE_BOOT` is `NOT_VERIFIED` and `BOOT_PROOF` is `NOT_OBSERVED`.
+The only captured TWRP previous-boot log belongs to a later legacy Android
+reboot, so it does not locate the target failure stage; see
+[secondboot post-mortem](../research/device/current/boot/secondboot-postmortem.md).
+
+Post-attempt review identifies a probable double application of the MSM8x60
+SMEM offset in the second DTS/layout model. This is a `HYPOTHESIS` supported by
+current upstream reservation semantics, historical MSM8x60 board code, and the
+observed legacy p3 load address—not a conclusion from a target kernel log.
+The next build gate is therefore `BLOCKED` until that physical-RAM model is
+corrected and revalidated offline.
 
 ## Status domains
 

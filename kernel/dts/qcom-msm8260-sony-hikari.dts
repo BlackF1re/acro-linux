@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: GPL-2.0
+/dts-v1/;
+
+#include <dt-bindings/soc/qcom,gsbi.h>
+#include "qcom-msm8660.dtsi"
+
+/ {
+	model = "Sony Xperia acro S (Hikari)";
+	compatible = "sony,hikari", "qcom,msm8660";
+
+	/*
+	 * The low bank starts at the historical MSM8x60 shared-memory physical
+	 * base.  CONFIG_ARCH_QCOM_RESERVE_SMEM then retains its first 2 MiB for
+	 * SMEM, leaving 0x40200000 as the first normal Linux address.  The legacy
+	 * resource view starts at that latter address; see FIRST_BOOT_MEMORY.md.
+	 * This remains a deliberately minimal bring-up memory description, not a
+	 * claim that every byte of nominal RAM is currently understood.
+	 */
+};
+
+/* Override the placeholder System RAM node supplied by qcom-msm8660.dtsi. */
+&{/memory@0} {
+	reg = <0x40000000 0x02e00000>,
+	      <0x48000000 0x26600000>;
+};
+
+/*
+ * The legacy kernel directly observed a low-speed UART at 0x19c40000.  Keep
+ * this common-SoC GSBI disabled until a physical console route is known; its
+ * required mux property is nevertheless part of a schema-valid description.
+ */
+&gsbi12 {
+	qcom,mode = <GSBI_PROT_I2C_UART>;
+};

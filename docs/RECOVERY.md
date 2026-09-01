@@ -47,6 +47,26 @@ FOTA/recovery-payload reference, not the current p11 payload's identity, a
 separate recovery partition, or a route independent of p3. See the
 [sanitized p3 bootrec evidence](../research/device/current/boot/p3-bootrec-sanitized.txt).
 
+## Recovery selection from the original p3
+
+The original p3 bootrec controller gives a directly derived recovery selector:
+it opens `/dev/input/event0`, waits for a **fresh** event for three seconds,
+and takes the p11 recovery branch if it received one (or if its cache recovery
+flag exists). Direct input evidence identifies that event device as
+`keypad-pmic-fuji`; the matching historical Hikari keypad source maps it to
+**Volume Up**. The operational sequence is therefore repeated Volume-Up
+presses from immediately before normal boot begins through its first 3–5
+seconds. A button held only before bootrec opens the event device may not
+produce the required event. The controller transiently shows red and blue LEDs
+during the window and blue after it chooses recovery.
+
+This is `VERIFIED_FROM_CURRENT_P3_ARTIFACT` for the controller behaviour, with
+the exact key identity corroborated by a historical source. It is not yet
+`VERIFIED_DEVICE` as a direct S1Boot-to-recovery procedure: the attempted
+sequence subsequently booted legacy Android instead. A later manual TWRP entry
+also came after Android had run, so it could not preserve the secondboot
+post-mortem buffer. See the [post-mortem record](../research/device/current/boot/secondboot-postmortem.md).
+
 TWRP is therefore `VERIFIED_DEVICE` as a reachable recovery environment, while
 its physical storage, whether it survives a p3 replacement, and whether it is
 an independent rollback route remain `UNKNOWN`. It must not be used as the
