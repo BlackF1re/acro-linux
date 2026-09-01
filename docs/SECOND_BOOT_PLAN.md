@@ -17,13 +17,18 @@ There is also a concrete pre-kernel configuration defect: firstboot omitted
 `CONFIG_ARCH_QCOM_RESERVE_SMEM=y`, although current upstream declares the
 first 2 MiB RAM reservation required for MSM8x60. Its built decompressor used
 `zreladdr=0x40208000`; a corrected build must use `0x40408000`. This is a
-strong candidate for failure, not proof that it was the sole cause.
+strong candidate for failure, not proof that it was the sole cause. That
+corrected destination would overlap the current `0x40208000` compressed-input
+range; upstream has generic relocation code, but its safety in this exact Sony
+ELF path is still unproven and is a separate deployment blocker.
 
 ## Required changes before authorizing another attempt
 
 1. Enable `CONFIG_ARCH_QCOM_RESERVE_SMEM=y`; rebuild from the documented
    upstream commit and prove the new `zreladdr`, all compressed-input,
-   decompressed-output, DTB work-space, initramfs and RPM intervals.
+   decompressed-output, DTB work-space, initramfs and RPM intervals. Select a
+   proven non-overlapping input address, or separately prove the required
+   relocation behaviour for this Sony path.
 2. Keep the appended-DTB strategy, but verify it again byte-for-byte. Upstream
    ARM supports an FDT appended at zImage `_edata` and ATAG-to-DT conversion;
    the legacy p3 itself has no appended DTB, so exact S1Boot/ATAG hand-off is

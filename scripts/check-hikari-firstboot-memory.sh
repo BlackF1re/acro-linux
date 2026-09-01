@@ -88,6 +88,8 @@ show('initramfs', ramdisk_start, size(ramdisk))
 show('RPM payload', rpm_start, size(rpm))
 if rpm_end > ram_start:
     raise SystemExit('RPM payload unexpectedly reaches System RAM')
+if zimage_load < kernel_end and kernel_load < dtb_end:
+    raise SystemExit('compressed zImage/appended DTB overlaps decompressed kernel; select a proven non-overlapping input address or separately prove Sony-path relocation')
 if kernel_end > ramdisk_start:
     raise SystemExit('decompressed kernel overlaps initramfs')
 

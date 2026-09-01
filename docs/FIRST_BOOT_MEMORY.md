@@ -35,6 +35,15 @@ RAM and is required on MSM8x60; `arch/arm/Makefile` then selects
 candidate must enable the option, rebuild, and prove
 `zreladdr=0x40408000`; it must not reuse the first artifact.
 
+That corrected output address alone is not enough. With the currently observed
+Sony ELF input address (`0x40208000`) and the current compressed-image size,
+the compressed zImage plus appended DTB intersects the proposed decompressed
+kernel interval beginning at `0x40408000`. Current upstream decompressor code
+does contain input-relocation handling, but that path has not been proved for
+this S1Boot/ELF combination. The host gate therefore rejects such an overlap:
+another candidate needs either a proven non-overlapping input address or
+separate evidence that makes the relocation path safe.
+
 The current upstream decompressor's `head.S` contains its own input-overlap
 relocation handling.  Its documented appended-DTB allowance is conservatively
 modelled here as a full 1 MiB clear workspace after the decompressed kernel.
@@ -55,7 +64,9 @@ The old arithmetic showed a gap to the initramfs, but it was not sufficient:
 it did not enforce the upstream MSM8x60 SMEM reservation.  The corrected
 host check now refuses a build without it.  After a rebuild it must re-measure
 the compressed input, appended DTB, `zreladdr`, decompressed image, relocation
-workspace, initramfs and RPM ranges; only then may it report `PASS`.
+workspace, initramfs and RPM ranges; only then may it report `PASS`. It now
+also rejects an input/decompressed-image overlap unless an explicitly proven
+Sony-path relocation rule replaces that conservative prohibition.
 
 This does not attribute the remaining nominal RAM, prove firmware ownership,
 prove decompressor relocation for the Sony path, or prove S1Boot acceptance.
