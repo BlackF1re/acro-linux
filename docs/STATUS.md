@@ -28,6 +28,13 @@ layout documented in [BOOT_FORMAT.md](BOOT_FORMAT.md). A local-only upstream
 Hikari kernel/DTB/initramfs/ELF prototype has been built; target Linux has not
 been sent to the device, booted, or probed.
 
+The rollback model is now narrower and evidence-backed: official historical
+LT26 AOSP maps `/boot` to `mmcblk0p3`, and historical LT26/Hikari material uses
+`fastboot flash boot` for a Sony boot ELF.  Together with physical independent
+S1Boot entry and the preserved original p3, this is
+`STRONGLY_SUPPORTED_HISTORICAL_SOURCE` for p3 restoration, not a write test on
+this handset.  `fastboot boot` remains `UNKNOWN`.  See [ROLLBACK.md](ROLLBACK.md).
+
 ## Status domains
 
 status/hardware.yaml deliberately separates physical hardware evidence, the

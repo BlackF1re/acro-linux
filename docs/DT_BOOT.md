@@ -24,6 +24,12 @@ This is a first-boot **candidate**, not `VERIFIED_DEVICE`: its compatibility
 with the exact S1Boot, decompressor placement, supplied ATAGs, and target
 memory layout must be tested only after a separate deployment approval.
 
+For the exact G artifact, this is a host-side checked fact rather than only a
+configuration intention: the combined segment begins byte-for-byte with the
+built zImage, contains FDT magic bytes `d0 0d fe ed` exactly at the zImage
+boundary, and ends byte-for-byte with the built Hikari DTB.  The artifact
+validator fails if any of these checks fails.
+
 ## Rejected assumptions
 
 - No Sony ELF DTB segment is evidenced in the current p3.

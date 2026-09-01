@@ -41,6 +41,10 @@ boot_chain:
       notes: Empty unlocked/max-download-size/partition boot metadata variables are unsupported or absent legacy responses, not negative evidence.
     target_linux:
       temporary_fastboot_boot: UNKNOWN
+      p3_restore:
+        evidence: STRONGLY_SUPPORTED_HISTORICAL_SOURCE
+        physical_write_test: NOT_YET_TESTED
+        notes: Official historical LT26 recovery.fstab maps boot to mmcblk0p3; historical LT26/Hikari material uses fastboot flash boot with a Sony boot ELF. No write has been tested on this handset.
   owner_provided_history:
     bootloader_previously_unlocked: true
     custom_rom_previously_installed: MoKee
@@ -63,7 +67,8 @@ boot_chain:
       twrp_storage_relation: REFERENCES_EXTERNAL_STORAGE
       notes: Recovery runtime was observed over ADB and owner returned to Android. Offline p3 bootrec references p11 as FOTA/recovery payload, but p11 was not read; storage location, p3 independence and rollback suitability remain UNKNOWN.
     target_linux:
-      rollback_route: UNKNOWN
+      rollback_route: STRONGLY_SUPPORTED_HISTORICAL_SOURCE
+      notes: The bootloader-level p3 restore route is supported by LT26 historical evidence but has not been physically write-tested on this handset.
 subsystems:
   cpu_smp: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   storage_emmc: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }

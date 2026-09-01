@@ -2,8 +2,8 @@
 
 No kernel, fastboot `boot`, flash, or other phone deployment has been
 performed. A local-only upstream kernel, Hikari DTB, native initramfs and Sony
-ELF prototype have been built and validated; this plan still selects no device
-deployment route until the owner reviews it.
+ELF prototype have passed the final host-side gates. Deployment still requires
+a new explicit owner approval.
 
 ## Candidate ranking
 
@@ -12,9 +12,11 @@ deployment route until the owner reviews it.
 | A. `fastboot boot` with a temporary Sony ELF | Not selected: `UNKNOWN` | Exact S1Boot `boot` support and its non-persistent semantics are not proven. |
 | B. Independent recovery/FOTA route | Not selected: `UNKNOWN` | TWRP 2.6.3.0 exists, but its storage/boot-path independence from p3 is unproven. |
 | C. Temporary chainload | Not selected: `UNKNOWN` | No evidence-backed mechanism has been found. |
-| D. Controlled replacement of p3 | Conditional future candidate | p3 role, exact image format, backup and S1Boot access are known; it still requires an independently acceptable rollback route and explicit owner approval. |
+| D. Controlled replacement of p3 | Selected conditional candidate | Official historical LT26 evidence maps `boot` to p3 and historical LT26/Hikari material uses `fastboot flash boot`; exact original p3 and independent physical S1Boot entry exist. It remains untested as a write on this handset and needs explicit owner approval. |
 
-Thus the safest present action is **further offline recovery-path research**, not an experimental boot. If it proves a rollback path independent of p3, the first later experiment may use candidate D with a single whitelisted p3 write.
+Thus the next action, if separately approved, is the one-write candidate D
+procedure in [FIRST_PHYSICAL_BOOT.md](FIRST_PHYSICAL_BOOT.md), with a single
+whitelisted p3 `boot` write and an exact original-p3 rollback artifact.
 
 ## Required artifact contract
 
@@ -40,23 +42,24 @@ Thus the safest present action is **further offline recovery-path research**, no
 - DTB method: appended `qcom-msm8260-sony-hikari.dtb`; the input tail is
   checked byte-for-byte by the host-only validator.
 - Initramfs: native static BusyBox diagnostic `/init`, SHA-256
-  `b290c36ae4595e4d37a851221d92bef14821ccf877910b4df177a62bfb3103c5`.
+  `03e6d9597a613f6218de756ef8000661f611f1ef678ee278fbdf976af6a1a855`.
 - Private local RPM input: the original p3 segment only; it is not in Git and
   has not been sent to the phone.
-- ELF32 prototype: `11,937,690` bytes, SHA-256
-  `cecf280c62023619274bff43ea370619c9d59f3272e0e4436ab2895481461f0e`.
-  Segment 0 is the appended-DTB zImage at `0x40208000` (`0xa380e0` bytes),
-  segment 1 is the initramfs at `0x41800000` (`0x10c2d2` bytes), and segment 2
+- ELF32 prototype: `11,937,605` bytes, SHA-256
+  `467d08a2fbafe86c61f5422946115a899f3bfa559f429d79dd13f9867ceb046f`.
+  Segment 0 is the appended-DTB zImage at `0x40208000` (`0xa3807e` bytes),
+  segment 1 is the initramfs at `0x42400000` (`0x10c2df` bytes), and segment 2
   is the private RPM ELF at `0x00020000` (`0x1d3e8` bytes). It is within the
   20 MiB p3 capacity and has no ELF load-address overlap.
 
-These are local format checks, not proof that the decompressor, bootloader or
-target memory reservation accepts the artifact.
+The explicit decompressor and range gate passes for these exact inputs; see
+[FIRST_BOOT_MEMORY.md](FIRST_BOOT_MEMORY.md). These are still host-side
+checks, not proof that the bootloader accepts the artifact or that Linux boots.
 
 ## Rollback and abort gate
 
 - Original p3 reference: SHA-256 `c59be74873aa32a8422adf9b5402254b2acae619f7dc97bd50fc0e120984d0c1`, private backup offset 4,194,304 bytes, size 20,971,520 bytes.
 - The full private user-area backup covers the p3 bytes, but it is a live capture and not an atomic filesystem snapshot.
-- Do not write p3 until recovery/fastboot rollback is demonstrated or the owner explicitly accepts its remaining limitations.
+- The bootloader-level p3 route is strongly supported by historical LT26 evidence, but not physically write-tested here.  Do not write p3 until the owner explicitly accepts that remaining limitation.
 - Abort immediately on device-identity mismatch, changed partition layout, unavailable backup, unknown artifact hash/format, missing diagnostics, or loss of the agreed rollback route.
 - A separate owner approval must name the exact artifact, target partition, rollback procedure and stop conditions.

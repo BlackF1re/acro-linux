@@ -7,7 +7,8 @@ mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
 
-echo "HIKARI_FIRSTBOOT_NATIVE_INITRAMFS"
+echo "HIKARI MAINLINE EARLY BOOT"
+echo "HIKARI INITRAMFS STARTED"
 uname -a
 echo "--- /proc/cpuinfo ---"
 cat /proc/cpuinfo

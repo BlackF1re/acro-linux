@@ -38,8 +38,12 @@ kernel outputs and ELF prototype are never added to Git.
 - `make ... zImage qcom/qcom-msm8260-sony-hikari.dtb`: passed.
 - `make ... dtbs`: passed as part of the build; no DTC warning was emitted for
   the new DTS.
-- `make ... dtbs_check`: blocked before schema validation because this host
-  lacks `dt-doc-validate` from dtschema. No package was installed implicitly.
+- `make ... dtbs_check`: completed with no diagnostic for Hikari.  The broad
+  Qualcomm DT set still emits unrelated existing diagnostics for other boards;
+  direct `dt-validate` of `qcom-msm8260-sony-hikari.dtb`, targeted
+  `dt-doc-validate`, `yamllint`, and single-process `dt-check-style` of the
+  changed Qualcomm binding all pass with no output.  `dtschema` and its host
+  tooling are installed in the isolated build venv, not the global Python.
 - The ELF self-test and artifact validator passed. The latter checks the
   original offline p3 hash and size, p3 capacity, appended-DTB tail, ELF32
   header, segment ranges and load-address overlap.

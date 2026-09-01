@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /dts-v1/;
 
+#include <dt-bindings/soc/qcom,gsbi.h>
 #include "qcom-msm8660.dtsi"
 
 / {
@@ -12,8 +13,19 @@
 	 * They are intentionally not a claim about every byte of the nominal 1 GiB;
 	 * see docs/FIRST_BOOT_MEMORY.md before any deployment.
 	 */
-	memory {
-		reg = <0x40200000 0x02c00000>,
-		      <0x48000000 0x26600000>;
-	};
+};
+
+/* Override the placeholder System RAM node supplied by qcom-msm8660.dtsi. */
+&{/memory@0} {
+	reg = <0x40200000 0x02c00000>,
+	      <0x48000000 0x26600000>;
+};
+
+/*
+ * The legacy kernel directly observed a low-speed UART at 0x19c40000.  Keep
+ * this common-SoC GSBI disabled until a physical console route is known; its
+ * required mux property is nevertheless part of a schema-valid description.
+ */
+&gsbi12 {
+	qcom,mode = <GSBI_PROT_I2C_UART>;
 };
