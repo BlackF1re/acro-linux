@@ -1,4 +1,4 @@
-# Second Hikari boot plan
+# Second Hikari boot plan and result
 
 The first attempt did not prove mainline boot.  Its two concrete pre-boot
 defects were an omitted MSM8x60 SMEM reservation and an initramfs at
@@ -6,7 +6,7 @@ defects were an omitted MSM8x60 SMEM reservation and an initramfs at
 range.  This second local artifact corrects only those defects and adds
 `HIKARI MAINLINE BOOT #2` / `HIKARI INITRAMFS STARTED` diagnostics.
 
-## Candidate
+## Executed candidate
 
 The Sony ELF contains zImage plus appended Hikari DTB at `0x40408000`, native
 initramfs at `0x42a00000`, and the private legacy RPM payload at `0x00020000`.
@@ -21,7 +21,20 @@ is host USB observation plus any visible target output; the initramfs markers
 are definitive only if a console becomes available.  This controlled blind
 attempt is acceptable only because the p3 rollback route is physically proven.
 
-## Proposed, owner-gated procedure
+The owner-approved second attempt was executed once. S1Boot accepted the
+logical `boot` flash and reported the expected p3 mapping, but the subsequent
+120-second observation produced no target-Linux marker, ADB, fastboot, or new
+USB target. The owner observed a black, unresponsive handset and recovered it
+with **Power + Volume Up**. The exact original p3 was then restored through
+S1Boot; Android returned normally. Thus `BOOT_PROOF=NOT_OBSERVED` and
+`SECOND_MAINLINE_BOOT=NOT_VERIFIED`; no particular kernel failure stage is
+established.
+
+The post-mortem capture did not preserve the failed boot: TWRP's only
+`/proc/last_kmsg` belongs to a later legacy Android/recovery transition.
+See [secondboot post-mortem](../research/device/current/boot/secondboot-postmortem.md).
+
+## Historical owner-gated procedure
 
 Do not execute without fresh approval:
 
@@ -40,4 +53,15 @@ fastboot flash boot /home/paul/xperia/backups/hikari/20260901T111716Z/hikari-gol
 fastboot reboot
 ```
 
-Never erase, use `fastboot boot`, or touch another partition.
+Never erase, use `fastboot boot`, or touch another partition. This procedure
+is historical and must not be reused without a new artifact and explicit owner
+approval.
+
+## Next diagnostic boundary
+
+Do not build or deploy a third artifact yet. The one recommended technical
+change is correction and host-side validation of the probable double-applied
+SMEM offset described in [FIRST_BOOT_MEMORY.md](FIRST_BOOT_MEMORY.md). A later
+attempt must additionally have a physically usable diagnostics route; the
+historical Hikari mainline trace identifies `ttyMSM0` at `0x19c40000` as a
+possible route, but no accessible Hikari UART path has yet been proven.

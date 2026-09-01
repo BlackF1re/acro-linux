@@ -32,6 +32,12 @@ target_linux:
     evidence: VERIFIED_DEVICE
     result: NOT_VERIFIED
     notes: The approved first Sony ELF was accepted by S1Boot, but no target-Linux marker, ADB, fastboot, or new USB target appeared during 120 seconds. Failure stage is UNKNOWN; this is not a kernel-panic diagnosis.
+  second_mainline_boot:
+    evidence: VERIFIED_DEVICE
+    result: NOT_VERIFIED
+    boot_proof: NOT_OBSERVED
+    postmortem: WRONG_BOOT
+    notes: The approved second Sony ELF was accepted by S1Boot through logical boot/p3. No target-Linux marker, ADB, fastboot, or new USB target appeared during 120 seconds; Power + Volume Up forced reset, original p3 restore succeeded, and Android returned. TWRP's captured previous-boot log was from a later legacy Android reboot, so the target failure stage is UNKNOWN.
   notes: A local-only upstream kernel/DTB/initramfs/ELF prototype was deployed once and rolled back. Target Linux has not been shown to boot or probe on the device.
 boot_chain:
   fastboot:
@@ -111,3 +117,4 @@ notes:
   - Legacy runtime observations are not target-Linux VERIFIED states and are not formal acceptance tests.
   - VERIFIED for a target subsystem requires a function-specific acceptance test on the physical Xperia.
   - Power + Volume Up is a VERIFIED_DEVICE forced-reset/shutdown action for a hung experimental kernel; phone off + Volume Up + USB is the separate S1Boot entry action.
+  - The second layout's SMEM placement at 0x40200000 is a HYPOTHESIS-level probable double offset, not target-kernel evidence; no third artifact is authorized until corrected offline.

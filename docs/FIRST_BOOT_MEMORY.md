@@ -1,21 +1,40 @@
-# Hikari second-boot memory gate
+# Hikari first-boot memory analysis
 
-`SECOND_BOOT_MEMORY_SAFETY=PASS` is a host-side gate for the locally built
-second artifact.  It is not proof that S1Boot will execute that artifact.
+## Post-secondboot reassessment
 
-The first attempt is obsolete: it omitted the upstream-required
-`CONFIG_ARCH_QCOM_RESERVE_SMEM`, so its decompressed-kernel base was
-`0x40208000` inside the required MSM8x60 2 MiB SMEM reservation.  The new
-configuration sets `CONFIG_ARCH_QCOM_RESERVE_SMEM=y`, disables
-`ARCH_MULTIPLATFORM` and `AUTO_ZRELADDR`, and uses `PHYS_OFFSET=0x40200000`.
-Pinned upstream `arch/arm/Makefile` consequently uses `TEXT_OFFSET=0x00208000`.
+The former `SECOND_BOOT_MEMORY_SAFETY=PASS` classification applied only to
+internal overlap arithmetic after treating `0x40200000` as physical RAM base.
+It is **invalidated as a deployment gate**. `SECOND_BOOT_MEMORY_SAFETY` is now
+`BLOCKED` pending a corrected RAM-base model and a new independently validated
+artifact; it does not claim that this was the only secondboot failure.
 
-## Validated second-artifact ranges
+Current upstream requires `CONFIG_ARCH_QCOM_RESERVE_SMEM` on MSM8x60 and
+reserves the first 2 MiB *of System RAM*. With that option selected, current
+ARM `TEXT_OFFSET` is `0x00208000`. Historical MSM8x60 board code instead sets
+the shared-RAM physical base to `0x40000000`; the physical legacy p3 also loads
+its zImage at `0x40208000`. The legacy `/proc/iomem` System-RAM resource view
+begins at `0x40200000`, but it explicitly is not a complete physical-RAM
+census.
 
-The physical legacy evidence gives first System RAM as
-`0x40200000-0x42dfffff`.  The local checker derives the kernel end from the
-current `vmlinux` and decompressor symbols from the current compressed
-`vmlinux`; it refuses a load address other than `0x40408000`.
+The second DTS made `0x40200000` the beginning of System RAM, so upstream
+reserved `0x40200000-0x403fffff` and generated a text/load candidate of
+`0x40408000`. This is a **probable double application of the 2 MiB SMEM
+offset**. It is not directly proven by a secondboot kernel log: the only
+captured TWRP `last_kmsg` belongs to a later legacy boot; see
+[secondboot post-mortem](../research/device/current/boot/secondboot-postmortem.md).
+
+The next proposed technical change is deliberately one change: model the
+physical RAM base at `0x40000000` (without claiming all later holes), let the
+upstream SMEM reservation consume `0x40000000-0x401fffff`, and revalidate a
+new kernel text/load candidate of `0x40208000`. No third artifact or device
+write is authorized by this analysis.
+
+## Historical second-artifact ranges (superseded)
+
+These are retained so the actual second artifact can be audited. They are no
+longer a safe target-memory layout. The local checker derived the kernel end
+from the then-current `vmlinux` and decompressor symbols from the compressed
+`vmlinux`; it deliberately refused any load address other than `0x40408000`.
 
 | Object | Range | Size |
 | --- | --- | ---: |
@@ -36,6 +55,8 @@ bytes.  The gate measures its relocation-code reserve (2,304 bytes) and adds
 `0x42800000` initramfs candidate intersected this relocated range; `0x42a00000`
 does not.  No arbitrary ramoops region is reserved.
 
-These addresses are host-validated, evidence-backed candidates.  S1Boot
-acceptance of the changed kernel load address remains a physical second-boot
-question.
+The decompressor relocation analysis remains valid only within this superseded
+address model. S1Boot accepted and flashed this ELF, but no target-Linux proof
+of life was observed. The required next build gate must validate the corrected
+`0x40000000` physical-base model before it considers compressed input,
+decompressor relocation, final kernel, DTB, initramfs, SMEM and RPM ranges.

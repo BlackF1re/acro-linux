@@ -48,9 +48,10 @@ The Sony physical key guidance is: with the phone off, hold Volume Up while conn
 ## Forced recovery from a hung experimental kernel
 
 `VERIFIED_DEVICE` operational observation on this handset: after the first
-experimental native-kernel attempt hung on a black screen, an ordinary Power
-hold and volume buttons did not recover it. Holding **Power + Volume Up**
-together forced a reset/shutdown and made the handset recoverable again.
+and second experimental native-kernel attempts hung on a black screen, an
+ordinary Power hold and volume buttons did not recover it. Holding **Power +
+Volume Up** together forced a reset/shutdown and made the handset recoverable
+again.
 
 This is distinct from fastboot entry:
 

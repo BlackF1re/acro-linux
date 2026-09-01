@@ -56,6 +56,15 @@ It is a Sony-style ARM ELF with a zImage at `0x40208000`, a gzip ramdisk at
 [BOOT_FORMAT.md](BOOT_FORMAT.md). Cmdline handling and temporary `fastboot boot`
 support remain UNKNOWN.
 
+Two narrowly approved native-Linux Sony-ELF attempts were then made. S1Boot
+accepted each through logical `boot`/p3, but neither gave an observable target
+marker, ADB, fastboot, or new USB target in 120 seconds. Both were recovered
+with the exact private original p3 through S1Boot and Android returned. This
+is direct physical proof of the p3 restore route, but not of target boot. The
+second attempt's only TWRP previous-boot log is proven to be a later legacy
+Android/recovery transition, so its target failure boundary remains UNKNOWN;
+see [secondboot post-mortem](../research/device/current/boot/secondboot-postmortem.md).
+
 The later read-only runtime check found no common Android recovery descriptor,
 install script, recovery patch, or pending recovery command at the checked
 paths.  It also found no `/dev/block/mmcblk0boot0`, `mmcblk0boot1`, or

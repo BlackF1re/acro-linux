@@ -84,3 +84,12 @@ the device identity or partition layout differs, either SHA-256 differs, the
 experimental image exceeds p3, any host validation fails, or S1Boot returns an
 unexpected response.  Stop and collect evidence rather than trying a second
 operation or a different bootloader command.
+
+## Second-attempt cross-reference
+
+The later, separately approved second artifact was also accepted by S1Boot but
+produced no observable target-Linux proof during 120 seconds. The same exact
+original p3 restore completed and Android returned. Its post-mortem buffer was
+not preserved because Android ran before TWRP capture; see
+[SECOND_BOOT_PLAN.md](SECOND_BOOT_PLAN.md) and the sanitized
+[post-mortem record](../research/device/current/boot/secondboot-postmortem.md).

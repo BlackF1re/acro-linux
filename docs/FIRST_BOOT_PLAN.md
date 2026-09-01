@@ -44,7 +44,8 @@ gate in [SECOND_BOOT_PLAN.md](SECOND_BOOT_PLAN.md).
 - Initramfs: native static BusyBox diagnostic `/init`, SHA-256
   `03e6d9597a613f6218de756ef8000661f611f1ef678ee278fbdf976af6a1a855`.
 - Private local RPM input: the original p3 segment only; it is not in Git and
-  has not been sent to the phone.
+  was carried only inside the approved historical first ELF, never separately
+  transferred or published.
 - ELF32 prototype: `11,937,605` bytes, SHA-256
   `467d08a2fbafe86c61f5422946115a899f3bfa559f429d79dd13f9867ceb046f`.
   Segment 0 is the appended-DTB zImage at `0x40208000` (`0xa3807e` bytes),

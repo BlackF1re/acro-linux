@@ -1,0 +1,19 @@
+# Second physical p3 rollback (sanitized)
+
+[restore_artifact]
+filename=hikari-original-p3-restore.elf
+size_bytes=20971520
+sha256=c59be74873aa32a8422adf9b5402254b2acae619f7dc97bd50fc0e120984d0c1
+
+[flash]
+logical_target=boot
+result=SUCCESS
+bootloader_message=Flash of partition 'boot' requested
+bootloader_part_id=0x00000003
+bootloader_blocks=0x00002000-0x0000bfff
+bootloader_result=Flash operation complete
+
+[outcome]
+reboot_command=fastboot reboot
+android_baseline_returned=VERIFIED_DEVICE
+result=ROLLBACK_AFTER_SECOND_BOOT_VERIFIED_DEVICE

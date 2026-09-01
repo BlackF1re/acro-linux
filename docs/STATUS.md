@@ -39,10 +39,22 @@ logical `boot`; and the ScrubbModRom baseline returned normally. This proves
 the p3 rollback route for this device and artifact, without generalizing it to
 other partitions. `fastboot boot` remains `UNKNOWN`. See [ROLLBACK.md](ROLLBACK.md).
 
-The second local-only candidate corrects the missing upstream MSM8x60 SMEM
-reservation and moves the initramfs past the measured ARM decompressor
-self-relocation interval. Its host-side memory, Sony ELF, appended-DTB and
-target-DTB schema gates pass; it has not been sent to the phone.
+The second candidate was physically written once and S1Boot accepted the
+expected logical `boot`/p3 mapping. After reboot, the 120-second observation
+had no target-Linux marker, ADB, fastboot, or new USB target; the owner
+observed a black, unresponsive handset and used the verified **Power + Volume
+Up** forced reset. The original p3 was restored and Android returned. Thus
+`SECOND_MAINLINE_BOOT` is `NOT_VERIFIED` and `BOOT_PROOF` is `NOT_OBSERVED`.
+The only captured TWRP previous-boot log belongs to a later legacy Android
+reboot, so it does not locate the target failure stage; see
+[secondboot post-mortem](../research/device/current/boot/secondboot-postmortem.md).
+
+Post-attempt review identifies a probable double application of the MSM8x60
+SMEM offset in the second DTS/layout model. This is a `HYPOTHESIS` supported by
+current upstream reservation semantics, historical MSM8x60 board code, and the
+observed legacy p3 load address—not a conclusion from a target kernel log.
+The next build gate is therefore `BLOCKED` until that physical-RAM model is
+corrected and revalidated offline.
 
 ## Status domains
 

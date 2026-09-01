@@ -36,6 +36,8 @@ MSM8260 has yet been recovered in this pass.
 | [AOSP LT26 mkelf.py introduction](https://android.googlesource.com/device/sony/lt26/%2B/b644924c93b3c89e0e6f3aeeb85fb9a23147350f%5E!/) | AOSP commit `b644924c93b3c89e0e6f3aeeb85fb9a23147350f`, Sony Mobile copyright notice | SEMC ELF flags: RAMDISK `0x80000000`, CMDLINE `0x20000000`, Qualcomm MSM8x60 RPM `0x01000000`; segments are laid from `0x1000` in input order. | `HISTORICAL_SOURCE` used to interpret the exact flags in the offline p3 metadata. |
 | [AOSP Android-building LT26 discussion](https://groups.google.com/g/android-building/c/zji_sQGN9Oo/m/MoaS0xidmRMJ) | Historical project discussion, checked 2026-09-01 | Reports LT26 recovery triggering from a boot image and legacy S1Boot family context. | `HISTORICAL_SOURCE` only; current handset recovery storage remains `UNKNOWN`. |
 | Linus Linux ARM Qualcomm Kconfig / Makefile | Local upstream checkout `786262be6048deab760f68c8acc2c85607165894`, checked 2026-09-02: `arch/arm/mach-qcom/Kconfig:18-22`, `arch/arm/Makefile:162,169` | `CONFIG_ARCH_QCOM_RESERVE_SMEM` reserves the first 2 MiB System RAM and is required for MSM8x60; when selected, ARM `TEXT_OFFSET` is `0x00208000`. | `VERIFIED_UPSTREAM` for the second-attempt config and memory-gate requirement; it does not diagnose the first physical failure by itself. |
+| OpenSEMC MSM8x60 board map | Local historical checkout `c4784b04c08d30f799b8b14b597aeb2124d2e6e1`, checked 2026-09-02: `arch/arm/mach-msm/board-msm8x60.c:110,7624-7627`; `include/mach/msm_iomap.h:104-109` | Historical MSM8x60 board code sets `msm_shared_ram_phys` to `0x40000000`; its shared-RAM mapping size for this family is 2 MiB. | `HISTORICAL_SOURCE` supporting, but not by itself proving, the physical-RAM/SMEM correction. |
+| [intgr Hikari mainline dmesg](https://gist.github.com/intgr/cc5b4e606846e33d6415694084f4aba1) | GitHub gist revision `cc5b4e606846e33d6415694084f4aba1`, created 2019-11-07, retrieved 2026-09-02 | A historical Hikari mainline Linux 5.3 trace identifies the Hikari DT model, reaches `/init`, records `No ATAGs?`, uses ramoops at `0x7ffe0000`, and enables `ttyMSM0` after the `0x19c40000` MSM serial device probes. | `HISTORICAL_SOURCE`: a known-booting bootstrap trace, not a source-tree revision nor proof that its addresses/config can be copied unchanged. |
 
 No authoritative source or direct non-persistent test was found that proves
 `fastboot boot` support for S1Boot `CRH1099189_R10C008`. Its status is therefore
@@ -65,6 +67,12 @@ usable authoritative Hikari tree at the checked guessed locations:
 FreeXperia and nAOSP `android_kernel_sony_msm8x60`.  This is a negative lookup,
 not evidence that no historical work exists.  It must be revisited with a
 specific archived URL if one is found.
+
+An additional targeted 2026-09-02 lookup found no public `sony-hikari` project
+through the postmarketOS GitLab project search and no public intgr
+`linux-postmarketos` Hikari source tree. The `intgr` mainline dmesg above is a
+usable historical runtime trace, but its matching kernel/DT source revision is
+therefore `UNKNOWN`; no inferred source commit is recorded.
 
 ## Exact source paths used as legacy references
 
