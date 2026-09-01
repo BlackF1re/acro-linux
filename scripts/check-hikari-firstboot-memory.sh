@@ -33,6 +33,7 @@ config=$kernel_build/.config
 grep -qx 'CONFIG_PHYS_OFFSET=0x40200000' "$config" || { echo "PHYS_OFFSET is not the verified Hikari RAM base" >&2; exit 1; }
 grep -qx '# CONFIG_ARCH_MULTIPLATFORM is not set' "$config" || { echo "ARCH_MULTIPLATFORM must be disabled to make the explicit decompressor address effective" >&2; exit 1; }
 grep -qx '# CONFIG_AUTO_ZRELADDR is not set' "$config" || { echo "AUTO_ZRELADDR must be disabled for this unaligned RAM base" >&2; exit 1; }
+grep -qx 'CONFIG_ARCH_QCOM_RESERVE_SMEM=y' "$config" || { echo "ARCH_QCOM_RESERVE_SMEM is required by upstream for MSM8x60; rebuild before deployment" >&2; exit 1; }
 grep -qx 'CONFIG_PAGE_OFFSET=0xC0000000' "$config" || { echo "unexpected PAGE_OFFSET" >&2; exit 1; }
 
 python3 - "$kernel_build/vmlinux" "$zimage" "$dtb" "$ramdisk" "$ramdisk_addr" "$rpm" <<'PY'
@@ -57,26 +58,30 @@ def show(name, start, length):
     return start, end
 
 ram_start, ram_end = 0x40200000, 0x42e00000
-kernel_load = 0x40208000
+# The Sony ELF supplies the compressed zImage at the legacy-compatible input
+# address. qcom's ARM Makefile selects TEXT_OFFSET=0x00208000 when SMEM
+# reservation is enabled, so the decompressed image begins 2 MiB later.
+zimage_load = 0x40208000
+kernel_load = 0x40408000
 page_offset = 0xc0000000
 kernel_end = kernel_load + (symbol('_end') - page_offset)
-z_end = kernel_load + size(zimage)
+z_end = zimage_load + size(zimage)
 dtb_end = z_end + size(dtb)
 ramdisk_start = int(ramdisk_addr, 0)
 ramdisk_end = ramdisk_start + size(ramdisk)
 rpm_start = 0x00020000
 rpm_end = rpm_start + size(rpm)
 
-assert kernel_load == ram_start + 0x8000
+assert kernel_load == ram_start + 0x208000
 for name, start, end in (
-    ('zImage input', kernel_load, z_end),
+    ('zImage input', zimage_load, z_end),
     ('appended DTB input', z_end, dtb_end),
     ('decompressed kernel', kernel_load, kernel_end),
     ('initramfs', ramdisk_start, ramdisk_end),
 ):
     if not (ram_start <= start < end <= ram_end):
         raise SystemExit(f'{name} is outside verified first RAM bank')
-show('zImage input', kernel_load, size(zimage))
+show('zImage input', zimage_load, size(zimage))
 show('appended DTB input', z_end, size(dtb))
 show('decompressed kernel', kernel_load, kernel_end - kernel_load)
 show('initramfs', ramdisk_start, size(ramdisk))

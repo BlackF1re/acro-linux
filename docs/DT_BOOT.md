@@ -3,8 +3,10 @@
 ## Legacy constraint
 
 The observed legacy boot is board-file/ATAG-era. Its Sony ELF contains no DTB
-or standalone cmdline segment. S1Boot DTB hand-off has not been proven, so a
-separate ELF DTB segment must not be invented.
+or standalone cmdline segment. Offline extraction of its zImage segment found
+no appended-FDT magic. This is evidence about the legacy image, not evidence
+that S1Boot rejects an appended DTB. A separate ELF DTB segment must not be
+invented.
 
 ## First local-build strategy
 
@@ -20,9 +22,12 @@ is retained only as a compatibility aid for legacy bootloader ATAG memory and
 cmdline information, not as proof that an ATAG will be present. The native
 initramfs supplies `/init`; no Android userspace or Android HAL participates.
 
-This is a first-boot **candidate**, not `VERIFIED_DEVICE`: its compatibility
-with the exact S1Boot, decompressor placement, supplied ATAGs, and target
-memory layout must be tested only after a separate deployment approval.
+This remains a first-boot **candidate**, not `VERIFIED_DEVICE`. Current
+upstream ARM decompressor code recognizes an FDT appended at zImage `_edata`,
+can translate bootloader ATAGs into it when configured, and hands that FDT to
+the generic DT setup path. This establishes that the selected kernel supports
+the strategy; it does not establish the exact S1Boot hand-off, ATAG contents,
+or Hikari execution path.
 
 For the exact G artifact, this is a host-side checked fact rather than only a
 configuration intention: the combined segment begins byte-for-byte with the

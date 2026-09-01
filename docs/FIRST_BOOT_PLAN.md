@@ -1,9 +1,10 @@
-# First native-Linux boot: proposal gate, not execution authorization
+# First native-Linux boot: historical first attempt
 
-No kernel, fastboot `boot`, flash, or other phone deployment has been
-performed. A local-only upstream kernel, Hikari DTB, native initramfs and Sony
-ELF prototype have passed the final host-side gates. Deployment still requires
-a new explicit owner approval.
+The first approved `fastboot flash boot` attempt was executed on 2026-09-02.
+S1Boot accepted the ELF, but no unmistakable native-Linux proof of life
+appeared; the exact original p3 was then restored and Android booted. This plan
+is retained as historical context only. See [SECOND_BOOT_PLAN.md](SECOND_BOOT_PLAN.md)
+for the next diagnostic gate.
 
 ## Candidate ranking
 
@@ -12,11 +13,10 @@ a new explicit owner approval.
 | A. `fastboot boot` with a temporary Sony ELF | Not selected: `UNKNOWN` | Exact S1Boot `boot` support and its non-persistent semantics are not proven. |
 | B. Independent recovery/FOTA route | Not selected: `UNKNOWN` | TWRP 2.6.3.0 exists, but its storage/boot-path independence from p3 is unproven. |
 | C. Temporary chainload | Not selected: `UNKNOWN` | No evidence-backed mechanism has been found. |
-| D. Controlled replacement of p3 | Selected conditional candidate | Official historical LT26 evidence maps `boot` to p3 and historical LT26/Hikari material uses `fastboot flash boot`; exact original p3 and independent physical S1Boot entry exist. It remains untested as a write on this handset and needs explicit owner approval. |
+| D. Controlled replacement of p3 | Historical selected candidate | It was physically executed once: S1Boot accepted logical `boot`; the original p3 restore returned Android. Any future instance remains an owner-approved operation. |
 
-Thus the next action, if separately approved, is the one-write candidate D
-procedure in [FIRST_PHYSICAL_BOOT.md](FIRST_PHYSICAL_BOOT.md), with a single
-whitelisted p3 `boot` write and an exact original-p3 rollback artifact.
+The next action is not another execution of this plan. It is the diagnostic
+gate in [SECOND_BOOT_PLAN.md](SECOND_BOOT_PLAN.md).
 
 ## Required artifact contract
 
@@ -52,14 +52,17 @@ whitelisted p3 `boot` write and an exact original-p3 rollback artifact.
   is the private RPM ELF at `0x00020000` (`0x1d3e8` bytes). It is within the
   20 MiB p3 capacity and has no ELF load-address overlap.
 
-The explicit decompressor and range gate passes for these exact inputs; see
-[FIRST_BOOT_MEMORY.md](FIRST_BOOT_MEMORY.md). These are still host-side
-checks, not proof that the bootloader accepts the artifact or that Linux boots.
+Post-attempt review found that this artifact's memory gate omitted the required
+MSM8x60 SMEM reservation. It must not be reused; see
+[FIRST_BOOT_MEMORY.md](FIRST_BOOT_MEMORY.md). These were host-side checks, not
+proof that the bootloader would execute Linux.
 
 ## Rollback and abort gate
 
 - Original p3 reference: SHA-256 `c59be74873aa32a8422adf9b5402254b2acae619f7dc97bd50fc0e120984d0c1`, private backup offset 4,194,304 bytes, size 20,971,520 bytes.
 - The full private user-area backup covers the p3 bytes, but it is a live capture and not an atomic filesystem snapshot.
-- The bootloader-level p3 route is strongly supported by historical LT26 evidence, but not physically write-tested here.  Do not write p3 until the owner explicitly accepts that remaining limitation.
+- The bootloader-level p3 route is `VERIFIED_DEVICE`: it restored this exact
+  handset after the failed attempt. Any future write still needs separate owner
+  approval and a new validated artifact.
 - Abort immediately on device-identity mismatch, changed partition layout, unavailable backup, unknown artifact hash/format, missing diagnostics, or loss of the agreed rollback route.
 - A separate owner approval must name the exact artifact, target partition, rollback procedure and stop conditions.
