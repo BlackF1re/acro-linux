@@ -6,10 +6,27 @@ This repository contains only read-only reconnaissance.  No recovery image,
 partition contents, bootloader state, TA contents, radio/NV data or calibration
 contents have been read.  No recovery route is therefore proven today.
 
+A follow-up read-only check found the legacy `/fstab.semc` and
+`/init.semc.rc`, but no `/system/etc/recovery.fstab`,
+`/system/etc/install-recovery.sh`, `/system/recovery-from-boot.p`,
+`/recovery.fstab`, or `/cache/recovery/command` in the running system.  This is
+evidence only that those common Android recovery artifacts are absent from the
+checked paths; it neither proves nor rules out a Sony FOTAKernel-style route,
+a separate recovery partition, or recovery code embedded in another boot path.
+There is no evidence of TWRP, and it must not be named as present.
+The sanitized runtime result is retained in
+[`recovery-runtime-check.txt`](../research/device/current/boot/recovery-runtime-check.txt).
+
 The known partition-role evidence is intentionally narrow: p3 is referenced as
 legacy `/boot`; p1 has a legacy `tad` reference; p10, p12–p15 have the roles
 documented in [PARTITIONS.md](PARTITIONS.md).  All other unconfirmed roles are
 UNKNOWN.  This is not enough to authorize any write.
+
+The running Android property `ro.bootloader=unknown` is not a lock-state
+attestation.  It establishes neither locked nor unlocked status.  A reboot to
+fastboot/recovery, a bootloader unlock, raw-partition inspection, or any TA
+access remains outside this read-only stage and requires separate owner
+approval.
 
 ## Mandatory gate before a future write
 

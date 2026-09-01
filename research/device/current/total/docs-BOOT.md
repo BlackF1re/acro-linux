@@ -35,6 +35,18 @@ not identify a recovery partition or authorize reading any partition content.
 The physical bootloader state, lock state, exact load addresses, boot image
 payload layout, and persistent boot-log recovery route are still UNKNOWN.
 
+The later read-only runtime check found no common Android recovery descriptor,
+install script, recovery patch, or pending recovery command at the checked
+paths.  It also found no `/dev/block/mmcblk0boot0`, `mmcblk0boot1`, or
+`mmcblk0rpmb` device node.  This limits the accessible golden backup to the
+eMMC user area; it does not identify the bootloader's own storage model.
+
+`ro.bootloader` currently returns `unknown`.  This is a legacy-ROM property
+value, not evidence of either a locked or unlocked Sony bootloader.  No
+fastboot-mode observation has been made, and none is implied here.
+See the [sanitized runtime check](../research/device/current/boot/recovery-runtime-check.txt)
+for the exact checked paths and property values.
+
 ## Sony ELF format
 
 Historical Xperia LT26 device configuration in Android Open Source Project
@@ -54,6 +66,8 @@ but its MSM8960 example must never be substituted for MSM8260/Hikari addresses.
 | Sony ELF container was used by historical LT26 build configuration | AOSP LT26 commit above | Future artifact research needs an ELF-capable, reproducible tool. |
 | Exact Hikari load addresses, RPM inclusion and cmdline format | UNKNOWN | Must be derived from a permitted source artifact or a non-destructive inspection. |
 | Recovery partition identity and recovery route | UNKNOWN | Cannot be assumed from p2/p5–p11. |
+| TWRP presence | UNKNOWN; no TWRP artifact was found at checked running-system paths | Do not label a recovery implementation without booting or permitted image analysis. |
+| Bootloader lock/unlock state | `ro.bootloader=unknown` only | Requires a separately approved, non-destructive evidence plan. |
 | Persistent logs | legacy ram_console at `0x7ffe0000` was observed | A target kernel must be designed to preserve/retrieve logs only after approval. |
 
 ## Safest first experimental-boot path (not authorized or executed)

@@ -1,0 +1,60 @@
+Title: Offline validation of the private pre-experiment eMMC user-area backup
+Date: 2026-09-01
+Scope: host-side only; no phone block device was read for this validation.
+
+Canonical private backup directory:
+  /home/paul/xperia/backups/hikari/20260901T111716Z/hikari-golden-backup-20260901T190000Z
+
+Acquisition provenance:
+  The accepted backup was not made with scripts/backup-device.sh.  Session
+  command provenance records one continuous, read-only phone-side stream:
+    busybox dd if=/dev/block/mmcblk0 bs=4M 2>/dev/null |
+      busybox split -b 1024m - mmcblk0.part-
+  `split` consumed the ordered dd stream.  The resulting lexical sequence
+  mmcblk0.part-aa through mmcblk0.part-ao is therefore byte-contiguous by
+  construction; independent skip/count reads were not used.
+
+Part validation:
+  Files: mmcblk0.part-aa ... mmcblk0.part-ao (15 files, lexical order)
+  Parts aa--an: 1,073,741,824 bytes each
+  Part ao:       601,882,624 bytes
+  Total:      15,634,268,160 bytes
+  Expected source /dev/block/mmcblk0: 15,634,268,160 bytes
+  Host verification: all 15 entries in the original per-part SHA-256 manifest
+  verified after replacing its obsolete removable-card path prefix with the
+  local canonical directory.
+  Logical-stream SHA-256 (cat mmcblk0.part-* in lexical order):
+    d3747bbb06de01007014182349c3ddb524fbdfe6b1a77c8749e01bcd86001133
+
+Offline partition-table validation:
+  A private reconstructed stream of the exact expected length was inspected
+  with fdisk/sfdisk only; no filesystem was mounted and no partition payload
+  was parsed.  The image is an MBR/DOS-label disk, 30,535,680 sectors of
+  512 bytes.  Its starts and sizes match the pre-acquisition private block
+  topology snapshot:
+
+  partition  start sector  sectors    size KiB
+  p1                  1       4096        2048
+  p2               4097       1024         512
+  p3               8192      40960       20480
+  p4              49152   30486528    15243264  (extended)
+  p5              50176       1024         512
+  p6              53248       6144        3072
+  p7              61440       6144        3072
+  p8              69632       6144        3072
+  p9              77824      10240        5120
+  p10             90112      16384        8192
+  p11            106496      32768       16384
+  p12            139264    2097152     1048576
+  p13           2236416     512000      256000
+  p14           2748416    4194304     2097152
+  p15           6942720   23592960    11796480
+
+Interpretation:
+  The parts provide complete byte coverage of the accessible eMMC user area,
+  including its MBR/extended partition map and p1--p15.  This was a live
+  acquisition from mounted Android filesystems, so it is not asserted to be an
+  atomic filesystem-consistent snapshot.  Sensitive partition bytes are in the
+  private raw stream but were not separately inspected, parsed, interpreted,
+  exposed, or committed to git.  Unexposed mmcblk0boot0, mmcblk0boot1 and RPMB
+  areas are outside this coverage.
