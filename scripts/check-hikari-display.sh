@@ -57,11 +57,22 @@ expect_string /display-controller@5100000 clock-names bus_clk
 expect_string /display-controller@5100000 clock-names lut_clk
 expect_string /dsi@4700000 compatible qcom,msm8660-dsi-ctrl
 expect_hex /dsi@4700000 reg '4700000 200'
-expect_string /dsi@4700000/panel@0 compatible renesas,r63306-tmd-mdv22
+expect_string /dsi@4700000/panel@0 compatible sony,hikari-r63306-tmd-mdv22
 expect_string /soc/gsbi@19800000/i2c@19880000/backlight@40 compatible ams,as3676-backlight
 expect_hex /soc/gsbi@19800000/i2c@19880000/backlight@40 reg 40
-expect_string /dsi-phy compatible qcom,dsi-phy-45nm-msm8x60
+expect_string /dsi-phy compatible qcom,msm8660-dsi-phy-45nm
 expect_hex /reserved-memory/ramoops@7ffe0000 reg '7ffe0000 20000'
+
+# MSM8x60 has two PHY outputs: the byte PLL feeds byte/escape clocks, while
+# the DSI PLL feeds DSI_SRC and the pixel RCG.  The order follows
+# assigned-clocks: source, byte, pixel, escape.
+phy_phandle=$(fdtget -t x "$dtb" /dsi-phy phandle)
+actual_parents=$(fdtget -t x "$dtb" /dsi@4700000 assigned-clock-parents | tr -s ' ' | sed 's/^ //;s/ $//')
+expected_parents="$phy_phandle 1 $phy_phandle 0 $phy_phandle 1 $phy_phandle 0"
+[[ $actual_parents == "$expected_parents" ]] || {
+	echo "incorrect Hikari DSI clock-parent graph: $actual_parents" >&2
+	exit 1
+}
 
 # Exact MDV22 timing: 896 * 1296 * 60 = 69,672,960 Hz; RGB888 / 4 lanes.
 [[ $((896 * 1296 * 60)) == 69672960 ]]
@@ -73,7 +84,7 @@ for endpoint in \
 	/display-controller@5100000/ports/port@0/endpoint \
 	/dsi@4700000/ports/port@0/endpoint \
 	/dsi@4700000/ports/port@1/endpoint \
-	/dsi@4700000/panel@0/ports/port/endpoint; do
+	/dsi@4700000/panel@0/port/endpoint; do
 	fdtget -t x "$dtb" "$endpoint" remote-endpoint >/dev/null
 done
 
