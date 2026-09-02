@@ -6,6 +6,8 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 kernel_build=${KERNEL_BUILD:-/home/paul/xperia/build/linux-hikari}
+kernel_src=${KERNEL_SRC:-/home/paul/xperia/src/linux}
+kernel_fragment=${KERNEL_FRAGMENT:-$repo_root/kernel/configs/hikari-firstboot.fragment}
 initramfs=${INITRAMFS:-/home/paul/xperia/build/hikari-initramfs/hikari-firstboot.cpio.gz}
 initramfs_build=${INITRAMFS_BUILD:-/home/paul/xperia/build/hikari-initramfs}
 initramfs_name=${INITRAMFS_NAME:-$(basename -- "$initramfs")}
@@ -22,7 +24,8 @@ test -f "$rpm" || { echo "RPM_PAYLOAD must name the private legacy RPM payload" 
 
 INITRAMFS_BUILD="$initramfs_build" INITRAMFS_NAME="$initramfs_name" \
   "$repo_root/scripts/build-hikari-initramfs.sh"
-BUILD_DIR="$kernel_build" INITRAMFS_SOURCE="$initramfs" \
+KERNEL_SRC="$kernel_src" KERNEL_FRAGMENT="$kernel_fragment" \
+  BUILD_DIR="$kernel_build" INITRAMFS_SOURCE="$initramfs" \
   "$repo_root/scripts/build-hikari-kernel.sh"
 
 zimage="$kernel_build/arch/arm/boot/zImage"

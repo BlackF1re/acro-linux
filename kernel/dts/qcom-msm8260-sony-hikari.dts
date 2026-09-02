@@ -2,6 +2,7 @@
 /dts-v1/;
 
 #include <dt-bindings/soc/qcom,gsbi.h>
+#include <dt-bindings/reset/qcom,gcc-msm8660.h>
 #include "qcom-msm8660.dtsi"
 
 / {
@@ -50,4 +51,65 @@
  */
 &gsbi12 {
 	qcom,mode = <GSBI_PROT_I2C_UART>;
+};
+
+/*
+ * HSUSB1 is the connector-facing ChipIdea controller.  The address and IRQ
+ * are shared MSM8x60 facts; `peripheral` and the two PHY rails come from the
+ * Fuji/Hikari downstream board code.  PMIC VBUS/ID callbacks were only used
+ * for legacy OTG role switching, so BOOT #5 deliberately supports device
+ * mode only and does not invent an extcon or host-role GPIO description.
+ */
+&{/} {
+	usb_hs1: usb@12500000 {
+		compatible = "qcom,ci-hdrc";
+		reg = <0x12500000 0x200>, <0x12500200 0x200>;
+		interrupts = <GIC_SPI 100 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&gcc USB_HS1_H_CLK>, <&gcc USB_HS1_XCVR_CLK>;
+		clock-names = "iface", "core";
+		assigned-clocks = <&gcc USB_HS1_XCVR_CLK>;
+		assigned-clock-rates = <60000000>;
+		resets = <&gcc USB_HS1_RESET>;
+		reset-names = "core";
+		phy_type = "ulpi";
+		dr_mode = "peripheral";
+		ahb-burst-config = <0>;
+		phys = <&usb_hs1_phy>;
+		phy-names = "usb-phy";
+		#reset-cells = <1>;
+		status = "okay";
+
+		ulpi {
+			usb_hs1_phy: phy {
+				compatible = "qcom,usb-hs-phy-msm8660",
+					     "qcom,usb-hs-phy";
+				clocks = <&sleep_clk>, <&cxo_board>;
+				clock-names = "sleep", "ref";
+				resets = <&usb_hs1 0>;
+				reset-names = "por";
+				v1p8-supply = <&pm8058_l7>;
+				v3p3-supply = <&pm8058_l6>;
+				#phy-cells = <0>;
+			};
+		};
+	};
+};
+
+/* Exact PHY rails and operating voltages from the Hikari downstream BSP. */
+&rpm {
+	regulators-1 {
+		compatible = "qcom,rpm-pm8058-regulators";
+
+		pm8058_l6: l6 {
+			regulator-min-microvolt = <3050000>;
+			regulator-max-microvolt = <3050000>;
+			bias-pull-down;
+		};
+
+		pm8058_l7: l7 {
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+			bias-pull-down;
+		};
+	};
 };

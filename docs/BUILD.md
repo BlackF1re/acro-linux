@@ -38,18 +38,21 @@ kernel outputs and ELF prototype are never added to Git.
 - `make ... zImage qcom/qcom-msm8260-sony-hikari.dtb`: passed.
 - `make ... dtbs`: passed as part of the build; no DTC warning was emitted for
   the new DTS.
-- `make ... dtbs_check`: completed with no diagnostic for Hikari.  The broad
-  Qualcomm DT set still emits unrelated existing diagnostics for other boards;
-  direct `dt-validate` of `qcom-msm8260-sony-hikari.dtb`, targeted
-  `dt-doc-validate`, `yamllint`, and single-process `dt-check-style` of the
-  changed Qualcomm binding all pass with no output.  `dtschema` and its host
-  tooling are installed in the isolated build venv, not the global Python.
+- The relevant Hikari DT is validated directly with `dt-validate` against the
+  processed schema and the controller, PHY and RPM regulator bindings. The
+  current `dtschema` 2026.6 command-line interface is incompatible with this
+  pinned kernel's broad `make dtbs_check` invocation: it reports positional
+  DTBs as unrecognized while the kernel intentionally ignores checker exit
+  status. This is a host-tool/version integration issue, not a Hikari schema
+  pass; it is recorded explicitly and the direct targeted validation is the
+  effective BOOT #5 gate. `dtschema` remains in the isolated build venv, not
+  the global Python.
 - The ELF self-test and artifact validator passed. The latter checks the
   original offline p3 hash and size, p3 capacity, appended-DTB tail, ELF32
   header, segment ranges and load-address overlap.
-- Two fresh local ELF builds with fixed `SOURCE_DATE_EPOCH` and `KBUILD_*`
-  identity inputs produced byte-identical output, SHA-256
-  `cecf280c62023619274bff43ea370619c9d59f3272e0e4436ab2895481461f0e`.
+- Reproducibility of the BOOT #5 serial-gadget artifact is not yet an
+  acceptance condition. Its exact local build output is recorded below and
+  must be hash-checked before any owner-approved deployment.
 
 This establishes local build integrity only. It is neither a boot test nor
 authorization to deploy any artifact. The current deployment gate is in
@@ -65,3 +68,37 @@ low-memory base `0x40000000`, reserves its first 2 MiB through
 [THIRD_BOOT_PLAN.md](THIRD_BOOT_PLAN.md) and
 [FIRST_BOOT_MEMORY.md](FIRST_BOOT_MEMORY.md).  It has not been sent to the
 phone.
+
+## BOOT #5 interactive local artifact
+
+The current locally validated, **not deployed** artifact is:
+
+```text
+/home/paul/xperia/build/hikari-artifacts-g7-serial/hikari-boot5-interactive-serial.elf
+size:   11,969,796 bytes
+SHA-256 48bba59faeaf610a93053ea18d8422c6c0a67afb7679e660259e60974a6821b2
+```
+
+It preserves the verified BOOT #4 load model and adds only a persistent PID 1
+and the narrow built-in HSUSB peripheral/static-g_serial/CDC-ACM path described in
+[USB.md](USB.md).  Display is intentionally absent; its blockers are recorded
+in [DISPLAY.md](DISPLAY.md).
+
+To reproduce this artifact from the external source worktree, use explicit
+paths rather than shell-profile defaults:
+
+```sh
+KERNEL_SRC=/home/paul/xperia/src/linux-hikari-boot5 \
+KERNEL_BUILD=/home/paul/xperia/build/linux-hikari-boot5 \
+KERNEL_FRAGMENT=kernel/configs/hikari-boot5.fragment \
+REQUIRE_USB_DEBUG=1 \
+ARTIFACT_DIR=/home/paul/xperia/build/hikari-artifacts-g7-serial \
+OUTPUT=/home/paul/xperia/build/hikari-artifacts-g7-serial/hikari-boot5-interactive-serial.elf \
+./scripts/build-hikari-elf.sh
+```
+
+The following are required local gates for that exact build: the Sony ELF
+inspector, appended-DTB and memory checks in
+`test-hikari-firstboot-artifact.sh`, the persistent-RAM check, and
+`check-hikari-boot5-interactive.sh`.  Passing them establishes local artifact
+integrity only; it does not establish USB or display functionality.

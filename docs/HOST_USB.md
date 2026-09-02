@@ -10,6 +10,7 @@ The Xperia re-enumerates when it changes mode:
 | --- | --- | --- |
 | Android ADB | `0fce:5176` | Xperia acro S / LT26W |
 | Sony fastboot | `0fce:0dde` | Sony Ericsson S1Boot Fastboot |
+| Hikari mainline debug gadget | `0525:a4a7` | upstream g_serial CDC ACM; physically verified |
 
 An ordinary one-shot USBIP attach can be lost during that identity change. Before AutoBind/auto-attach was configured, this made S1Boot appear to disconnect from WSL and eventually fall through to charging mode. A persistent auto-attach PowerShell process made the same physical port stable across the re-enumeration.
 
@@ -63,3 +64,22 @@ phone off + Volume Up + USB cable -> S1Boot fastboot
 After a forced reset, use the documented phone-off Volume-Up USB sequence and
 confirm `0fce:0dde` before any approved recovery action. This path does not
 depend on Android userspace having booted.
+
+## Expected mainline debug-gadget handoff
+
+BOOT #5.1 uses the same physical connector and re-enumerates as the static upstream g_serial CDC ACM identity
+`0525:a4a7`.  g_serial intentionally does not use a device-derived serial
+string. AutoBind applies to the physical BUSID, so the existing auto-attach
+PowerShell process should carry this new identity into `XperiaDev` too. It is
+a prediction from the local artifact, not a device verification.
+
+Inside WSL, wait for `/dev/ttyACM*` and use the reconnecting helper:
+
+```sh
+scripts/connect-hikari-console.sh
+```
+
+The helper intentionally selects a CDC ACM node rather than any device serial.
+Its device-side peer is `/dev/ttyGS0`; the host physically created `/dev/ttyACM0`
+and reached a BusyBox interactive prompt through it. Details and remaining
+boundaries are in [USB.md](USB.md).

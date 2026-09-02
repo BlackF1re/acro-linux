@@ -69,13 +69,27 @@ not an early-kernel hang. Thus `FIRST_MAINLINE_EXECUTION=VERIFIED_DEVICE` and
 target lifecycle is `BOOTS` at the native initramfs boundary. No peripheral
 acceptance claim follows. See [boot #4 post-mortem](../research/device/current/boot/boot4-postmortem.md).
 
+BOOT #5 then physically verified the target USB device-mode hardware path:
+the Qualcomm HS PHY, vendor ULPI initialization, ChipIdea UDC, and built-in
+`g_serial` enumerated as non-unique `0525:a4a7` at High Speed (480 Mbps), and
+the host created `/dev/ttyACM0`. BOOT #5.1 corrected BOOT #5's missing device
+nodes and BusyBox applet links, then physically exposed `/dev/ttyGS0` and an
+interactive root shell. The first shell exited with status zero and the
+independent supervisor spawned another one. `HIKARI ALIVE` markers from 2.18
+through 1082.67 seconds prove a stable PID 1 and supervisor for at least
+18 minutes. The initial `uname: not found` was caused by missing initramfs
+symlinks, not a missing compiled BusyBox applet. The L6 voltage warning was
+non-blocking for this acceptance test and remains a power-management blocker.
+
 ## Status domains
 
 status/hardware.yaml deliberately separates physical hardware evidence, the
 legacy Android baseline, and native target-Linux progress for every subsystem.
-The baseline is BOOTS; target Linux has lifecycle IMPLEMENTING and every
-target subsystem is UNKNOWN. Legacy runtime observations are retained in their
-own field, but are neither target-Linux progress nor functional verification.
+The legacy baseline and target Linux both have a `BOOTS` lifecycle. BOOT #5.1
+physically verified native initramfs execution, stable PID 1, persistent
+diagnostics, and the USB peripheral/root-console path. Legacy runtime
+observations are retained in their own field, but are neither target-Linux
+progress nor functional verification.
 
 VERIFIED is reserved for a defined acceptance test on the physical Xperia.
 This pass was topology collection only; it performed no functional acceptance
