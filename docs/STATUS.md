@@ -81,6 +81,13 @@ through 1082.67 seconds prove a stable PID 1 and supervisor for at least
 symlinks, not a missing compiled BusyBox applet. The L6 voltage warning was
 non-blocking for this acceptance test and remains a power-management blocker.
 
+BOOT #6 is a **local-only**, untested display artifact.  It adds source-derived
+MSM8x60 MMCC/GDSC/NoC infrastructure, MDP4, the DRM/MSM DSI v2 host, a fixed
+rate 45 nm DSI PHY, the exact R63306/TMD MDV22 panel profile, AS3676
+backlight, fbdev emulation and fbcon while preserving the verified USB and
+ramoops paths.  These are implementation/static-validation states, not
+display acceptance claims.  See [DISPLAY_BOOT6.md](DISPLAY_BOOT6.md).
+
 ## Status domains
 
 status/hardware.yaml deliberately separates physical hardware evidence, the

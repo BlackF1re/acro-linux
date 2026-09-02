@@ -14,6 +14,7 @@ initramfs_name=${INITRAMFS_NAME:-$(basename -- "$initramfs")}
 rpm=${RPM_PAYLOAD:-/home/paul/xperia/p3-offline-analysis.rSjNfb/rpm.segment}
 artifact_dir=${ARTIFACT_DIR:-/home/paul/xperia/build/hikari-artifacts}
 output=${OUTPUT:-$artifact_dir/hikari-firstboot.elf}
+require_display_bringup=${REQUIRE_DISPLAY_BRINGUP:-0}
 ramdisk_addr=${RAMDISK_ADDR:-0x42a00000}
 kernel_addr=${KERNEL_ADDR:-0x40208000}
 p3_limit=$((20 * 1024 * 1024))
@@ -31,11 +32,15 @@ KERNEL_SRC="$kernel_src" KERNEL_FRAGMENT="$kernel_fragment" \
 zimage="$kernel_build/arch/arm/boot/zImage"
 dtb="$kernel_build/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb"
 test -f "$zimage" && test -f "$dtb" || { echo "kernel build did not produce zImage and Hikari DTB" >&2; exit 1; }
+if [[ $require_display_bringup == 1 ]]; then
+	"$repo_root/scripts/check-hikari-display.sh" --config "$kernel_build/.config" --dtb "$dtb"
+fi
 mkdir -p "$artifact_dir"
 kernel_with_dtb="$artifact_dir/hikari-zImage-appended-dtb"
 test ! -e "$kernel_with_dtb" || { echo "refusing to overwrite $kernel_with_dtb" >&2; exit 1; }
 test ! -e "$output" || { echo "refusing to overwrite $output" >&2; exit 1; }
-cat "$zimage" "$dtb" > "$kernel_with_dtb"
+cp -- "$zimage" "$kernel_with_dtb"
+dd if="$dtb" of="$kernel_with_dtb" oflag=append conv=notrunc status=none
 dtb_size=$(stat -c %s "$dtb")
 zimage_size=$(stat -c %s "$zimage")
 test "$zimage_size" -gt 0 || { echo "zImage is empty" >&2; exit 1; }
@@ -55,6 +60,9 @@ test "$(od -An -tx1 -j "$zimage_size" -N 4 "$kernel_with_dtb" | tr -d '[:space:]
   --kernel-load "$kernel_addr" --rpm "$rpm"
 "$repo_root/scripts/check-hikari-persistent-ram.sh" \
   --config "$kernel_build/.config" --dtb "$dtb"
+if [[ $require_display_bringup == 1 ]]; then
+	"$repo_root/scripts/check-hikari-display.sh" --config "$kernel_build/.config" --dtb "$dtb"
+fi
 
 python3 "$repo_root/tools/sony_elf.py" build \
   --kernel "$kernel_with_dtb" --ramdisk "$initramfs" --rpm "$rpm" \

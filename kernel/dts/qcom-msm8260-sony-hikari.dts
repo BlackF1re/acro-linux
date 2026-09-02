@@ -2,7 +2,12 @@
 /dts-v1/;
 
 #include <dt-bindings/soc/qcom,gsbi.h>
+#include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/reset/qcom,gcc-msm8660.h>
+#include <dt-bindings/clock/qcom,mmcc-msm8660.h>
+#include <dt-bindings/clock/qcom,dsi-phy-28nm.h>
+#include <dt-bindings/clock/qcom,rpmcc.h>
+#include <dt-bindings/interconnect/qcom,msm8660.h>
 #include "qcom-msm8660.dtsi"
 
 / {
@@ -93,10 +98,149 @@
 			};
 		};
 	};
+
+	/* MSM8x60 multimedia infrastructure; all clocks are fed by RPM. */
+	mmcc: clock-controller@4000000 {
+		compatible = "qcom,mmcc-msm8660";
+		reg = <0x04000000 0x1000>;
+		#clock-cells = <1>;
+		#reset-cells = <1>;
+		#power-domain-cells = <1>;
+		/* MSM8x60 GCC exposes PLL8 as the shared MMSS parent. */
+		clocks = <&pxo_board>, <&gcc PLL8_VOTE>, <&gcc PLL8_VOTE>,
+			 <&dsi_phy DSI_PIXEL_PLL_CLK>, <&dsi_phy DSI_BYTE_PLL_CLK>,
+			 <&dsi_phy DSI_PIXEL_PLL_CLK>, <&dsi_phy DSI_BYTE_PLL_CLK>;
+		clock-names = "pxo", "pll3", "pll8_vote", "dsi1pll", "dsi1pllbyte",
+			      "dsi2pll", "dsi2pllbyte";
+		status = "okay";
+	};
+
+	afab: interconnect@1000000 {
+		compatible = "qcom,msm8660-apps-fabric";
+		reg = <0x01000000 0x1000>;
+		#interconnect-cells = <1>;
+		clocks = <&rpmcc RPM_APPS_FABRIC_CLK>, <&rpmcc RPM_APPS_FABRIC_A_CLK>,
+			 <&rpmcc RPM_EBI1_CLK>, <&rpmcc RPM_EBI1_A_CLK>;
+		clock-names = "bus", "bus_a", "ebi1", "ebi1_a";
+		qcom,rpm = <&rpm>;
+		status = "okay";
+	};
+
+	sfab: interconnect@4000000 {
+		compatible = "qcom,msm8660-system-fabric";
+		reg = <0x04000000 0x1000>;
+		#interconnect-cells = <1>;
+		clocks = <&rpmcc RPM_SYS_FABRIC_CLK>, <&rpmcc RPM_SYS_FABRIC_A_CLK>;
+		clock-names = "bus", "bus_a";
+		qcom,rpm = <&rpm>;
+		status = "okay";
+	};
+
+	mmfab: interconnect@5700000 {
+		compatible = "qcom,msm8660-mmss-fabric";
+		reg = <0x05700000 0x1000>;
+		#interconnect-cells = <1>;
+		clocks = <&rpmcc RPM_MM_FABRIC_CLK>, <&rpmcc RPM_MM_FABRIC_A_CLK>,
+			 <&rpmcc RPM_SMI_CLK>, <&rpmcc RPM_SMI_A_CLK>;
+		clock-names = "bus", "bus_a", "smi", "smi_a";
+		qcom,rpm = <&rpm>;
+		status = "okay";
+	};
+
+	dfab: interconnect@6000000 {
+		compatible = "qcom,msm8660-daytona-fabric";
+		reg = <0x06000000 0x1000>;
+		#interconnect-cells = <1>;
+		clocks = <&rpmcc RPM_DAYTONA_FABRIC_CLK>, <&rpmcc RPM_DAYTONA_FABRIC_A_CLK>;
+		clock-names = "bus", "bus_a";
+		qcom,rpm = <&rpm>;
+		status = "okay";
+	};
+
+	mmss_sfpb: syscon@5700000 {
+		compatible = "qcom,msm8660-mmss-sfpb", "syscon";
+		reg = <0x05700000 0x1000>;
+	};
+
+	mdp: display-controller@5100000 {
+		compatible = "qcom,mdp4";
+		reg = <0x05100000 0x000f0000>;
+		interrupts = <GIC_SPI 75 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&mmcc MDP_CLK>, <&mmcc MDP_AHB_CLK>,
+			 <&mmcc MDP_AXI_CLK>, <&mmcc MDP_LUT_CLK>;
+		clock-names = "core", "iface", "bus", "lut";
+		power-domains = <&mmcc MDP_GDSC>;
+		interconnects = <&mmfab MMFAB_MAS_MDP_PORT0 &mmfab MMFAB_SLV_SMI>;
+		interconnect-names = "mdp-mem";
+		status = "okay";
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			port@0 {
+				reg = <0>;
+				mdp_out: endpoint { remote-endpoint = <&dsi_in>; };
+			};
+		};
+	};
+
+	/* The MSM8x60 PHY and PLL share the DSI register aperture. */
+	dsi_phy: dsi-phy {
+		compatible = "qcom,dsi-phy-45nm-msm8x60";
+		reg = <0x04700000 0x400>, <0x04700000 0x400>;
+		reg-names = "dsi_phy", "dsi_pll";
+		vdda-supply = <&pm8058_l0>;
+		#clock-cells = <1>;
+		#phy-cells = <0>;
+		status = "okay";
+	};
+
+	dsi: dsi@4700000 {
+		compatible = "qcom,msm8660-dsi-ctrl";
+		reg = <0x04700000 0x200>;
+		interrupts = <GIC_SPI 82 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&mmcc DSI_M_AHB_CLK>, <&mmcc DSI_S_AHB_CLK>,
+			 <&mmcc AMP_AHB_CLK>, <&mmcc DSI_SRC>,
+			 <&mmcc DSI1_BYTE_CLK>, <&mmcc DSI_PIXEL_CLK>,
+			 <&mmcc DSI1_ESC_CLK>;
+		clock-names = "iface", "bus", "core_mmss", "src", "byte", "pixel", "core";
+		assigned-clocks = <&mmcc DSI_SRC>, <&mmcc DSI1_BYTE_CLK>,
+			 <&mmcc DSI_PIXEL_CLK>, <&mmcc DSI1_ESC_CLK>;
+		assigned-clock-parents = <&dsi_phy 0>, <&dsi_phy 0>, <&dsi_phy 1>, <&dsi_phy 1>;
+		phys = <&dsi_phy>;
+		phy-names = "dsi-phy";
+		qcom,mmss-sfpb = <&mmss_sfpb>;
+		vdda-supply = <&pm8058_l0>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "okay";
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			port@0 { reg = <0>; dsi_in: endpoint { remote-endpoint = <&mdp_out>; }; };
+			port@1 { reg = <1>; dsi_out: endpoint { remote-endpoint = <&panel_in>; }; };
+		};
+
+		panel@0 {
+			compatible = "renesas,r63306-tmd-mdv22";
+			reg = <0>;
+			vci-supply = <&pm8901_l2>;
+			vddio-supply = <&pm8901_lvs1>;
+			power-gpios = <&tlmm 18 GPIO_ACTIVE_HIGH>;
+			reset-gpios = <&tlmm 70 GPIO_ACTIVE_HIGH>;
+			ports { #address-cells = <1>; #size-cells = <0>; port { panel_in: endpoint { remote-endpoint = <&dsi_out>; }; }; };
+		};
+	};
 };
 
 /* Exact PHY rails and operating voltages from the Hikari downstream BSP. */
 &rpm {
+	regulators-0 {
+		compatible = "qcom,rpm-pm8901-regulators";
+		pm8901_l2: l2 { regulator-min-microvolt = <2850000>; regulator-max-microvolt = <2850000>; };
+		pm8901_lvs1: lvs1 { regulator-always-on; };
+	};
 	regulators-1 {
 		compatible = "qcom,rpm-pm8058-regulators";
 
@@ -111,5 +255,27 @@
 			regulator-max-microvolt = <1800000>;
 			bias-pull-down;
 		};
+
+		pm8058_l0: l0 {
+			regulator-min-microvolt = <1200000>;
+			regulator-max-microvolt = <1200000>;
+		};
+	};
+};
+
+&gsbi8 {
+	qcom,mode = <GSBI_PROT_I2C>;
+	status = "okay";
+};
+
+&gsbi8_i2c {
+	clock-frequency = <400000>;
+	status = "okay";
+
+	backlight@40 {
+		compatible = "ams,as3676-backlight";
+		reg = <0x40>;
+		default-brightness = <32>;
+		status = "okay";
 	};
 };

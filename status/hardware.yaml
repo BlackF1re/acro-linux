@@ -46,11 +46,11 @@ target_linux:
       otg_host: NOT_VERIFIED
       ecm: NOT_IMPLEMENTED
     display:
-      mdp4: RESEARCHING
-      dsi: RESEARCHING
-      panel: RESEARCHING
-      backlight: RESEARCHING
-      fbcon: RESEARCHING
+      mdp4: IMPLEMENTING
+      dsi: IMPLEMENTING
+      panel: IMPLEMENTING
+      backlight: IMPLEMENTING
+      fbcon: IMPLEMENTING
       verification: NOT_YET_TESTED
   first_mainline_execution:
     evidence: VERIFIED_DEVICE
@@ -127,7 +127,7 @@ subsystems:
   cpu_smp: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: VERIFIED, evidence: VERIFIED_DEVICE, notes: "BOOT #4 post-mortem identified two CPU bring-up; BOOT #5.1 remains live on both CPUs." } }
   storage_emmc: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   storage_microsd: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: WORKING, notes: Separate mmcblk1/mmcblk1p1 SD path was mounted, wrote the C2 raw-backup stream, and its parts passed hash validation. }, target_linux: { implementation: UNKNOWN } }
-  display: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: RESEARCHING, notes: "No target DRM, backlight, or display class device has been physically verified; see docs/DISPLAY.md and docs/DISPLAY_BRINGUP_PLAN.md." } }
+  display: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: IMPLEMENTING, notes: "BOOT #6 locally builds MSM8x60 MMCC/GDSC/NoC, MDP4, DSI, a source-derived 45 nm PHY, R63306/TMD MDV22 panel, AS3676 backlight and fbcon. None has physical target-Linux acceptance evidence; see docs/DISPLAY_BOOT6.md." } }
   touchscreen: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   gpu: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   wifi: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }

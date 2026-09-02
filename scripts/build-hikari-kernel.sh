@@ -10,6 +10,7 @@ jobs=${JOBS:-"$(nproc)"}
 initramfs_source=${INITRAMFS_SOURCE:-}
 kernel_fragment=${KERNEL_FRAGMENT:-"$repo_root/kernel/configs/hikari-firstboot.fragment"}
 require_usb_debug=${REQUIRE_USB_DEBUG:-0}
+require_display_bringup=${REQUIRE_DISPLAY_BRINGUP:-0}
 
 # Keep local prototype bytes reproducible across repeated builds from the same
 # source and inputs. Callers may deliberately override these conventional
@@ -57,6 +58,20 @@ if [[ "$require_usb_debug" == 1 ]]; then
     exit 1
   }
 fi
+if [[ "$require_display_bringup" == 1 ]]; then
+  for required in \
+    CONFIG_MSM_MMCC_8660=y CONFIG_INTERCONNECT_QCOM_MSM8660=y \
+    CONFIG_DRM=y CONFIG_DRM_MSM=y CONFIG_DRM_MSM_MDP4=y CONFIG_DRM_MSM_DSI=y \
+    CONFIG_DRM_MSM_DSI_45NM_PHY=y \
+    CONFIG_DRM_PANEL_RENESAS_R63306_TMD_MDV22=y \
+    CONFIG_DRM_FBDEV_EMULATION=y CONFIG_FRAMEBUFFER_CONSOLE=y \
+    CONFIG_BACKLIGHT_AS3676=y CONFIG_I2C_QUP=y; do
+    grep -qx "$required" "$build_dir/.config" || {
+      echo "Hikari BOOT #6 build requires $required" >&2
+      exit 1
+    }
+  done
+fi
 if [[ -n "$initramfs_source" ]]; then
   test -f "$initramfs_source" || { echo "INITRAMFS_SOURCE is not a regular file" >&2; exit 1; }
   "$kernel_src/scripts/config" --file "$build_dir/.config" --set-str INITRAMFS_SOURCE "$initramfs_source"
@@ -88,6 +103,20 @@ if [[ -n "$initramfs_source" ]]; then
       echo 'Hikari BOOT #5.1 build lost the late ttyGS0 console cmdline' >&2
       exit 1
     }
+  fi
+  if [[ "$require_display_bringup" == 1 ]]; then
+    for required in \
+      CONFIG_MSM_MMCC_8660=y CONFIG_INTERCONNECT_QCOM_MSM8660=y \
+      CONFIG_DRM=y CONFIG_DRM_MSM=y CONFIG_DRM_MSM_MDP4=y CONFIG_DRM_MSM_DSI=y \
+      CONFIG_DRM_MSM_DSI_45NM_PHY=y \
+      CONFIG_DRM_PANEL_RENESAS_R63306_TMD_MDV22=y \
+      CONFIG_DRM_FBDEV_EMULATION=y CONFIG_FRAMEBUFFER_CONSOLE=y \
+      CONFIG_BACKLIGHT_AS3676=y CONFIG_I2C_QUP=y; do
+      grep -qx "$required" "$build_dir/.config" || {
+        echo "Hikari BOOT #6 build lost $required" >&2
+        exit 1
+      }
+    done
   fi
 fi
 make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" -j"$jobs" zImage qcom/qcom-msm8260-sony-hikari.dtb
