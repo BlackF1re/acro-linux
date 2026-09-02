@@ -26,19 +26,25 @@ legacy_baseline:
     observation: "adb shell su -c id returned uid=0(root) during read-only reconnaissance."
   notes: Modified Android baseline, not Sony stock. Its exposed 1890 MHz frequency is not a Sony-approved OPP.
 target_linux:
-  implementation: IMPLEMENTING
+  implementation: BOOTS
   lifecycle: BOOTS
   boot5_interactive:
     implementation: WORKING
     evidence: VERIFIED_DEVICE
-    notes: BOOT #5.1 physically verified the built-in HSUSB static g_serial CDC ACM gadget at High Speed and a bidirectional BusyBox shell over the host CDC ACM node. The prior BOOT #5 CPIO defect is superseded; uname is intentionally not yet an initramfs BusyBox applet.
+    notes: BOOT #5.1 physically verified the built-in HSUSB static g_serial CDC ACM gadget at High Speed (480 Mbps), a bidirectional root shell, shell respawn, and stable PID 1. BusyBox already contained uname/ls/top and other applets; the prior CPIO lacked their symlinks. The host-side builder now installs symlinks without changing the BusyBox applet set.
     usb:
-      controller: VERIFIED
-      phy: VERIFIED
-      device_mode: VERIFIED
-      acm_gadget: VERIFIED
-      console: VERIFIED
-      verification: VERIFIED
+      controller: VERIFIED_DEVICE
+      phy: VERIFIED_DEVICE
+      ulpi: VERIFIED_DEVICE
+      device_mode: VERIFIED_DEVICE
+      high_speed: VERIFIED_DEVICE
+      acm_gadget: VERIFIED_DEVICE
+      ttygs0: VERIFIED_DEVICE
+      console: VERIFIED_DEVICE
+      interactive_root_shell: VERIFIED_DEVICE
+      shell_respawn: VERIFIED_DEVICE
+      otg_host: NOT_VERIFIED
+      ecm: NOT_IMPLEMENTED
     display:
       mdp4: RESEARCHING
       dsi: RESEARCHING
@@ -61,7 +67,11 @@ target_linux:
     boot_proof: NOT_OBSERVED
     postmortem: WRONG_BOOT
     notes: The approved second Sony ELF was accepted by S1Boot through logical boot/p3. No target-Linux marker, ADB, fastboot, or new USB target appeared during 120 seconds; Power + Volume Up forced reset, original p3 restore succeeded, and Android returned. TWRP's captured previous-boot log was from a later legacy Android reboot, so the target failure stage is UNKNOWN.
-  notes: Mainline boot #4 reached /init on the physical device and then panicked because the diagnostic PID 1 exited. Earlier local-only prototypes were deployed and rolled back. Target peripheral status remains UNKNOWN until separate acceptance tests.
+  stable_pid1: { evidence: VERIFIED_DEVICE, implementation: VERIFIED, notes: "BOOT #5.1 emitted ALIVE markers through uptime 1082.67 seconds; PID 1 remained active and respawned an exited USB shell." }
+  init_supervisor: { evidence: VERIFIED_DEVICE, implementation: VERIFIED }
+  boot5_alive_loop: { evidence: VERIFIED_DEVICE, implementation: VERIFIED, minimum_observed_seconds: 1082.67 }
+  initramfs_dev_console: { evidence: VERIFIED_DEVICE, implementation: VERIFIED, notes: "BOOT #5.1 lacked the previous unable-to-open-initial-console warning; final CPIO contains c 5:1 /dev/console." }
+  notes: Mainline boot #4 reached /init on the physical device and then panicked because the diagnostic PID 1 exited. BOOT #5.1 corrected that liveness defect and verified USB device-mode diagnostics. Earlier prototypes were deployed and rolled back. Other target peripheral status remains UNKNOWN until separate acceptance tests.
   persistent_boot_diagnostics:
     physical_reader: VERIFIED_DEVICE
     writer: VERIFIED_DEVICE
@@ -114,15 +124,15 @@ boot_chain:
       rollback_route: VERIFIED_DEVICE
       notes: The bootloader-level p3 restore route was physically used after the first failed native-Linux attempt; TWRP storage and independence from p3 remain UNKNOWN.
 subsystems:
-  cpu_smp: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  cpu_smp: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: VERIFIED, evidence: VERIFIED_DEVICE, notes: "BOOT #4 post-mortem identified two CPU bring-up; BOOT #5.1 remains live on both CPUs." } }
   storage_emmc: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   storage_microsd: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: WORKING, notes: Separate mmcblk1/mmcblk1p1 SD path was mounted, wrote the C2 raw-backup stream, and its parts passed hash validation. }, target_linux: { implementation: UNKNOWN } }
-  display: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: RESEARCHING, notes: "BOOT #5 deliberately does not add speculative MSM8x60 MDP4/DSI/panel nodes; see docs/DISPLAY.md." } }
+  display: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: RESEARCHING, notes: "No target DRM, backlight, or display class device has been physically verified; see docs/DISPLAY.md and docs/DISPLAY_BRINGUP_PLAN.md." } }
   touchscreen: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   gpu: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   wifi: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   bluetooth: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
-  usb_device: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: VERIFIED, notes: "BOOT #5.1 physically verified HSUSB peripheral/static g_serial CDC ACM High-Speed enumeration and a bidirectional BusyBox shell via host ttyACM. The initial BOOT #5 initramfs defect is resolved; a richer diagnostic applet set remains future userspace work." } }
+  usb_device: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: VERIFIED, evidence: VERIFIED_DEVICE, notes: "BOOT #5.1 physically verified HSUSB peripheral/static g_serial CDC ACM High-Speed enumeration, target ttyGS0, host ttyACM0, interactive root shell, and shell respawn. USB OTG host and ECM remain separate unverified/not-implemented work." } }
   usb_otg_host: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   hdmi: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   audio: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
@@ -147,5 +157,5 @@ notes:
   - Legacy runtime observations are not target-Linux VERIFIED states and are not formal acceptance tests.
   - VERIFIED for a target subsystem requires a function-specific acceptance test on the physical Xperia.
   - Power + Volume Up is a VERIFIED_DEVICE forced-reset/shutdown action for a hung experimental kernel; phone off + Volume Up + USB is the separate S1Boot entry action.
-  - The second layout's SMEM placement at 0x40200000 is a HYPOTHESIS-level probable double offset, not target-kernel evidence. The third local build corrects it to a 0x40000000 physical-base model with upstream SMEM reservation; no new physical deployment is implied.
+  - The second layout's SMEM placement at 0x40200000 was a double-offset error. BOOT #4 and BOOT #5.1 physically verify the corrected 0x40000000 physical-base model with upstream SMEM reservation.
   - TWRP physically observes Linux-visible System RAM at 0x40200000-0x42dfffff and 0x48000000-0x6e5fffff, with kernel code at 0x40208000. This supports but does not by itself fully enumerate physical DRAM or target reserved-memory policy.

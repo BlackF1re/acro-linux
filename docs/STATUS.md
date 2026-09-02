@@ -71,27 +71,23 @@ acceptance claim follows. See [boot #4 post-mortem](../research/device/current/b
 
 BOOT #5 then physically verified the target USB device-mode hardware path:
 the Qualcomm HS PHY, vendor ULPI initialization, ChipIdea UDC, and built-in
-`g_serial` enumerated as non-unique `0525:a4a7` at High Speed, and the host
-created a CDC ACM node. This does **not** verify an interactive console. The
-actual BOOT #5 CPIO lacked `/dev/console`, had an empty `/dev`, and installed
-only the BusyBox `sh` link; PID 1's first `mount` never ran and no userspace
-marker reached ramoops. BOOT #5.1 corrected that archive with required device
-nodes, command links, late `ttyGS0` kernel console, and explicit raw-TX/shell
-diagnostics. It was then physically accepted by S1Boot: the host reached a
-BusyBox root prompt through CDC ACM, proving bidirectional interactive console
-I/O. The minimal BusyBox image does not yet contain the `uname` applet; that is
-not a transport failure. The L6 voltage warning was non-blocking for observed
-enumeration and remains unresolved.
+`g_serial` enumerated as non-unique `0525:a4a7` at High Speed (480 Mbps), and
+the host created `/dev/ttyACM0`. BOOT #5.1 corrected BOOT #5's missing device
+nodes and BusyBox applet links, then physically exposed `/dev/ttyGS0` and an
+interactive root shell. The first shell exited with status zero and the
+independent supervisor spawned another one. `HIKARI ALIVE` markers from 2.18
+through 1082.67 seconds prove a stable PID 1 and supervisor for at least
+18 minutes. The initial `uname: not found` was caused by missing initramfs
+symlinks, not a missing compiled BusyBox applet. The L6 voltage warning was
+non-blocking for this acceptance test and remains a power-management blocker.
 
 ## Status domains
 
 status/hardware.yaml deliberately separates physical hardware evidence, the
 legacy Android baseline, and native target-Linux progress for every subsystem.
-The legacy baseline and target Linux both have a `BOOTS` lifecycle: BOOT #4
-physically reached native `/init`. BOOT #5 work is locally `IMPLEMENTING` for
-a stable PID 1 and USB device-mode diagnostics. BOOT #5 physically verified
-the target USB PHY/UDC/gadget enumeration, while the console and stable PID 1
-remain unverified pending the corrected BOOT #5.1 artifact. Legacy runtime
+The legacy baseline and target Linux both have a `BOOTS` lifecycle. BOOT #5.1
+physically verified native initramfs execution, stable PID 1, persistent
+diagnostics, and the USB peripheral/root-console path. Legacy runtime
 observations are retained in their own field, but are neither target-Linux
 progress nor functional verification.
 

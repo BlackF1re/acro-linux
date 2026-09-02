@@ -29,8 +29,7 @@ is included in BOOT #5. Adding one would require inventing unproven 45 nm PHY,
 MMCC/MMFAB and panel-init behaviour. USB ACM is intentionally the sole
 external BOOT #5 diagnostic target.
 
-Display remains `IMPLEMENTING`, not `PROBES`. The next bounded display task is
-to retrieve the latest authoritative MSM8x60 MMCC and interconnect revisions,
-then implement an upstream-style R63306 panel driver from the evidenced
-downstream power/reset/DCS sequence and validate it independently. Only a
-physical visible native-resolution fbcon result can verify the subsystem.
+Display remains `IMPLEMENTING`, not `PROBES`. The bounded implementation
+sequence and the BOOT #5.1 read-only live baseline are documented in
+[DISPLAY_BRINGUP_PLAN.md](DISPLAY_BRINGUP_PLAN.md). Only a physical visible
+native-resolution fbcon result can verify the subsystem.

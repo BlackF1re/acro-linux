@@ -97,11 +97,12 @@ ChipIdea controller and HS-PHY probe paths found no interconnect consumer.
 That is a scope decision for this first gadget attempt, not evidence that
 every USB workload will work. BOOT #5 physically verified the HS PHY, MSM8x60
 vendor ULPI initialization, ChipIdea UDC, and static `g_serial`: the host saw
-`0525:a4a7` at USB High Speed and created a CDC ACM node. BOOT #5.1 then
-physically verified the interactive path: an explicit host `uname -a` line
-reached BusyBox over CDC ACM and the handset returned its root prompt. `uname`
-is not among this deliberately tiny BusyBox applet set, so its "not found"
-response is an initramfs-content limitation, not a transport failure.
+`0525:a4a7` at USB High Speed (480 Mbps) and created a CDC ACM node. BOOT #5.1
+then physically verified the interactive path: the target exposed
+`/dev/ttyGS0`, the host opened `/dev/ttyACM0`, and an interactive root shell
+executed target commands. The first shell exited with status zero and the
+independent supervisor spawned another one. This verifies the shell-respawn
+path as well as the transport.
 
 ## BOOT #5.1 initramfs console correction
 
@@ -114,20 +115,23 @@ expected marker. Separately, the archive had no `c 5:1 /dev/console`, which
 explains the kernel's pre-`/init` "unable to open an initial console" warning.
 
 BOOT #5.1 generates its CPIO with the kernel `gen_init_cpio` file-list
-mechanism. It contains `c 5:1 /dev/console`, `c 1:3 /dev/null`, and explicit
-BusyBox links for every command PID 1 invokes. Each mount is followed by a
+mechanism. It contains `c 5:1 /dev/console`, `c 1:3 /dev/null`, and canonical
+BusyBox links installed from the already-built BusyBox applet metadata. This
+does not add applets or alter the BusyBox configuration. Each mount is followed by a
 kernel-visible return-code marker. Once `/dev/ttyGS0` exists, a child first
 writes `HIKARI TTYGS0 RAW TX VERIFIED`, records that result in ramoops, and
 only then starts a simple redirected interactive shell. PID 1 remains alive
 if either operation fails.
 
 The L6 `voltage operation not allowed` message remains unresolved, but is
-`NON_BLOCKING_FOR_CURRENT_USB`: physical High-Speed CDC ACM enumeration
-already occurred. In the current HS PHY driver the likely origin is its
-`regulator_set_voltage_triplet()` request for the v3p3 rail (Hikari maps it
-to fixed 3.05 V PM8058 L6). BOOT #5.1 deliberately leaves the physically
-working regulator topology unchanged; a later focused power-cycle/suspend
-analysis must establish the exact regulator constraint interaction.
+`NON_BLOCKING_FOR_CURRENT_USB`: physical High-Speed CDC ACM enumeration and
+an interactive shell already occurred. The current likely origin is the HS
+PHY's `regulator_set_voltage_triplet()` request for the v3p3 rail while Hikari
+maps it to fixed 3.05 V PM8058 L6. The live regulator summary shows L6 at
+3050 mV and its ULPI v3p3 consumer enabled; this is evidence of a constraint
+interaction, not a safe reason to change the working topology. A later focused
+power-cycle/suspend/runtime-PM/OTG investigation must establish the exact
+cause.
 
 ## BOOT #5 diagnostic boundary
 
