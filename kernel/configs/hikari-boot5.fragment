@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# BOOT #5 is deliberately a narrow diagnostic configuration.  It retains the
+# proven BOOT #4 hand-off and adds only the built-in USB device path required
+# to expose a host console.
+CONFIG_ARCH_QCOM=y
+CONFIG_SMP=y
+# CONFIG_ARCH_MULTIPLATFORM is not set
+# CONFIG_AUTO_ZRELADDR is not set
+CONFIG_PHYS_OFFSET=0x40000000
+CONFIG_ARCH_QCOM_RESERVE_SMEM=y
+CONFIG_ARM_APPENDED_DTB=y
+CONFIG_ARM_ATAG_DTB_COMPAT=y
+CONFIG_ARM_ATAG_DTB_COMPAT_CMDLINE_EXTEND=y
+CONFIG_DEVTMPFS=y
+CONFIG_DEVTMPFS_MOUNT=y
+CONFIG_TMPFS=y
+CONFIG_PROC_FS=y
+CONFIG_SYSFS=y
+CONFIG_PRINTK=y
+CONFIG_PSTORE=y
+CONFIG_PSTORE_CONSOLE=y
+CONFIG_PSTORE_RAM=y
+# CONFIG_PSTORE_COMPRESS is not set
+CONFIG_BLK_DEV_INITRD=y
+CONFIG_INITRAMFS_SOURCE=""
+CONFIG_RD_GZIP=y
+CONFIG_SERIAL_MSM=y
+CONFIG_SERIAL_MSM_CONSOLE=y
+CONFIG_SERIAL_EARLYCON=y
+CONFIG_REGULATOR_QCOM_RPM=y
+
+# Hikari HSUSB device debugging: every component used before userspace is
+# built in.  Configfs creates one ACM function from the initramfs; ECM stays
+# out of BOOT #5 so that a failed composite setup cannot hide ttyGS0.
+CONFIG_USB=y
+CONFIG_USB_CHIPIDEA=y
+CONFIG_USB_CHIPIDEA_UDC=y
+CONFIG_USB_CHIPIDEA_MSM=y
+CONFIG_PHY_QCOM_USB_HS=y
+CONFIG_USB_GADGET=y
+CONFIG_CONFIGFS_FS=y
+CONFIG_USB_CONFIGFS=y
+CONFIG_USB_CONFIGFS_ACM=y
+# CONFIG_USB_CONFIGFS_ECM is not set
+# CONFIG_DEBUG_INFO is not set
