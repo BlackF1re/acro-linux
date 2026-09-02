@@ -66,13 +66,36 @@ a USB reset. It uses `picocom` when available, otherwise `screen`. Expected
 read-only initial probes are `uname -a`, `dmesg`, `cat /proc/cpuinfo`, and
 `ls /dev`.
 
-## Patch status and acceptance gate
+## MSM8x60 vendor ULPI initialization
 
-The project searched the claimed June 2026 v3 series *"phy: qcom: usb-hs:
-MSM8x60 vendor ULPI init"* before this implementation. At the pinned revision
-it was not merged, and its authoritative lore mbox could not be retrieved in
-this environment. No unverifiable or rewritten third-party patch is applied.
-No current MSM8x60 interconnect series is applied either: the existing device
-mode description is deliberately the smallest path that can be built and
-tested. Physical enumeration of a CDC ACM interface is required before any
-USB state becomes `VERIFIED_DEVICE`.
+`VERIFIED_UPSTREAM` source review found that the pinned Linus revision did not
+contain the required MSM8x60 vendor ULPI writes.  The external BOOT #5 kernel
+worktree therefore carries a mechanical rebase of Herman van Hazendonk's
+author-preserved v3 series dated 2026-06-16:
+
+| Commit in external worktree | Original public message | Effect |
+| --- | --- | --- |
+| `a2e1e55ae3b266d90dc7c7a0629f4398b4cc41f7` | [v3 1/2](https://lkml.iu.edu/2606.2/01062.html), Message-ID `<20260616-submit-phy-usb-hs-vendor-init-seq-v3-1-7d21fb1d1484@herrie.org>` | Adds the optional `qcom,hs-drv-slope` binding. |
+| `7d2353796ad5317c04c14465fcf3321f2f89c225` | [v3 2/2](https://lkml.iu.edu/2606.2/01073.html), Message-ID `<20260616-submit-phy-usb-hs-vendor-init-seq-v3-2-7d21fb1d1484@herrie.org>` | On MSM8660 power-on, writes ULPI `0x32[5:4] = 0b11` and sets bits 1 and 2 of ULPI `0x36`; an explicitly supplied slope controls only `0x32[3:0]`. |
+
+The rebase was needed solely because the current driver had moved since the
+series was posted; it retains the original author, author date, subject,
+Message-ID and Signed-off-by.  It is not a project-authored reimplementation.
+
+Sony's downstream Fuji/Hikari code has no board-specific HS driver-slope
+override.  The final Hikari DTB consequently **omits** `qcom,hs-drv-slope`,
+leaving the documented Sony/silicon default of zero rather than inventing a
+board value.
+
+No current MSM8x60 interconnect series is applied: static inspection of the
+ChipIdea controller and HS-PHY probe paths found no interconnect consumer.
+That is a scope decision for this first gadget attempt, not physical evidence
+that USB traffic will work. Physical CDC ACM enumeration remains required
+before any USB state becomes `VERIFIED_DEVICE`.
+
+## BOOT #5 diagnostic boundary
+
+Before its normal `ALIVE` loop, PID 1 records the contents of
+`/sys/class/udc` and the currently present `/dev/ttyGS*` nodes to `/dev/kmsg`.
+It never emits a synthetic USB-ready marker.  Thus a failed enumeration can be
+distinguished in the preserved ramoops log from a later userspace failure.

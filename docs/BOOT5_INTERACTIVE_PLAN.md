@@ -18,7 +18,7 @@ and ramoops `0x7ffe0000/0x20000/ECC=0`.
 ## Proposed run and observation
 
 ```sh
-fastboot flash boot /home/paul/xperia/build/hikari-artifacts-g7-serial/hikari-boot5-interactive-serial.elf
+fastboot flash boot /home/paul/xperia/build/hikari-artifacts-g7-ulpi/hikari-boot5-interactive-ulpi.elf
 fastboot reboot
 ```
 
@@ -26,6 +26,12 @@ Do not issue a second flash. For at least 120 seconds watch `lsusb`, host
 kernel events and `/dev/ttyACM*`. If ACM appears, run
 `./scripts/connect-hikari-console.sh`; use read-only probes first. USB ACM
 acceptance requires a real host `ttyACM`, `ttyGS0` and interactive shell.
+
+The final BOOT #5 DT sets HSUSB1 to `dr_mode = "peripheral"`, with no
+`extcon` or `usb-role-switch` dependency.  The MSM8x60 ULPI vendor
+initialisation patch is present in the external kernel worktree, and PID 1
+will preserve a one-time UDC/`ttyGS*` snapshot in ramoops before its periodic
+markers.  These are local-build facts, not device results.
 
 If there is no usable interface, use the proven forced-reset and rollback
 route: **Power + Volume Up**, then phone-off **Volume Up + USB**, verify

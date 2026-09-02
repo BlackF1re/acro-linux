@@ -19,6 +19,29 @@ mount -t tmpfs -o mode=0755 tmpfs /run 2>/dev/null || true
 log "HIKARI BOOT5 INIT START"
 log "HIKARI BOOT5 DEV READY"
 
+usb_snapshot()
+{
+	seen=0
+	log "HIKARI USB SYSFS UDC: BEGIN"
+	for node in /sys/class/udc/*; do
+		[ -e "$node" ] || continue
+		log "HIKARI USB SYSFS UDC: ${node##*/}"
+		seen=1
+	done
+	[ "$seen" -eq 1 ] || log "HIKARI USB SYSFS UDC: NONE"
+
+	seen=0
+	log "HIKARI USB TTY: BEGIN"
+	for node in /dev/ttyGS*; do
+		[ -c "$node" ] || continue
+		log "HIKARI USB TTY: ${node##*/}"
+		seen=1
+	done
+	[ "$seen" -eq 1 ] || log "HIKARI USB TTY: NONE"
+}
+
+usb_snapshot
+
 console_supervisor()
 {
 	announced=0

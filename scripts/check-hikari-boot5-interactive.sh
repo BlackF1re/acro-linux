@@ -57,6 +57,16 @@ test "$(get_string /usb@12500000 dr_mode)" = peripheral || {
   echo "BOOT5_USB_DTB=FAIL dr_mode is not peripheral" >&2
   exit 1
 }
+test "$(get_cells /usb@12500000 interrupts)" = '0 64 4' || {
+  echo "BOOT5_USB_DTB=FAIL controller IRQ is not GIC_SPI 100" >&2
+  exit 1
+}
+for prohibited in extcon usb-role-switch; do
+  if fdtget "$dtb" /usb@12500000 "$prohibited" >/dev/null 2>&1; then
+    echo "BOOT5_USB_DTB=FAIL unexpected $prohibited dependency" >&2
+    exit 1
+  fi
+done
 
 # DTC rejects dangling labels while compiling this DTB.  These direct reads
 # additionally gate every reference that the ChipIdea controller and its PHY

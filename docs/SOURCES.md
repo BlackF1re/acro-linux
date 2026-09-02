@@ -92,12 +92,13 @@ proof of exact silicon beyond the physical evidence cited there.
 | --- | --- | --- | --- |
 | Linus Linux USB controller binding | [`ci-hdrc-usb2.yaml`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/devicetree/bindings/usb/ci-hdrc-usb2.yaml?id=786262be6048deab760f68c8acc2c85607165894), Linux `786262be6048deab760f68c8acc2c85607165894` | `qcom,ci-hdrc`, two controller register ranges, `iface`/`core` clocks, reset and peripheral `dr_mode`. | `VERIFIED_UPSTREAM`; used for the BOOT #5 HSUSB1 node. |
 | Linus Linux Qualcomm HS PHY binding | [`qcom,usb-hs-phy.yaml`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/devicetree/bindings/phy/qcom,usb-hs-phy.yaml?id=786262be6048deab760f68c8acc2c85607165894), same revision | MSM8660 ULPI PHY compatible and regulator/clock/reset binding. | `VERIFIED_UPSTREAM`; used for the PHY node, not as physical proof of enumeration. |
+| Herman van Hazendonk USB-HS PHY v3 | [v3 1/2 binding](https://lkml.iu.edu/2606.2/01062.html), Message-ID `<20260616-submit-phy-usb-hs-vendor-init-seq-v3-1-7d21fb1d1484@herrie.org>`; [v3 2/2 driver](https://lkml.iu.edu/2606.2/01073.html), Message-ID `<20260616-submit-phy-usb-hs-vendor-init-seq-v3-2-7d21fb1d1484@herrie.org>`; 2026-06-16 | Authoritative public v3 source for MSM8x60 vendor ULPI power-on writes and optional 4-bit HS driver slope. Applied as external-worktree commits `a2e1e55ae3b266d90dc7c7a0629f4398b4cc41f7` and `7d2353796ad5317c04c14465fcf3321f2f89c225`, retaining author metadata after a mechanical context rebase. | `VERIFIED_UPSTREAM`; BOOT #5 uses the vendor writes and deliberately omits an unsupported Hikari slope override. |
 | OpenSEMC Fuji USB BSP | `board-semc_fuji.c` in [OpenSEMC MSM8x60](https://github.com/OpenSEMC/android_kernel_sony_msm8x60/tree/c4784b04c08d30f799b8b14b597aeb2124d2e6e1), branch `kk_chocolate_rmfx`, checked 2026-09-02 | HSUSB at `0x12500000`; PM8058 L6 3.05 V, L7 1.8 V; VBUS/ID callbacks. | `HISTORICAL_SOURCE`; board wiring evidence. Only the device-only rails are represented in BOOT #5. |
 | OpenSEMC Fuji display BSP | `board-semc_fuji.c` and `mipi_tmd_video_wxga_mdv22.c` in the same tree/revision | R63306/TMD 720p panel family, four-lane video DSI, legacy timing/power/reset information. | `HISTORICAL_SOURCE`; records a future conversion input, not a current DTS implementation. |
 | Linus Linux DRM/MSM tree | [`drivers/gpu/drm/msm`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/gpu/drm/msm?id=786262be6048deab760f68c8acc2c85607165894), same revision | Generic DRM/MSM, MDP4, DSI and fbdev infrastructure exist; no exact MSM8x60 45 nm DSI PHY or R63306 panel driver was found. | `VERIFIED_UPSTREAM`; establishes the intended architecture and present gap. |
 
-The claimed June 2026 MSM8x60 USB-ULPI, MMCC and interconnect patch series
-were looked up through lore before BOOT #5. Their authoritative latest mboxes
-were not retrievable in this environment, so no patch, Message-ID or inferred
-revision is recorded and no third-party patch is applied. This is an explicit
-`UNKNOWN`, not a conclusion that such work does not exist.
+The June 2026 USB-ULPI v3 series is now recorded and applied exactly as noted
+above.  No MSM8x60 MMCC or interconnect series is applied to BOOT #5: neither
+is a static dependency of the minimal ChipIdea device-mode path.  Their merge
+state and need for later display/high-bandwidth work remain separate research
+items.
