@@ -3,7 +3,9 @@
 # BOOT #5.1 PID 1.  This is deliberately independent of its optional USB
 # console: losing or closing a host terminal must never terminate PID 1.
 
-export PATH=/bin:/sbin
+# BusyBox's host-side install metadata places a few applets in /usr/bin.
+# Keep the runtime lookup path aligned with the archive's canonical links.
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
 log()
 {

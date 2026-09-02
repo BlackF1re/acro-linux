@@ -7,13 +7,30 @@ archive=${1:?usage: check-hikari-initramfs.sh INITRAMFS.cpio.gz}
 test -f "$archive"
 
 listing=$(gzip -cd -- "$archive" | cpio -itv 2>/dev/null)
-for path in init bin/sh bin/mount bin/sleep bin/setsid bin/cttyhack bin/mkdir bin/cat bin/echo \
+for path in init bin/sh bin/mount bin/sleep bin/cttyhack bin/mkdir bin/cat bin/echo \
+            bin/ls bin/uname bin/dmesg bin/ps usr/bin/setsid usr/bin/top sbin/getty \
             dev proc sys; do
   printf '%s\n' "$listing" | grep -Eq "[[:space:]]${path}( |$| ->)" || {
     echo "Hikari initramfs missing $path" >&2
     exit 1
   }
 done
+for link in bin/ls bin/uname bin/dmesg bin/ps bin/cttyhack; do
+  printf '%s\n' "$listing" | grep -Eq " ${link} -> busybox$" || {
+    echo "Hikari initramfs missing canonical BusyBox link $link -> busybox" >&2
+    exit 1
+  }
+done
+for link in usr/bin/setsid usr/bin/top; do
+  printf '%s\n' "$listing" | grep -Eq " ${link} -> ../../bin/busybox$" || {
+    echo "Hikari initramfs missing canonical BusyBox link $link -> ../../bin/busybox" >&2
+    exit 1
+  }
+done
+printf '%s\n' "$listing" | grep -Eq ' sbin/getty -> ../bin/busybox$' || {
+  echo 'Hikari initramfs missing canonical BusyBox link sbin/getty -> ../bin/busybox' >&2
+  exit 1
+}
 printf '%s\n' "$listing" | grep -Eq '^crw-------.* dev/console$' || {
   echo 'Hikari initramfs has no c 5:1 /dev/console' >&2
   exit 1

@@ -36,6 +36,15 @@ if grep -q '^CONFIG_TC=y$' "$busybox_build/.config"; then
 fi
 make -C "$busybox_src" O="$busybox_build" ARCH=arm CROSS_COMPILE="$cross_compile" -j"$jobs" busybox
 
+# Generate the canonical applet-link tree from this already-built BusyBox.
+# `make install` reads BusyBox's generated applet metadata; it does not add an
+# applet or execute the ARM binary on the host. This is a host build-time step,
+# not a PID-1 workaround.
+busybox_install="$initramfs_build/busybox-install"
+rm -rf -- "$busybox_install"
+make -C "$busybox_src" O="$busybox_build" ARCH=arm CROSS_COMPILE="$cross_compile" \
+  CONFIG_PREFIX="$busybox_install" install
+
 list="$initramfs_build/${initramfs_name%.gz}.list"
 archive="$initramfs_build/${initramfs_name%.gz}"
 
@@ -50,13 +59,24 @@ archive="$initramfs_build/${initramfs_name%.gz}"
     'dir /proc 0755 0 0' \
     'dir /run 0755 0 0' \
     'dir /sbin 0755 0 0' \
-    'dir /sys 0755 0 0'
+    'dir /sys 0755 0 0' \
+    'dir /usr 0755 0 0' \
+    'dir /usr/bin 0755 0 0' \
+    'dir /usr/sbin 0755 0 0'
   printf 'file /bin/busybox %s 0755 0 0\n' "$busybox_build/busybox"
-  # Every external command called by /init needs an argv[0] BusyBox applet
-  # link.  BOOT #5 installed only sh, so its first mount never executed.
-  for applet in sh mount sleep setsid cttyhack mkdir cat echo; do
-    printf 'slink /bin/%s busybox 0777 0 0\n' "$applet"
-  done
+  # Preserve BusyBox's canonical applet paths rather than curating a fragile
+  # hand-maintained list. The installed BusyBox binary is omitted: the archive
+  # copy above is authoritative. Targets must remain relative archive paths.
+  while IFS= read -r -d '' link; do
+    rel=${link#"$busybox_install"/}
+    target=$(readlink -- "$link")
+    resolved=$(readlink -f -- "$link")
+    [[ "$target" != /* && "$resolved" = "$busybox_install/bin/busybox" ]] || {
+      echo "unsafe BusyBox applet symlink: $rel -> $target" >&2
+      exit 1
+    }
+    printf 'slink /%s %s 0777 0 0\n' "$rel" "$target"
+  done < <(find "$busybox_install" -type l -print0 | sort -z)
   printf '%s\n' \
     'nod /dev/console 0600 0 0 c 5 1' \
     'nod /dev/null 0666 0 0 c 1 3'
