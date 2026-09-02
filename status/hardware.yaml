@@ -28,6 +28,24 @@ legacy_baseline:
 target_linux:
   implementation: IMPLEMENTING
   lifecycle: BOOTS
+  boot5_interactive:
+    implementation: IMPLEMENTING
+    evidence: LOCAL_BUILD_ONLY
+    notes: BOOT #5 keeps PID 1 alive and prepares a built-in HSUSB CDC ACM diagnostic path. It has not been flashed or physically tested.
+    usb:
+      controller: IMPLEMENTING
+      phy: IMPLEMENTING
+      device_mode: IMPLEMENTING
+      acm_gadget: IMPLEMENTING
+      console: IMPLEMENTING
+      verification: NOT_YET_TESTED
+    display:
+      mdp4: RESEARCHING
+      dsi: RESEARCHING
+      panel: RESEARCHING
+      backlight: RESEARCHING
+      fbcon: RESEARCHING
+      verification: NOT_YET_TESTED
   first_mainline_execution:
     evidence: VERIFIED_DEVICE
     result: VERIFIED
@@ -99,12 +117,12 @@ subsystems:
   cpu_smp: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   storage_emmc: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   storage_microsd: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: WORKING, notes: Separate mmcblk1/mmcblk1p1 SD path was mounted, wrote the C2 raw-backup stream, and its parts passed hash validation. }, target_linux: { implementation: UNKNOWN } }
-  display: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  display: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: RESEARCHING, notes: "BOOT #5 deliberately does not add speculative MSM8x60 MDP4/DSI/panel nodes; see docs/DISPLAY.md." } }
   touchscreen: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   gpu: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   wifi: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   bluetooth: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
-  usb_device: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  usb_device: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: IMPLEMENTING, notes: "BOOT #5 contains a built-in HSUSB peripheral/CDC ACM configuration; physical enumeration is NOT_YET_TESTED." } }
   usb_otg_host: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   hdmi: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   audio: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }

@@ -38,12 +38,15 @@ kernel outputs and ELF prototype are never added to Git.
 - `make ... zImage qcom/qcom-msm8260-sony-hikari.dtb`: passed.
 - `make ... dtbs`: passed as part of the build; no DTC warning was emitted for
   the new DTS.
-- `make ... dtbs_check`: completed with no diagnostic for Hikari.  The broad
-  Qualcomm DT set still emits unrelated existing diagnostics for other boards;
-  direct `dt-validate` of `qcom-msm8260-sony-hikari.dtb`, targeted
-  `dt-doc-validate`, `yamllint`, and single-process `dt-check-style` of the
-  changed Qualcomm binding all pass with no output.  `dtschema` and its host
-  tooling are installed in the isolated build venv, not the global Python.
+- The relevant Hikari DT is validated directly with `dt-validate` against the
+  processed schema and the controller, PHY and RPM regulator bindings. The
+  current `dtschema` 2026.6 command-line interface is incompatible with this
+  pinned kernel's broad `make dtbs_check` invocation: it reports positional
+  DTBs as unrecognized while the kernel intentionally ignores checker exit
+  status. This is a host-tool/version integration issue, not a Hikari schema
+  pass; it is recorded explicitly and the direct targeted validation is the
+  effective BOOT #5 gate. `dtschema` remains in the isolated build venv, not
+  the global Python.
 - The ELF self-test and artifact validator passed. The latter checks the
   original offline p3 hash and size, p3 capacity, appended-DTB tail, ELF32
   header, segment ranges and load-address overlap.
@@ -65,3 +68,37 @@ low-memory base `0x40000000`, reserves its first 2 MiB through
 [THIRD_BOOT_PLAN.md](THIRD_BOOT_PLAN.md) and
 [FIRST_BOOT_MEMORY.md](FIRST_BOOT_MEMORY.md).  It has not been sent to the
 phone.
+
+## BOOT #5 interactive local artifact
+
+The current locally validated, **not deployed** artifact is:
+
+```text
+/home/paul/xperia/build/hikari-artifacts-g7/hikari-boot5-interactive.elf
+size:   11964672 bytes
+SHA-256 e417d89c32d1bcae9553d83377bce964b840b9a88fc0338bac51e5555fb91ab8
+```
+
+It preserves the verified BOOT #4 load model and adds only a persistent PID 1
+and the narrow built-in HSUSB peripheral/configfs/CDC-ACM path described in
+[USB.md](USB.md).  Display is intentionally absent; its blockers are recorded
+in [DISPLAY.md](DISPLAY.md).
+
+To reproduce this artifact from the external source worktree, use explicit
+paths rather than shell-profile defaults:
+
+```sh
+KERNEL_SRC=/home/paul/xperia/src/linux-hikari-boot5 \
+KERNEL_BUILD=/home/paul/xperia/build/linux-hikari-boot5 \
+KERNEL_FRAGMENT=kernel/configs/hikari-boot5.fragment \
+REQUIRE_USB_DEBUG=1 \
+ARTIFACT_DIR=/home/paul/xperia/build/hikari-artifacts-g7 \
+OUTPUT=/home/paul/xperia/build/hikari-artifacts-g7/hikari-boot5-interactive.elf \
+./scripts/build-hikari-elf.sh
+```
+
+The following are required local gates for that exact build: the Sony ELF
+inspector, appended-DTB and memory checks in
+`test-hikari-firstboot-artifact.sh`, the persistent-RAM check, and
+`check-hikari-boot5-interactive.sh`.  Passing them establishes local artifact
+integrity only; it does not establish USB or display functionality.
