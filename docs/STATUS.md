@@ -49,12 +49,25 @@ The only captured TWRP previous-boot log belongs to a later legacy Android
 reboot, so it does not locate the target failure stage; see
 [secondboot post-mortem](../research/device/current/boot/secondboot-postmortem.md).
 
-Post-attempt review identifies a probable double application of the MSM8x60
-SMEM offset in the second DTS/layout model. This is a `HYPOTHESIS` supported by
-current upstream reservation semantics, historical MSM8x60 board code, and the
-observed legacy p3 load address—not a conclusion from a target kernel log.
-The next build gate is therefore `BLOCKED` until that physical-RAM model is
-corrected and revalidated offline.
+Post-attempt review identified a double application of the MSM8x60 SMEM offset
+in the second DTS/layout model. TWRP's later read-only `/proc/iomem` capture
+now physically confirms that Linux-visible low System RAM begins at
+`0x40200000`, while its own code is at `0x40208000`; this supports the
+corrected physical-base/SMEM model without making a target-boot claim. Boot #4
+uses `0x40208000` again and reserves a distinct legacy-compatible persistent
+console at `0x7ffe0000-0x7fffffff`. See
+[FIRST_BOOT_MEMORY.md](FIRST_BOOT_MEMORY.md) and
+[PERSISTENT_LOGGING.md](PERSISTENT_LOGGING.md).
+
+Boot #4 then provided the first direct target-kernel execution evidence. Its
+recovered `/proc/last_kmsg`, exported by TWRP from the compatible persistent
+console before recovery reset the physical ring, identifies the Hikari FDT,
+corrected RAM layout, two CPU bring-up, ramoops, RPM, initramfs unpacking, and
+`Run /init as init process`. The diagnostic PID 1 then exited with status zero,
+causing `Attempted to kill init`; this is a controlled initramfs-liveness bug,
+not an early-kernel hang. Thus `FIRST_MAINLINE_EXECUTION=VERIFIED_DEVICE` and
+target lifecycle is `BOOTS` at the native initramfs boundary. No peripheral
+acceptance claim follows. See [boot #4 post-mortem](../research/device/current/boot/boot4-postmortem.md).
 
 ## Status domains
 

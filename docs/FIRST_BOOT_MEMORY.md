@@ -32,21 +32,63 @@ legacy p3 load address. It remains a target-layout hypothesis until a physical
 boot produces evidence. Local artifact creation is not authorization to write
 the phone.
 
-## Third local artifact validation
+## Physical recovery correction (2026-09-02)
+
+TWRP now adds direct physical-device evidence to the model. Its
+`/proc/iomem` shows Linux-visible System RAM at
+`0x40200000-0x42dfffff` and `0x48000000-0x6e5fffff`; its own kernel code starts
+at `0x40208000`. It separately records the persistent console at
+`0x7ffe0000-0x7fffffff`. This is a Linux resource view, not a complete DRAM
+map: it confirms the post-reservation low address, but does not expose the
+SMEM bytes as System RAM.
+
+The convergent evidence chain is: historical MSM8x60/Fuji code places shared
+RAM at physical `0x40000000`; current upstream
+`CONFIG_ARCH_QCOM_RESERVE_SMEM` reserves its first 2 MiB and selects
+`TEXT_OFFSET=0x00208000`; the legacy p3 and physical TWRP kernel both use
+`0x40208000`; and a historical Hikari mainline trace reaches `/init` with
+ramoops at `0x7ffe0000`.
+
+| Item | Range / value | Evidence and confidence |
+| --- | --- | --- |
+| Physical low DRAM bank base | `0x40000000` | `HISTORICAL_SOURCE` plus upstream reservation semantics; consistent with device runtime |
+| Qualcomm SMEM | `0x40000000-0x401fffff` | `VERIFIED_UPSTREAM` semantics, Hikari application remains target layout pending boot |
+| First Linux-visible low address | `0x40200000` | `VERIFIED_DEVICE` TWRP `/proc/iomem` |
+| Kernel text / Sony zImage candidate | `0x40208000` | `VERIFIED_DEVICE` for legacy/TWRP; strongest target starting point |
+| Low visible System RAM | `0x40200000-0x42dfffff` | `VERIFIED_DEVICE` TWRP `/proc/iomem` |
+| High visible System RAM | `0x48000000-0x6e5fffff` | `VERIFIED_DEVICE` TWRP `/proc/iomem` |
+| Persistent console | `0x7ffe0000-0x7fffffff` | `VERIFIED_DEVICE` TWRP `/proc/iomem` |
+
+The `0x40408000` address used in boot #2 applied the two-MiB adjustment to a
+memory node that already began at the legacy post-SMEM address. It is now a
+strongly supported **double-offset error**, though the lack of a target log
+means it cannot be named the sole cause of that failed observation. Boot #4
+returns the zImage address to `0x40208000`; it moves neither the SMEM reserve
+nor the kernel arbitrarily. The initramfs remains high enough to avoid the
+code-derived decompressor relocation interval.
+
+## Boot #4 local artifact validation
 
 The corrected local artifact was built without contacting the phone.  Its
 memory gate reads the actual current `vmlinux` end and ARM compressed-kernel
 symbols, rather than estimating the final kernel extent from a source setting.
 
+The resulting local-only artifact is
+`/home/paul/xperia/build/hikari-artifacts-g6/hikari-boot4-debug.elf` (11,955,195
+bytes, SHA-256
+`ba83fda682df3c49e5ec81ee6d354f1cc5a7e575ac94a065ef011c602319ed7c`).
+It is not in Git and this record is not authority to deploy it.
+
 | Object | Range | Size |
 | --- | --- | ---: |
 | Qualcomm SMEM reserve | `0x40000000-0x401fffff` | 2,097,152 |
-| zImage input | `0x40208000-0x40c3e6d7` | 10,708,696 |
-| appended Hikari DTB | `0x40c3e6d8-0x40c405e5` | 7,950 |
-| final decompressed kernel | `0x40208000-0x41d23c83` | 28,425,348 |
-| relocated decompressor, appended DTB and 128 KiB margin | `0x41d24600-0x4277cb25` | 10,847,526 |
-| native initramfs | `0x42a00000-0x42b0c33b` | 1,098,556 |
+| zImage input | `0x40208000-0x40c424d7` | 10,724,568 |
+| appended Hikari DTB | `0x40c424d8-0x40c444a3` | 8,140 |
+| final decompressed kernel | `0x40208000-0x41d23d03` | 28,425,476 |
+| relocated decompressor, appended DTB and 128 KiB margin | `0x41d24700-0x42780ae3` | 10,863,588 |
+| native initramfs | `0x42a00000-0x42b0c36e` | 1,098,607 |
 | private RPM payload (outside System RAM) | `0x00020000-0x0003d3e7` | 119,784 |
+| persistent console (outside System RAM) | `0x7ffe0000-0x7fffffff` | 131,072 |
 
 The native initramfs begins after the relocation interval.  The compressed
 input overlaps its ultimate decompressed-kernel range, which the current ARM
@@ -55,7 +97,7 @@ input overlaps its ultimate decompressed-kernel range, which the current ARM
 for this path, its 2,304-byte relocation-code reserve, and an additional
 128 KiB margin.
 
-`THIRD_BOOT_MEMORY_SAFETY=PASS` means the listed local artifact satisfies this
+`BOOT4_MEMORY_SAFETY=PASS` means the listed local artifact satisfies this
 code-derived overlap model.  It does not prove that S1Boot will execute it or
 that target Linux will boot on the handset.
 
@@ -87,6 +129,8 @@ does not.  No arbitrary ramoops region is reserved.
 
 The decompressor relocation analysis remains valid only within this superseded
 address model. S1Boot accepted and flashed this ELF, but no target-Linux proof
-of life was observed. The required next build gate must validate the corrected
-`0x40000000` physical-base model before it considers compressed input,
-decompressor relocation, final kernel, DTB, initramfs, SMEM and RPM ranges.
+of life was observed. Boot #4's gate validates the corrected `0x40000000`
+physical-base model before it considers compressed input, decompressor
+relocation, final kernel, DTB, initramfs, SMEM, RPM and the distinct
+`0x7ffe0000` persistent-console range. It does not mechanically copy legacy
+multimedia carveouts into the target DT.

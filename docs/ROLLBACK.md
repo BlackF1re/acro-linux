@@ -37,3 +37,10 @@ The original p3 is a private artifact outside Git. Sensitive raw backup data
 was not parsed or exposed. Both historical attempts and their completed
 rollbacks are recorded in [FIRST_PHYSICAL_BOOT.md](FIRST_PHYSICAL_BOOT.md) and
 [SECOND_BOOT_PLAN.md](SECOND_BOOT_PLAN.md).
+
+For a future boot #4 diagnostic attempt, recovery capture is part of the
+rollback procedure: after restoring original p3, enter TWRP before Android and
+capture its preserved previous console before reading the live persistent-RAM
+area.  The precise owner-gated sequence is in
+[BOOT4_POSTMORTEM_PLAN.md](BOOT4_POSTMORTEM_PLAN.md).  This addition does not
+broaden the logical-`boot` whitelist or authorize a flash.

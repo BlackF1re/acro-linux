@@ -31,6 +31,12 @@ grep -qx 'CONFIG_PHYS_OFFSET=0x40000000' "$build_dir/.config" || {
   echo "Hikari boot build requires the MSM8x60 physical RAM base 0x40000000" >&2
   exit 1
 }
+for required in CONFIG_PSTORE=y CONFIG_PSTORE_RAM=y CONFIG_PSTORE_CONSOLE=y; do
+  grep -qx "$required" "$build_dir/.config" || {
+    echo "Hikari boot build requires $required for persistent diagnostics" >&2
+    exit 1
+  }
+done
 if [[ -n "$initramfs_source" ]]; then
   test -f "$initramfs_source" || { echo "INITRAMFS_SOURCE is not a regular file" >&2; exit 1; }
   "$kernel_src/scripts/config" --file "$build_dir/.config" --set-str INITRAMFS_SOURCE "$initramfs_source"
@@ -43,6 +49,12 @@ if [[ -n "$initramfs_source" ]]; then
     echo "Hikari boot build lost CONFIG_PHYS_OFFSET=0x40000000" >&2
     exit 1
   }
+  for required in CONFIG_PSTORE=y CONFIG_PSTORE_RAM=y CONFIG_PSTORE_CONSOLE=y; do
+    grep -qx "$required" "$build_dir/.config" || {
+      echo "Hikari boot build lost $required" >&2
+      exit 1
+    }
+  done
 fi
 make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" -j"$jobs" zImage qcom/qcom-msm8260-sony-hikari.dtb
 echo "zImage: $build_dir/arch/arm/boot/zImage"

@@ -33,5 +33,6 @@ head -c "$zimage_size" "$kernel_with_dtb" | cmp -s - "$zimage" || { echo "append
 tail -c "$dtb_size" "$kernel_with_dtb" | cmp -s - "$dtb" || { echo "DTB is not the final appended input" >&2; exit 1; }
 test "$(od -An -tx1 -j "$zimage_size" -N 4 "$kernel_with_dtb" | tr -d '[:space:]')" = d00dfeed || { echo "FDT header missing at appended-DTB boundary" >&2; exit 1; }
 "$repo_root/scripts/check-hikari-firstboot-memory.sh" --kernel-build "$kernel_build" --zimage "$zimage" --dtb "$dtb" --ramdisk "$initramfs" --ramdisk-addr "$ramdisk_addr" --kernel-load "$kernel_addr" --rpm "$rpm"
+"$repo_root/scripts/check-hikari-persistent-ram.sh" --config "$kernel_build/.config" --dtb "$dtb"
 python3 "$repo_root/tools/sony_elf.py" inspect "$artifact" --limit "$p3_limit"
 echo "offline first-boot artifact checks: PASS"

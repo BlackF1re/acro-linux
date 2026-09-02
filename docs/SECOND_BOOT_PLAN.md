@@ -16,10 +16,14 @@ compatibility enabled.  There is no standalone cmdline ELF segment.
 No Hikari physical debug UART is proven: historical Fuji source names GPIO117
 / GPIO118 as generic UART pins but does not establish their GSBI or an exposed
 connector.  `SERIAL_EARLYCON` is enabled but no guessed console route is sent.
-USB gadget and ramoops are likewise not enabled.  Thus the external proof path
-is host USB observation plus any visible target output; the initramfs markers
-are definitive only if a console becomes available.  This controlled blind
-attempt is acceptable only because the p3 rollback route is physically proven.
+USB gadget remains outside this early-boot scope.  The second attempt itself
+therefore remained externally blind.  Its successor is not: boot #4 adds a
+standard mainline ramoops console at the physically observed legacy
+`ram_console` range, with a TWRP `/proc/last_kmsg` and host-side raw-memory
+capture procedure documented in [PERSISTENT_LOGGING.md](PERSISTENT_LOGGING.md)
+and [BOOT4_POSTMORTEM_PLAN.md](BOOT4_POSTMORTEM_PLAN.md).  The rollback route
+is physically proven, but a new boot #4 deployment still requires separate
+owner approval.
 
 The owner-approved second attempt was executed once. S1Boot accepted the
 logical `boot` flash and reported the expected p3 mapping, but the subsequent
