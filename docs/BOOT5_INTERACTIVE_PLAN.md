@@ -5,10 +5,10 @@ flash. Preserve the verified BOOT #4 hand-off: zImage `0x40208000`, initramfs
 `0x42a00000`, SMEM `0x40000000-0x401fffff`, appended Hikari DTB, RPM payload,
 and ramoops `0x7ffe0000/0x20000/ECC=0`.
 
-The ULPI-maximized local artifact is
-`/home/paul/xperia/build/hikari-artifacts-g7-ulpi/hikari-boot5-interactive-ulpi.elf`:
-`11,970,286` bytes, SHA-256
-`5cc54001bc10c90ab3a600658a7404ad9920abf8228e0641f0169b98721cfc6b`.
+The final local artifact is
+`/home/paul/xperia/build/hikari-artifacts-g7-tty/hikari-boot5-interactive-tty.elf`:
+`11,970,642` bytes, SHA-256
+`d977bcc2c2bea3675e80c688b546712fcef6f00b3f4a19c165c5923047080176`.
 It was built from Linus `786262be6048deab760f68c8acc2c85607165894` plus the
 author-preserved USB-HS v3 commits documented in [USB.md](USB.md). This local
 artifact is not a physical USB result.
@@ -26,7 +26,7 @@ artifact is not a physical USB result.
 ## Proposed run and observation
 
 ```sh
-fastboot flash boot /home/paul/xperia/build/hikari-artifacts-g7-ulpi/hikari-boot5-interactive-ulpi.elf
+fastboot flash boot /home/paul/xperia/build/hikari-artifacts-g7-tty/hikari-boot5-interactive-tty.elf
 fastboot reboot
 ```
 

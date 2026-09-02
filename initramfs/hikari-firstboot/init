@@ -54,7 +54,13 @@ console_supervisor()
 				announced=1
 			fi
 			log "HIKARI USB SHELL START"
-			/bin/sh -i </dev/ttyGS0 >/dev/ttyGS0 2>&1
+			# /bin/sh with redirected standard streams is not necessarily attached
+			# to a controlling terminal.  Create a new session and explicitly claim
+			# ttyGS0 before starting the interactive shell.  Keep the applets behind
+			# the BusyBox dispatcher: this initramfs intentionally installs only
+			# /bin/busybox and /bin/sh.
+			/bin/busybox setsid -c /bin/busybox cttyhack /bin/sh -i \
+				</dev/ttyGS0 >/dev/ttyGS0 2>&1
 			log "HIKARI USB SHELL EXIT"
 		fi
 		sleep 2

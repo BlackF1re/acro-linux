@@ -47,9 +47,13 @@ No ECM function is configured in BOOT #5. Adding a composite function before
 the ACM transport has a physical result would make failure attribution worse.
 
 If the UDC binds, g_serial is expected to create `/dev/ttyGS0`; a separate
-supervisor waits indefinitely for that node, runs BusyBox `sh` on it, and
-restarts the shell if it exits. PID 1 continues independently, logs its state
-to ramoops, and emits an `ALIVE` marker every 30 seconds.
+supervisor waits indefinitely for that node and restarts the console service
+if it exits. It launches BusyBox as `setsid -c cttyhack sh -i`, with stdin,
+stdout and stderr explicitly redirected to `/dev/ttyGS0`. Thus the shell has
+the gadget node as all three standard streams and a controlling terminal; it
+is not merely a shell with output redirected to USB. PID 1 continues
+independently, logs its state to ramoops, and emits an `ALIVE` marker every 30
+seconds.
 
 ## Host use after an owner-approved physical boot
 
