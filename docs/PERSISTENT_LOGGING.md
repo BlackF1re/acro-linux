@@ -59,13 +59,29 @@ and `ecc-size = <0>`.  Consequently:
 This classification is deliberately limited to the console-zone header/ring
 format and zero ECC.  It does not claim that boot #4 has written a log yet.
 
-At recovery startup legacy `persistent_ram_init_ringbuffer()` saves a valid
-old `DBGC` buffer before it initializes a new one.  TWRP should then expose
-that saved content as `/proc/last_kmsg`; `/dev/last_kmsg` and pstore paths are
-also probed because availability is kernel-specific.  Capture the previous
-log **first**.  The later raw `/dev/mem` read independently verifies the
-region/header but may already contain TWRP's new console rather than the
-previous mainline bytes.
+### Exact legacy TWRP export order
+
+The Fuji recovery-generation `ram_console` driver calls
+`persistent_ram_init_ringbuffer()` from `ram_console_probe()`.  In
+`__persistent_ram_init()`, a valid, bounds-checked `DBGC` header causes
+`persistent_ram_save_old()` to copy the circular bytes into allocated
+`old_log`; it **then** writes `DBGC`, `start = 0`, and `size = 0` back to the
+physical persistent buffer for the recovery console.  A `late_initcall`
+creates `/proc/last_kmsg` only when `persistent_ram_old_size()` is non-zero.
+
+Thus `/proc/last_kmsg` is the primary previous-boot export on this legacy
+implementation.  The exact driver contains no `/dev/last_kmsg` exporter;
+that path remains a harmless runtime probe because another recovery build
+could provide it.  The observed TWRP session had neither endpoint because
+the pre-existing signature was `0xc0c0c0c0`, not `DBGC`, so no `old_log` was
+created.  This agrees with TWRP's `persistent_ram: no valid data in buffer`
+message.
+
+Capture `/proc/last_kmsg` and then `/dev/last_kmsg`, if present, **before any
+other recovery diagnostics**.  A later raw `/dev/mem` read is explicitly
+classified as `CURRENT_RECOVERY_PERSISTENT_BUFFER`: it is useful for header,
+format and troubleshooting analysis, but is not evidence of previous-boot
+content unless independently tied to a pre-reinitialization capture.
 
 ## Host-side independent decoder
 
@@ -76,10 +92,22 @@ private device RAM is never committed.  It intentionally rejects an unknown
 or ECC-enabled layout instead of pretending to decode it.
 
 [`scripts/capture-hikari-ramconsole.sh`](../scripts/capture-hikari-ramconsole.sh)
-is a read-only TWRP capture helper.  It reads exactly 32,768 32-bit words from
-`0x7ffe0000`, verifies the resulting 131,072-byte size, hashes it, and invokes
-the parser.  Captures and reconstructed text remain below the private host
-research directory, never in Git.
+is a read-only TWRP capture helper.  After `adb wait-for-device`, it first
+checks and immediately copies `/proc/last_kmsg` and `/dev/last_kmsg` if they
+exist, requiring each saved file to be non-empty and recording its size and
+SHA-256.  Only then does it save recovery `dmesg` and `/proc/iomem`, emit a
+private `grep -Ei 'found existing buffer|persistent_ram|ram_console'` status
+file, and read exactly 32,768 32-bit words from `0x7ffe0000`.  The latter
+131,072-byte raw capture is named and reported as the current recovery
+persistent buffer.  Captures and reconstructed text remain below the private
+host research directory, never in Git.
+
+The boot #4 diagnostic success criterion is therefore: mainline ramoops
+writes a compatible `DBGC` ring; after a warm reset and p3 restore, TWRP logs
+an existing buffer and exports the previous mainline log through
+`/proc/last_kmsg` (or, only if provided by that recovery build,
+`/dev/last_kmsg`).  Raw `/dev/mem` is a secondary integrity/troubleshooting
+capture, not the primary post-mortem source.
 
 ## Boot #4 mainline configuration and DT
 

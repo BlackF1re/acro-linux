@@ -15,25 +15,21 @@ or reboot by itself.
    Do not erase or touch another partition.  Then use `fastboot reboot`.
 5. Enter the verified TWRP branch using the separately documented original-p3
    bootrec key sequence.  Do **not** let Android userspace boot.
-6. As soon as TWRP ADB is ready, save a valid old log in this order:
-
-   ```sh
-   adb exec-out cat /proc/last_kmsg > PRIVATE/proc-last_kmsg.raw
-   # Also probe /dev/last_kmsg, /proc/ram_console and /sys/fs/pstore.
-   ```
-
-   The raw outputs remain private.  If `/proc/last_kmsg` is absent, record
-   that fact rather than substituting TWRP's live `dmesg`.
-7. Also run the read-only host helper:
+6. As soon as TWRP ADB is ready, run the capture helper.  Its first operation
+   after `adb wait-for-device` is to save a valid old log, before it requests
+   recovery `dmesg`, `/proc/iomem`, or `/dev/mem`:
 
    ```sh
    scripts/capture-hikari-ramconsole.sh
    ```
 
-   It records the exact physical `0x7ffe0000+0x20000` range and uses the host
-   parser.  It validates the surviving buffer/header but may already see a
-   new TWRP console, which is why step 6 precedes it.
-8. Only after all capture attempts can recovery leave for Android.
+   `/proc/last_kmsg` is the primary prior-mainline source; `/dev/last_kmsg`
+   is a secondary probe. The helper only later saves TWRP `dmesg`, including
+   the `found existing buffer` / `persistent_ram` / `ram_console` status, and
+   captures the physical range as `CURRENT_RECOVERY_PERSISTENT_BUFFER`.
+   If neither endpoint exists, record that fact rather than substituting
+   TWRP's live `dmesg`.
+7. Only after all capture attempts can recovery leave for Android.
 
 Abort before flashing if USB identity is unexpected, a hash/gate fails, the
 artifact exceeds p3, the original restore artifact cannot be verified, or
