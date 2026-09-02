@@ -75,10 +75,13 @@ the Qualcomm HS PHY, vendor ULPI initialization, ChipIdea UDC, and built-in
 created a CDC ACM node. This does **not** verify an interactive console. The
 actual BOOT #5 CPIO lacked `/dev/console`, had an empty `/dev`, and installed
 only the BusyBox `sh` link; PID 1's first `mount` never ran and no userspace
-marker reached ramoops. BOOT #5.1 is a local-only console/initramfs correction;
-it adds the required device nodes, command links, late `ttyGS0` kernel console,
-and explicit raw-TX/shell diagnostics. The L6 voltage warning was non-blocking
-for observed enumeration and remains unresolved.
+marker reached ramoops. BOOT #5.1 corrected that archive with required device
+nodes, command links, late `ttyGS0` kernel console, and explicit raw-TX/shell
+diagnostics. It was then physically accepted by S1Boot: the host reached a
+BusyBox root prompt through CDC ACM, proving bidirectional interactive console
+I/O. The minimal BusyBox image does not yet contain the `uname` applet; that is
+not a transport failure. The L6 voltage warning was non-blocking for observed
+enumeration and remains unresolved.
 
 ## Status domains
 

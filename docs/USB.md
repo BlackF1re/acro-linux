@@ -97,9 +97,11 @@ ChipIdea controller and HS-PHY probe paths found no interconnect consumer.
 That is a scope decision for this first gadget attempt, not evidence that
 every USB workload will work. BOOT #5 physically verified the HS PHY, MSM8x60
 vendor ULPI initialization, ChipIdea UDC, and static `g_serial`: the host saw
-`0525:a4a7` at USB High Speed and created a CDC ACM node. This is
-`VERIFIED_DEVICE` for the USB hardware/device-mode path, but not for the
-interactive console.
+`0525:a4a7` at USB High Speed and created a CDC ACM node. BOOT #5.1 then
+physically verified the interactive path: an explicit host `uname -a` line
+reached BusyBox over CDC ACM and the handset returned its root prompt. `uname`
+is not among this deliberately tiny BusyBox applet set, so its "not found"
+response is an initramfs-content limitation, not a transport failure.
 
 ## BOOT #5.1 initramfs console correction
 

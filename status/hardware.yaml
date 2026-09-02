@@ -29,16 +29,16 @@ target_linux:
   implementation: IMPLEMENTING
   lifecycle: BOOTS
   boot5_interactive:
-    implementation: PARTIAL
+    implementation: WORKING
     evidence: VERIFIED_DEVICE
-    notes: BOOT #5 physically enumerated the built-in HSUSB static g_serial CDC ACM gadget at High Speed. Its actual CPIO lacked /dev/console and necessary BusyBox applet links, so PID 1 and the interactive console remain unverified. BOOT #5.1 is a local-only correction.
+    notes: BOOT #5.1 physically verified the built-in HSUSB static g_serial CDC ACM gadget at High Speed and a bidirectional BusyBox shell over the host CDC ACM node. The prior BOOT #5 CPIO defect is superseded; uname is intentionally not yet an initramfs BusyBox applet.
     usb:
-      controller: PROBES
-      phy: PROBES
-      device_mode: PROBES
-      acm_gadget: PROBES
-      console: IMPLEMENTING
-      verification: PARTIAL
+      controller: VERIFIED
+      phy: VERIFIED
+      device_mode: VERIFIED
+      acm_gadget: VERIFIED
+      console: VERIFIED
+      verification: VERIFIED
     display:
       mdp4: RESEARCHING
       dsi: RESEARCHING
@@ -122,7 +122,7 @@ subsystems:
   gpu: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   wifi: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   bluetooth: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
-  usb_device: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: PARTIAL, notes: "BOOT #5 physically verified HSUSB peripheral/static g_serial CDC ACM High-Speed enumeration. Interactive console remains IMPLEMENTING because its initramfs failed before userspace markers; BOOT #5.1 corrects that path locally." } }
+  usb_device: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: VERIFIED, notes: "BOOT #5.1 physically verified HSUSB peripheral/static g_serial CDC ACM High-Speed enumeration and a bidirectional BusyBox shell via host ttyACM. The initial BOOT #5 initramfs defect is resolved; a richer diagnostic applet set remains future userspace work." } }
   usb_otg_host: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   hdmi: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   audio: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
