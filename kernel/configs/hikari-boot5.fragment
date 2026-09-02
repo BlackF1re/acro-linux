@@ -30,16 +30,16 @@ CONFIG_SERIAL_EARLYCON=y
 CONFIG_REGULATOR_QCOM_RPM=y
 
 # Hikari HSUSB device debugging: every component used before userspace is
-# built in.  Configfs creates one ACM function from the initramfs; ECM stays
-# out of BOOT #5 so that a failed composite setup cannot hide ttyGS0.
+# built in.  The legacy g_serial gadget binds one CDC ACM function as soon as
+# the UDC appears, avoiding a userspace configfs choreography for the first
+# physical enumeration.  ECM stays out of BOOT #5 so a composite setup cannot
+# hide ttyGS0.
 CONFIG_USB=y
 CONFIG_USB_CHIPIDEA=y
 CONFIG_USB_CHIPIDEA_UDC=y
 CONFIG_USB_CHIPIDEA_MSM=y
 CONFIG_PHY_QCOM_USB_HS=y
 CONFIG_USB_GADGET=y
-CONFIG_CONFIGFS_FS=y
-CONFIG_USB_CONFIGFS=y
-CONFIG_USB_CONFIGFS_ACM=y
-# CONFIG_USB_CONFIGFS_ECM is not set
+CONFIG_USB_G_SERIAL=y
+CONFIG_U_SERIAL_CONSOLE=y
 # CONFIG_DEBUG_INFO is not set

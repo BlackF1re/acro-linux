@@ -10,7 +10,7 @@ The Xperia re-enumerates when it changes mode:
 | --- | --- | --- |
 | Android ADB | `0fce:5176` | Xperia acro S / LT26W |
 | Sony fastboot | `0fce:0dde` | Sony Ericsson S1Boot Fastboot |
-| BOOT #5 debug gadget (expected) | `1d6b:0104` | Hikari Mainline Debug, CDC ACM |
+| BOOT #5 debug gadget (expected) | `0525:a4a7` | upstream g_serial CDC ACM |
 
 An ordinary one-shot USBIP attach can be lost during that identity change. Before AutoBind/auto-attach was configured, this made S1Boot appear to disconnect from WSL and eventually fall through to charging mode. A persistent auto-attach PowerShell process made the same physical port stable across the re-enumeration.
 
@@ -68,11 +68,11 @@ depend on Android userspace having booted.
 ## Expected mainline debug-gadget handoff
 
 BOOT #5 uses the same physical connector but, if its MSM8x60 HSUSB device-mode
-path probes, re-enumerates as the non-unique development identity
-`1d6b:0104` (product string `Hikari Mainline Debug`, serial string
-`HIKARI-DEBUG`). AutoBind applies to the physical BUSID, so the existing
-auto-attach PowerShell process should carry this new identity into `XperiaDev`
-too. It is a prediction from the local artifact, not a device verification.
+path probes, re-enumerates as the static upstream g_serial CDC ACM identity
+`0525:a4a7`.  g_serial intentionally does not use a device-derived serial
+string. AutoBind applies to the physical BUSID, so the existing auto-attach
+PowerShell process should carry this new identity into `XperiaDev` too. It is
+a prediction from the local artifact, not a device verification.
 
 Inside WSL, wait for `/dev/ttyACM*` and use the reconnecting helper:
 

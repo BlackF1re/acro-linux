@@ -50,9 +50,9 @@ kernel outputs and ELF prototype are never added to Git.
 - The ELF self-test and artifact validator passed. The latter checks the
   original offline p3 hash and size, p3 capacity, appended-DTB tail, ELF32
   header, segment ranges and load-address overlap.
-- Two fresh local ELF builds with fixed `SOURCE_DATE_EPOCH` and `KBUILD_*`
-  identity inputs produced byte-identical output, SHA-256
-  `cecf280c62023619274bff43ea370619c9d59f3272e0e4436ab2895481461f0e`.
+- Reproducibility of the BOOT #5 serial-gadget artifact is not yet an
+  acceptance condition. Its exact local build output is recorded below and
+  must be hash-checked before any owner-approved deployment.
 
 This establishes local build integrity only. It is neither a boot test nor
 authorization to deploy any artifact. The current deployment gate is in
@@ -74,13 +74,13 @@ phone.
 The current locally validated, **not deployed** artifact is:
 
 ```text
-/home/paul/xperia/build/hikari-artifacts-g7/hikari-boot5-interactive.elf
-size:   11964672 bytes
-SHA-256 e417d89c32d1bcae9553d83377bce964b840b9a88fc0338bac51e5555fb91ab8
+/home/paul/xperia/build/hikari-artifacts-g7-serial/hikari-boot5-interactive-serial.elf
+size:   11,969,796 bytes
+SHA-256 48bba59faeaf610a93053ea18d8422c6c0a67afb7679e660259e60974a6821b2
 ```
 
 It preserves the verified BOOT #4 load model and adds only a persistent PID 1
-and the narrow built-in HSUSB peripheral/configfs/CDC-ACM path described in
+and the narrow built-in HSUSB peripheral/static-g_serial/CDC-ACM path described in
 [USB.md](USB.md).  Display is intentionally absent; its blockers are recorded
 in [DISPLAY.md](DISPLAY.md).
 
@@ -92,8 +92,8 @@ KERNEL_SRC=/home/paul/xperia/src/linux-hikari-boot5 \
 KERNEL_BUILD=/home/paul/xperia/build/linux-hikari-boot5 \
 KERNEL_FRAGMENT=kernel/configs/hikari-boot5.fragment \
 REQUIRE_USB_DEBUG=1 \
-ARTIFACT_DIR=/home/paul/xperia/build/hikari-artifacts-g7 \
-OUTPUT=/home/paul/xperia/build/hikari-artifacts-g7/hikari-boot5-interactive.elf \
+ARTIFACT_DIR=/home/paul/xperia/build/hikari-artifacts-g7-serial \
+OUTPUT=/home/paul/xperia/build/hikari-artifacts-g7-serial/hikari-boot5-interactive-serial.elf \
 ./scripts/build-hikari-elf.sh
 ```
 

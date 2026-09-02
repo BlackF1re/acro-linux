@@ -46,8 +46,7 @@ done
 if [[ "$require_usb_debug" == 1 ]]; then
   for required in CONFIG_USB_CHIPIDEA_MSM=y CONFIG_USB_CHIPIDEA_UDC=y \
     CONFIG_PHY_QCOM_USB_HS=y \
-    CONFIG_USB_GADGET=y CONFIG_CONFIGFS_FS=y CONFIG_USB_CONFIGFS=y \
-    CONFIG_USB_CONFIGFS_ACM=y; do
+    CONFIG_USB_GADGET=y CONFIG_USB_G_SERIAL=y CONFIG_U_SERIAL_CONSOLE=y; do
     grep -qx "$required" "$build_dir/.config" || {
       echo "Hikari BOOT #5 build requires $required" >&2
       exit 1
@@ -75,8 +74,7 @@ if [[ -n "$initramfs_source" ]]; then
   if [[ "$require_usb_debug" == 1 ]]; then
     for required in CONFIG_USB_CHIPIDEA_MSM=y CONFIG_USB_CHIPIDEA_UDC=y \
       CONFIG_PHY_QCOM_USB_HS=y \
-      CONFIG_USB_GADGET=y CONFIG_CONFIGFS_FS=y CONFIG_USB_CONFIGFS=y \
-      CONFIG_USB_CONFIGFS_ACM=y; do
+      CONFIG_USB_GADGET=y CONFIG_USB_G_SERIAL=y CONFIG_U_SERIAL_CONSOLE=y; do
       grep -qx "$required" "$build_dir/.config" || {
         echo "Hikari BOOT #5 build lost $required" >&2
         exit 1

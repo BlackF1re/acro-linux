@@ -13,57 +13,23 @@ log()
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
-mkdir -p /run /sys/kernel/config
+mkdir -p /run
 mount -t tmpfs -o mode=0755 tmpfs /run 2>/dev/null || true
 
 log "HIKARI BOOT5 INIT START"
 log "HIKARI BOOT5 DEV READY"
 
-configure_acm()
-{
-	mount -t configfs none /sys/kernel/config 2>/dev/null || {
-		log "HIKARI USB CONFIGFS UNAVAILABLE"
-		return
-	}
-
-	for node in /sys/class/udc/*; do
-		[ -e "$node" ] || continue
-		udc=${node##*/}
-		break
-	done
-	if [ -z "${udc:-}" ]; then
-		log "HIKARI USB UDC NOT PRESENT"
-		return
-	fi
-
-	log "HIKARI USB UDC READY"
-	g=/sys/kernel/config/usb_gadget/hikari_debug
-	[ -e "$g/UDC" ] && return
-	mkdir -p "$g"
-	echo 0x1d6b >"$g/idVendor"
-	echo 0x0104 >"$g/idProduct"
-	mkdir -p "$g/strings/0x409" "$g/configs/c.1/strings/0x409"
-	echo HIKARI-DEBUG >"$g/strings/0x409/serialnumber"
-	echo Hikari >"$g/strings/0x409/manufacturer"
-	echo 'Hikari Mainline Debug' >"$g/strings/0x409/product"
-	echo 'CDC ACM diagnostic console' >"$g/configs/c.1/strings/0x409/configuration"
-	echo 120 >"$g/configs/c.1/MaxPower"
-	mkdir -p "$g/functions/acm.GS0"
-	ln -s "$g/functions/acm.GS0" "$g/configs/c.1/acm.GS0"
-	echo "$udc" >"$g/UDC"
-
-	if [ -c /dev/ttyGS0 ]; then
-		log "HIKARI USB GADGET READY"
-		log "HIKARI USB TTYGS0 READY"
-	else
-		log "HIKARI USB GADGET BOUND WITHOUT TTYGS0"
-	fi
-}
-
 console_supervisor()
 {
+	announced=0
 	while :; do
 		if [ -c /dev/ttyGS0 ]; then
+			if [ "$announced" -eq 0 ]; then
+				log "HIKARI USB UDC READY"
+				log "HIKARI USB GADGET READY"
+				log "HIKARI USB TTYGS0 READY"
+				announced=1
+			fi
 			log "HIKARI USB SHELL START"
 			/bin/sh -i </dev/ttyGS0 >/dev/ttyGS0 2>&1
 			log "HIKARI USB SHELL EXIT"
@@ -72,7 +38,6 @@ console_supervisor()
 	done
 }
 
-configure_acm &
 console_supervisor &
 log "HIKARI BOOT5 SERVICES START"
 

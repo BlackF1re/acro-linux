@@ -19,7 +19,7 @@ contains the `qcom,ci-hdrc` ChipIdea controller and the exact
 
 ```text
 USB connector -> HSUSB1 ChipIdea @ 0x12500000 -> ULPI HS PHY
-              -> Linux gadget -> configfs ACM -> /dev/ttyGS0
+              -> built-in g_serial CDC ACM -> /dev/ttyGS0
 ```
 
 The DT node supplies HSUSB1 XCVR/iface clocks, the HSUSB1 reset, ULPI PHY,
@@ -29,19 +29,27 @@ vendor ULPI initialization, remain the main device-mode risks.
 
 ## BOOT #5 gadget
 
-All controller, PHY, gadget and configfs options are built in. PID 1 mounts
-configfs and creates exactly one ACM function (`acm.GS0`). It uses the
-non-unique development identity `1d6b:0104`, manufacturer `Hikari`, product
-`Hikari Mainline Debug`, and serial text `HIKARI-DEBUG`. That Linux Foundation
-VID/PID is a local development identity only, never a production USB identity.
+All controller, PHY and gadget components are built in.  BOOT #5 deliberately
+uses the static legacy `g_serial` composite rather than userspace configfs:
+its default `use_acm=true` binds one CDC ACM function when the UDC appears,
+without waiting for PID 1 to create a gadget.  The expected gadget identity is
+the non-unique upstream g_serial CDC ACM default `0525:a4a7` (NetChip/Linux
+USB Serial Gadget); it has no device-derived serial string.  It is a debug
+identity only, not a production USB identity.
+
+`CONFIG_U_SERIAL_CONSOLE=y` is built in, but the current static `g_serial`
+driver does not call `gserial_set_console()` to register `ttyGS0` as a kernel
+console.  Therefore BOOT #5 does **not** add `console=ttyGS0,115200` or claim
+an early console.  Ramoops remains the early path; after `ttyGS0` appears, the
+initramfs starts the interactive shell below.
 
 No ECM function is configured in BOOT #5. Adding a composite function before
 the ACM transport has a physical result would make failure attribution worse.
 
-If the UDC binds, the device is expected to create `/dev/ttyGS0`; a separate
-supervisor runs BusyBox `sh` on that node and restarts it if it exits. PID 1
-continues independently, logs its state to ramoops, and emits an `ALIVE`
-marker every 30 seconds.
+If the UDC binds, g_serial is expected to create `/dev/ttyGS0`; a separate
+supervisor waits indefinitely for that node, runs BusyBox `sh` on it, and
+restarts the shell if it exits. PID 1 continues independently, logs its state
+to ramoops, and emits an `ALIVE` marker every 30 seconds.
 
 ## Host use after an owner-approved physical boot
 

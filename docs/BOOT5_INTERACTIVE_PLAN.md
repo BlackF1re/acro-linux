@@ -18,7 +18,7 @@ and ramoops `0x7ffe0000/0x20000/ECC=0`.
 ## Proposed run and observation
 
 ```sh
-fastboot flash boot /home/paul/xperia/build/hikari-artifacts-g7/hikari-boot5-interactive.elf
+fastboot flash boot /home/paul/xperia/build/hikari-artifacts-g7-serial/hikari-boot5-interactive-serial.elf
 fastboot reboot
 ```
 
