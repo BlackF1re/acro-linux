@@ -168,7 +168,8 @@
 		interrupts = <GIC_SPI 75 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&mmcc MDP_CLK>, <&mmcc MDP_AHB_CLK>,
 			 <&mmcc MDP_AXI_CLK>, <&mmcc MDP_LUT_CLK>;
-		clock-names = "core", "iface", "bus", "lut";
+		/* Names are the MDP4 DRM driver's DT ABI, not descriptive labels. */
+		clock-names = "core_clk", "iface_clk", "bus_clk", "lut_clk";
 		power-domains = <&mmcc MDP_GDSC>;
 		interconnects = <&mmfab MMFAB_MAS_MDP_PORT0 &mmfab MMFAB_SLV_SMI>;
 		interconnect-names = "mdp-mem";
