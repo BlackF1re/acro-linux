@@ -27,7 +27,12 @@ legacy_baseline:
   notes: Modified Android baseline, not Sony stock. Its exposed 1890 MHz frequency is not a Sony-approved OPP.
 target_linux:
   implementation: IMPLEMENTING
-  lifecycle: IMPLEMENTING
+  lifecycle: BOOTS
+  first_mainline_execution:
+    evidence: VERIFIED_DEVICE
+    result: VERIFIED
+    artifact: hikari-boot4-debug.elf
+    notes: Boot #4 recovered through TWRP /proc/last_kmsg identifies the Hikari FDT, corrected RAM layout, SMP, ramoops, RPM, initramfs unpacking, and Run /init as init process. PID 1 then exited 0 and caused Attempted to kill init; no peripheral acceptance claim follows.
   first_mainline_boot:
     evidence: VERIFIED_DEVICE
     result: NOT_VERIFIED
@@ -38,14 +43,14 @@ target_linux:
     boot_proof: NOT_OBSERVED
     postmortem: WRONG_BOOT
     notes: The approved second Sony ELF was accepted by S1Boot through logical boot/p3. No target-Linux marker, ADB, fastboot, or new USB target appeared during 120 seconds; Power + Volume Up forced reset, original p3 restore succeeded, and Android returned. TWRP's captured previous-boot log was from a later legacy Android reboot, so the target failure stage is UNKNOWN.
-  notes: Local-only upstream kernel/DTB/initramfs/ELF prototypes were deployed and rolled back. Target Linux has not been shown to boot or probe on the device.
+  notes: Mainline boot #4 reached /init on the physical device and then panicked because the diagnostic PID 1 exited. Earlier local-only prototypes were deployed and rolled back. Target peripheral status remains UNKNOWN until separate acceptance tests.
   persistent_boot_diagnostics:
     physical_reader: VERIFIED_DEVICE
-    writer: IMPLEMENTING
+    writer: VERIFIED_DEVICE
     region: "0x7ffe0000-0x7fffffff"
     format: "legacy TWRP ram_console / current mainline ramoops console, DBGC, zero ECC"
     compatibility: VERIFIED_COMPATIBLE
-    notes: TWRP read-only /dev/mem capture confirms the 128 KiB DBGC region and ECC disabled. Boot #4 must still demonstrate a mainline-written post-mortem log.
+    notes: Boot #4 mainline ramoops registered at the exact region and, after reset/direct TWRP entry, TWRP reported found existing buffer and exported the prior mainline log through /proc/last_kmsg.
 boot_chain:
   fastboot:
     physical:

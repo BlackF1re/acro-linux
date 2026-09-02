@@ -92,15 +92,19 @@ private device RAM is never committed.  It intentionally rejects an unknown
 or ECC-enabled layout instead of pretending to decode it.
 
 [`scripts/capture-hikari-ramconsole.sh`](../scripts/capture-hikari-ramconsole.sh)
-is a read-only TWRP capture helper.  After `adb wait-for-device`, it first
-checks and immediately copies `/proc/last_kmsg` and `/dev/last_kmsg` if they
-exist, requiring each saved file to be non-empty and recording its size and
-SHA-256.  Only then does it save recovery `dmesg` and `/proc/iomem`, emit a
-private `grep -Ei 'found existing buffer|persistent_ram|ram_console'` status
-file, and read exactly 32,768 32-bit words from `0x7ffe0000`.  The latter
-131,072-byte raw capture is named and reported as the current recovery
-persistent buffer.  Captures and reconstructed text remain below the private
-host research directory, never in Git.
+is a read-only TWRP capture helper. It accepts both Android's `device` and
+TWRP's `recovery` ADB transport states, then first checks and immediately
+copies `/proc/last_kmsg` and `/dev/last_kmsg` if they exist. The observed old
+TWRP `adbd` can close `exec-out`; the helper therefore falls back to its stable
+shell transport, strips only CR directly preceding LF, and requires the result
+to equal the byte count reported by the endpoint. It records a non-empty size
+and SHA-256 before saving any recovery diagnostic. Only then does it save
+recovery `dmesg` and `/proc/iomem`, emit a private
+`grep -Ei 'found existing buffer|persistent_ram|ram_console'` status file, and
+read exactly 32,768 32-bit words from `0x7ffe0000`. The latter 131,072-byte
+raw capture is named and reported as the current recovery persistent buffer.
+Captures and reconstructed text remain below the private host research
+directory, never in Git.
 
 The boot #4 diagnostic success criterion is therefore: mainline ramoops
 writes a compatible `DBGC` ring; after a warm reset and p3 restore, TWRP logs
@@ -142,7 +146,9 @@ therefore the relevant clean result; no warning was suppressed or disabled.
 
 ## Limits
 
-The only verification at this point is the recovery reader path and its
-format.  `PERSISTENT_LOG_WRITER = IMPLEMENTING`, pending a boot #4 write and
-post-reset recovery capture.  A successful mainline log is required before
-calling the writer `VERIFIED_DEVICE`.
+Boot #4 completed the intended handoff: the mainline console registered
+standard ramoops at `0x7ffe0000/0x20000` with zero ECC; after reset and direct
+TWRP entry, TWRP reported `found existing buffer` and exported a mainline log
+through `/proc/last_kmsg`. See the sanitized
+[boot #4 post-mortem](../research/device/current/boot/boot4-postmortem.md).
+`PERSISTENT_LOG_WRITER = VERIFIED_DEVICE` for this exact writer/reader path.

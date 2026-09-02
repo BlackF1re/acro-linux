@@ -17,11 +17,17 @@ case "$output_dir" in
   *) echo "OUTPUT_DIR must remain below $private_root" >&2; exit 1 ;;
 esac
 command -v adb >/dev/null || { echo "adb is required" >&2; exit 1; }
-adb wait-for-device
-[[ "$(adb get-state 2>/dev/null || true)" == device ]] || {
-  echo "ADB transport is not ready; this script does not select a device" >&2
-  exit 1
-}
+# TWRP's adbd reports the transport state as "recovery" on this device,
+# whereas Android normally reports "device".  Do not use wait-for-device here:
+# it would delay the priority last_kmsg copy while recovery is already usable.
+adb_state=$(adb get-state 2>/dev/null || true)
+case "$adb_state" in
+  device|recovery) ;;
+  *)
+    echo "ADB transport is not ready (state: ${adb_state:-unavailable}); this script does not select a device" >&2
+    exit 1
+    ;;
+esac
 
 mkdir -p "$output_dir"
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
@@ -44,12 +50,42 @@ trap 'rm -f -- "$words_file"' EXIT
 # collecting dmesg, iomem or the current physical buffer.
 saved_previous=0
 for endpoint in /proc/last_kmsg /dev/last_kmsg; do
-  if adb shell "[ -r '$endpoint' ]" >/dev/null 2>&1; then
+  # Old recovery adb does not propagate the remote shell's exit status, so
+  # test through an explicit marker rather than relying on `adb shell [ -r ]`.
+  if [[ "$(adb shell "if [ -r '$endpoint' ]; then echo HIKARI_READABLE; fi" 2>/dev/null | tr -d '\r')" == HIKARI_READABLE ]]; then
     name=${endpoint#/}
     name=${name//\//-}
     previous="$output_dir/previous-$name-$stamp.raw"
+    transport="$output_dir/.previous-$name-$stamp.transport"
     [[ ! -e "$previous" ]] || { echo "refusing to overwrite $previous" >&2; exit 1; }
-    adb exec-out cat "$endpoint" > "$previous"
+    [[ ! -e "$transport" ]] || { echo "refusing to overwrite $transport" >&2; exit 1; }
+
+    # exec-out preserves bytes, but the old TWRP adbd can close that transport
+    # while its normal shell transport remains usable.  Record the endpoint's
+    # byte count first; the fallback removes only CR immediately before LF,
+    # which adb shell adds to this text procfs export, then verifies that it
+    # reconstructed exactly the device-reported byte count.
+    endpoint_bytes=$(adb shell "wc -c < '$endpoint'" 2>/dev/null | tr -d '\r' | awk '/^[0-9]+$/ { print; exit }')
+    [[ "$endpoint_bytes" =~ ^[0-9]+$ ]] || { echo "could not obtain byte count for $endpoint" >&2; exit 1; }
+    if adb exec-out cat "$endpoint" > "$transport" 2>/dev/null && \
+       [[ "$(stat -c %s "$transport")" -eq "$endpoint_bytes" ]]; then
+      mv -- "$transport" "$previous"
+    else
+      rm -f -- "$transport"
+      adb shell cat "$endpoint" > "$transport"
+      python3 - "$transport" "$previous" <<'PY'
+import sys
+
+source, destination = sys.argv[1:]
+data = open(source, 'rb').read()
+open(destination, 'wb').write(data.replace(b'\r\n', b'\n'))
+PY
+      rm -f -- "$transport"
+      [[ "$(stat -c %s "$previous")" -eq "$endpoint_bytes" ]] || {
+        echo "fallback capture size does not match $endpoint ($endpoint_bytes bytes)" >&2
+        exit 1
+      }
+    fi
     [[ -s "$previous" ]] || { echo "empty previous-log endpoint: $endpoint" >&2; exit 1; }
     stat -c '%n %s bytes' "$previous"
     sha256sum "$previous"
@@ -64,8 +100,15 @@ fi
 
 # Only after any saved previous boot log is safely on the host may recovery's
 # live diagnostics be read.  These files are private host artifacts.
-adb exec-out dmesg > "$recovery_dmesg"
-adb exec-out cat /proc/iomem > "$recovery_iomem"
+# The recovery adbd on this handset may close exec-out, although ordinary
+# shell transport works.  These are secondary current-recovery diagnostics,
+# so a shell fallback is acceptable and is deliberately after last_kmsg.
+if ! adb exec-out dmesg > "$recovery_dmesg" 2>/dev/null; then
+  adb shell dmesg > "$recovery_dmesg"
+fi
+if ! adb exec-out cat /proc/iomem > "$recovery_iomem" 2>/dev/null; then
+  adb shell cat /proc/iomem > "$recovery_iomem"
+fi
 grep -Ei 'found existing buffer|persistent_ram|ram_console' "$recovery_dmesg" \
   > "$recovery_persistent_status" || true
 stat -c '%n %s bytes' "$recovery_dmesg" "$recovery_iomem" "$recovery_persistent_status"

@@ -1,7 +1,8 @@
 # Hikari boot #4 post-mortem procedure
 
-This is an owner-gated physical procedure.  It is not authorization to flash
-or reboot by itself.
+This owner-gated procedure was executed for boot #4 on 2026-09-02. It is not
+authorization to flash or reboot again. Its result is the sanitized
+[boot #4 post-mortem](../research/device/current/boot/boot4-postmortem.md).
 
 1. Check the validated boot #4 ELF hash, size, Sony-ELF validation, DTB gate,
    memory gate, persistent-RAM gate and the original p3 restore hash.
@@ -15,8 +16,9 @@ or reboot by itself.
    Do not erase or touch another partition.  Then use `fastboot reboot`.
 5. Enter the verified TWRP branch using the separately documented original-p3
    bootrec key sequence.  Do **not** let Android userspace boot.
-6. As soon as TWRP ADB is ready, run the capture helper.  Its first operation
-   after `adb wait-for-device` is to save a valid old log, before it requests
+6. As soon as TWRP ADB is ready, run the capture helper. Its first operation
+   after confirming the TWRP `recovery` ADB transport is to save a valid old
+   log, before it requests
    recovery `dmesg`, `/proc/iomem`, or `/dev/mem`:
 
    ```sh

@@ -59,6 +59,16 @@ console at `0x7ffe0000-0x7fffffff`. See
 [FIRST_BOOT_MEMORY.md](FIRST_BOOT_MEMORY.md) and
 [PERSISTENT_LOGGING.md](PERSISTENT_LOGGING.md).
 
+Boot #4 then provided the first direct target-kernel execution evidence. Its
+recovered `/proc/last_kmsg`, exported by TWRP from the compatible persistent
+console before recovery reset the physical ring, identifies the Hikari FDT,
+corrected RAM layout, two CPU bring-up, ramoops, RPM, initramfs unpacking, and
+`Run /init as init process`. The diagnostic PID 1 then exited with status zero,
+causing `Attempted to kill init`; this is a controlled initramfs-liveness bug,
+not an early-kernel hang. Thus `FIRST_MAINLINE_EXECUTION=VERIFIED_DEVICE` and
+target lifecycle is `BOOTS` at the native initramfs boundary. No peripheral
+acceptance claim follows. See [boot #4 post-mortem](../research/device/current/boot/boot4-postmortem.md).
+
 ## Status domains
 
 status/hardware.yaml deliberately separates physical hardware evidence, the
