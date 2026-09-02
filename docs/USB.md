@@ -1,7 +1,7 @@
 # Hikari USB device debugging
 
-This is the BOOT #5 host-debug design. It is not a physical USB acceptance
-result and it authorizes no phone operation.
+This records the BOOT #5 USB result and the BOOT #5.1 console-only retry. It
+authorizes no phone operation.
 
 ## Provenance and hardware model
 
@@ -37,22 +37,23 @@ the non-unique upstream g_serial CDC ACM default `0525:a4a7` (NetChip/Linux
 USB Serial Gadget); it has no device-derived serial string.  It is a debug
 identity only, not a production USB identity.
 
-`CONFIG_U_SERIAL_CONSOLE=y` is built in, but the current static `g_serial`
-driver does not call `gserial_set_console()` to register `ttyGS0` as a kernel
-console.  Therefore BOOT #5 does **not** add `console=ttyGS0,115200` or claim
-an early console.  Ramoops remains the early path; after `ttyGS0` appears, the
-initramfs starts the interactive shell below.
+`CONFIG_U_SERIAL_CONSOLE=y` is built in. In the pinned 7.3-rc1 tree, static
+`g_serial` creates an ACM function; `acm_alloc_instance()` calls
+`gserial_alloc_line()`, which invokes `gs_console_init()` for line 0 and
+registers `ttyGS0` as a console. BOOT #5.1 therefore uses
+`console=tty0 console=ttyGS0,115200`. This is a **late** console: it cannot
+replace early diagnostics before the UDC/ACM function appears, so ramoops
+remains mandatory.
 
 No ECM function is configured in BOOT #5. Adding a composite function before
 the ACM transport has a physical result would make failure attribution worse.
 
-If the UDC binds, g_serial is expected to create `/dev/ttyGS0`; a separate
-supervisor waits indefinitely for that node and restarts the console service
-if it exits. It launches BusyBox as `setsid -c cttyhack sh -i`, with stdin,
-stdout and stderr explicitly redirected to `/dev/ttyGS0`. Thus the shell has
-the gadget node as all three standard streams and a controlling terminal; it
-is not merely a shell with output redirected to USB. PID 1 continues
-independently, logs its state to ramoops, and emits an `ALIVE` marker every 30
+If the UDC binds, g_serial creates `/dev/ttyGS0`; a separate supervisor waits
+indefinitely for it and restarts the console service if it exits. First it
+writes an explicit raw transport marker, then starts `/bin/sh -i` with stdin,
+stdout, and stderr all attached to `/dev/ttyGS0`. This deliberately proves
+basic I/O before a later getty/controlling-TTY refinement. PID 1 remains
+independent, logs its state to ramoops, and emits an `ALIVE` marker every 30
 seconds.
 
 ## Host use after an owner-approved physical boot
@@ -93,9 +94,38 @@ board value.
 
 No current MSM8x60 interconnect series is applied: static inspection of the
 ChipIdea controller and HS-PHY probe paths found no interconnect consumer.
-That is a scope decision for this first gadget attempt, not physical evidence
-that USB traffic will work. Physical CDC ACM enumeration remains required
-before any USB state becomes `VERIFIED_DEVICE`.
+That is a scope decision for this first gadget attempt, not evidence that
+every USB workload will work. BOOT #5 physically verified the HS PHY, MSM8x60
+vendor ULPI initialization, ChipIdea UDC, and static `g_serial`: the host saw
+`0525:a4a7` at USB High Speed and created a CDC ACM node. This is
+`VERIFIED_DEVICE` for the USB hardware/device-mode path, but not for the
+interactive console.
+
+## BOOT #5.1 initramfs console correction
+
+Inspection of the CPIO that was actually embedded in BOOT #5 found an empty
+`/dev` directory and only `/bin/sh` alongside BusyBox. The script then called
+unqualified `mount`, `mkdir`, `sleep`, and `cat`; those BusyBox applet links
+did not exist. Its first mount therefore never ran, `devtmpfs` never created
+`/dev/kmsg`, and the old best-effort redirection silently discarded every
+expected marker. Separately, the archive had no `c 5:1 /dev/console`, which
+explains the kernel's pre-`/init` "unable to open an initial console" warning.
+
+BOOT #5.1 generates its CPIO with the kernel `gen_init_cpio` file-list
+mechanism. It contains `c 5:1 /dev/console`, `c 1:3 /dev/null`, and explicit
+BusyBox links for every command PID 1 invokes. Each mount is followed by a
+kernel-visible return-code marker. Once `/dev/ttyGS0` exists, a child first
+writes `HIKARI TTYGS0 RAW TX VERIFIED`, records that result in ramoops, and
+only then starts a simple redirected interactive shell. PID 1 remains alive
+if either operation fails.
+
+The L6 `voltage operation not allowed` message remains unresolved, but is
+`NON_BLOCKING_FOR_CURRENT_USB`: physical High-Speed CDC ACM enumeration
+already occurred. In the current HS PHY driver the likely origin is its
+`regulator_set_voltage_triplet()` request for the v3p3 rail (Hikari maps it
+to fixed 3.05 V PM8058 L6). BOOT #5.1 deliberately leaves the physically
+working regulator topology unchanged; a later focused power-cycle/suspend
+analysis must establish the exact regulator constraint interaction.
 
 ## BOOT #5 diagnostic boundary
 

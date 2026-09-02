@@ -1,20 +1,31 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-or-later
-# BOOT #5 PID 1.  This is deliberately independent of its optional USB
+# BOOT #5.1 PID 1.  This is deliberately independent of its optional USB
 # console: losing or closing a host terminal must never terminate PID 1.
 
 export PATH=/bin:/sbin
 
 log()
 {
-	echo "$*" >/dev/kmsg 2>/dev/null || true
+	[ -c /dev/kmsg ] || return 0
+	printf '%s\n' "$*" >/dev/kmsg
 }
 
-mount -t proc proc /proc
-mount -t sysfs sysfs /sys
-mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
-mkdir -p /run
-mount -t tmpfs -o mode=0755 tmpfs /run 2>/dev/null || true
+log "HIKARI INIT ENTER"
+
+/bin/mount -t proc proc /proc
+log "HIKARI PROC MOUNT rc=$?"
+/bin/mount -t sysfs sysfs /sys
+log "HIKARI SYS MOUNT rc=$?"
+/bin/mount -t devtmpfs devtmpfs /dev
+log "HIKARI DEV MOUNT rc=$?"
+# The earlier copy records the transition if a console already exists.  Repeat
+# it after devtmpfs so ramoops receives an unambiguous init-entry marker.
+log "HIKARI INIT ENTER"
+[ -c /dev/kmsg ] && log "HIKARI KMSG AVAILABLE"
+/bin/mkdir -p /run
+/bin/mount -t tmpfs -o mode=0755 tmpfs /run
+log "HIKARI RUN MOUNT rc=$?"
 
 log "HIKARI BOOT5 INIT START"
 log "HIKARI BOOT5 DEV READY"
@@ -45,25 +56,30 @@ usb_snapshot
 console_supervisor()
 {
 	announced=0
+	wait_logged=0
 	while :; do
 		if [ -c /dev/ttyGS0 ]; then
 			if [ "$announced" -eq 0 ]; then
 				log "HIKARI USB UDC READY"
 				log "HIKARI USB GADGET READY"
+				log "HIKARI TTYGS0 EXISTS"
 				log "HIKARI USB TTYGS0 READY"
 				announced=1
 			fi
-			log "HIKARI USB SHELL START"
-			# /bin/sh with redirected standard streams is not necessarily attached
-			# to a controlling terminal.  Create a new session and explicitly claim
-			# ttyGS0 before starting the interactive shell.  Keep the applets behind
-			# the BusyBox dispatcher: this initramfs intentionally installs only
-			# /bin/busybox and /bin/sh.
-			/bin/busybox setsid -c /bin/busybox cttyhack /bin/sh -i \
-				</dev/ttyGS0 >/dev/ttyGS0 2>&1
-			log "HIKARI USB SHELL EXIT"
+			printf '\r\nHIKARI TTYGS0 RAW TX VERIFIED\r\n' >/dev/ttyGS0
+			log "HIKARI TTYGS0 RAW WRITE rc=$?"
+			log "HIKARI SHELL START"
+			# First prove the uncomplicated data path.  A future getty/ctty layer
+			# may add job control, but must not obscure first USB-console evidence.
+			/bin/sh -i </dev/ttyGS0 >/dev/ttyGS0 2>&1
+			log "HIKARI SHELL EXIT rc=$?"
+		else
+			if [ "$wait_logged" -eq 0 ]; then
+				log "HIKARI WAIT TTYGS0"
+				wait_logged=1
+			fi
 		fi
-		sleep 2
+		/bin/sleep 2
 	done
 }
 
@@ -71,7 +87,7 @@ console_supervisor &
 log "HIKARI BOOT5 SERVICES START"
 
 while :; do
-	set -- $(cat /proc/uptime 2>/dev/null || echo unknown)
-	log "HIKARI BOOT5 ALIVE $1"
-	sleep 30
+	set -- $(/bin/cat /proc/uptime 2>/dev/null || /bin/echo unknown)
+	log "HIKARI ALIVE uptime=$1"
+	/bin/sleep 30
 done

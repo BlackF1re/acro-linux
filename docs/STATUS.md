@@ -69,15 +69,28 @@ not an early-kernel hang. Thus `FIRST_MAINLINE_EXECUTION=VERIFIED_DEVICE` and
 target lifecycle is `BOOTS` at the native initramfs boundary. No peripheral
 acceptance claim follows. See [boot #4 post-mortem](../research/device/current/boot/boot4-postmortem.md).
 
+BOOT #5 then physically verified the target USB device-mode hardware path:
+the Qualcomm HS PHY, vendor ULPI initialization, ChipIdea UDC, and built-in
+`g_serial` enumerated as non-unique `0525:a4a7` at High Speed, and the host
+created a CDC ACM node. This does **not** verify an interactive console. The
+actual BOOT #5 CPIO lacked `/dev/console`, had an empty `/dev`, and installed
+only the BusyBox `sh` link; PID 1's first `mount` never ran and no userspace
+marker reached ramoops. BOOT #5.1 is a local-only console/initramfs correction;
+it adds the required device nodes, command links, late `ttyGS0` kernel console,
+and explicit raw-TX/shell diagnostics. The L6 voltage warning was non-blocking
+for observed enumeration and remains unresolved.
+
 ## Status domains
 
 status/hardware.yaml deliberately separates physical hardware evidence, the
 legacy Android baseline, and native target-Linux progress for every subsystem.
 The legacy baseline and target Linux both have a `BOOTS` lifecycle: BOOT #4
 physically reached native `/init`. BOOT #5 work is locally `IMPLEMENTING` for
-a stable PID 1 and USB device-mode diagnostics; it has no physical peripheral
-verification yet. Legacy runtime observations are retained in their own field,
-but are neither target-Linux progress nor functional verification.
+a stable PID 1 and USB device-mode diagnostics. BOOT #5 physically verified
+the target USB PHY/UDC/gadget enumeration, while the console and stable PID 1
+remain unverified pending the corrected BOOT #5.1 artifact. Legacy runtime
+observations are retained in their own field, but are neither target-Linux
+progress nor functional verification.
 
 VERIFIED is reserved for a defined acceptance test on the physical Xperia.
 This pass was topology collection only; it performed no functional acceptance

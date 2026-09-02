@@ -11,6 +11,9 @@ CONFIG_ARCH_QCOM_RESERVE_SMEM=y
 CONFIG_ARM_APPENDED_DTB=y
 CONFIG_ARM_ATAG_DTB_COMPAT=y
 CONFIG_ARM_ATAG_DTB_COMPAT_CMDLINE_EXTEND=y
+# ttyGS0 is registered only after the built-in ACM function allocates line 0.
+# Ramoops remains mandatory for diagnostics before the UDC appears.
+CONFIG_CMDLINE="console=tty0 console=ttyGS0,115200"
 CONFIG_DEVTMPFS=y
 CONFIG_DEVTMPFS_MOUNT=y
 CONFIG_TMPFS=y

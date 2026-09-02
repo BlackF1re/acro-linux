@@ -7,6 +7,7 @@ busybox_src=${BUSYBOX_SRC:-/home/paul/xperia/src/busybox}
 busybox_build=${BUSYBOX_BUILD:-/home/paul/xperia/build/busybox-hikari}
 initramfs_build=${INITRAMFS_BUILD:-/home/paul/xperia/build/hikari-initramfs}
 initramfs_name=${INITRAMFS_NAME:-hikari-firstboot.cpio.gz}
+gen_init_cpio=${GEN_INIT_CPIO:-/home/paul/xperia/build/linux-hikari/usr/gen_init_cpio}
 cross_compile=${CROSS_COMPILE:-arm-linux-gnueabihf-}
 jobs=${JOBS:-"$(nproc)"}
 source_date_epoch=${SOURCE_DATE_EPOCH:-0}
@@ -15,6 +16,7 @@ case "$busybox_build" in /home/paul/xperia/build/*) ;; *) echo "BUSYBOX_BUILD mu
 case "$initramfs_build" in /home/paul/xperia/build/*) ;; *) echo "INITRAMFS_BUILD must be below /home/paul/xperia/build" >&2; exit 1;; esac
 test -f "$busybox_src/Makefile" || { echo "missing external BusyBox source tree" >&2; exit 1; }
 test -f "$repo_root/initramfs/hikari-firstboot/init" || { echo "missing project init" >&2; exit 1; }
+test -x "$gen_init_cpio" || { echo "missing executable gen_init_cpio: $gen_init_cpio" >&2; exit 1; }
 [[ "$source_date_epoch" =~ ^[0-9]+$ ]] || { echo "SOURCE_DATE_EPOCH must be an integer" >&2; exit 1; }
 [[ "$initramfs_name" != */* && "$initramfs_name" = *.cpio.gz ]] || { echo "INITRAMFS_NAME must be a .cpio.gz filename" >&2; exit 1; }
 
@@ -34,20 +36,35 @@ if grep -q '^CONFIG_TC=y$' "$busybox_build/.config"; then
 fi
 make -C "$busybox_src" O="$busybox_build" ARCH=arm CROSS_COMPILE="$cross_compile" -j"$jobs" busybox
 
-root=$(mktemp -d "$initramfs_build/root.XXXXXX")
-trap 'rm -rf -- "$root"' EXIT
-mkdir -p "$root/bin" "$root/dev" "$root/proc" "$root/sys" "$root/sbin"
-install -m 0755 "$busybox_build/busybox" "$root/bin/busybox"
-ln -s busybox "$root/bin/sh"
-install -m 0755 "$repo_root/initramfs/hikari-firstboot/init" "$root/init"
-# cpio records mtimes. Normalise only the disposable staging tree so equal
-# source inputs yield an equal archive without modifying source files.
-find "$root" -exec touch -h -d "@$source_date_epoch" {} +
+list="$initramfs_build/${initramfs_name%.gz}.list"
+archive="$initramfs_build/${initramfs_name%.gz}"
 
-(
-  cd "$root"
-  find . -print0 | LC_ALL=C sort -z | cpio --null -o -H newc --reproducible --quiet
-) > "$initramfs_build/${initramfs_name%.gz}"
-gzip -n -f -9 "$initramfs_build/${initramfs_name%.gz}"
+# Generate the archive through the kernel initramfs file-list mechanism.  It
+# can encode device nodes without host privileges, unlike mknod in a staging
+# directory.  /dev/console must exist before the kernel runs /init; devtmpfs
+# is mounted by PID 1 only afterwards.
+{
+  printf '%s\n' \
+    'dir /bin 0755 0 0' \
+    'dir /dev 0755 0 0' \
+    'dir /proc 0755 0 0' \
+    'dir /run 0755 0 0' \
+    'dir /sbin 0755 0 0' \
+    'dir /sys 0755 0 0'
+  printf 'file /bin/busybox %s 0755 0 0\n' "$busybox_build/busybox"
+  # Every external command called by /init needs an argv[0] BusyBox applet
+  # link.  BOOT #5 installed only sh, so its first mount never executed.
+  for applet in sh mount sleep setsid cttyhack mkdir cat echo; do
+    printf 'slink /bin/%s busybox 0777 0 0\n' "$applet"
+  done
+  printf '%s\n' \
+    'nod /dev/console 0600 0 0 c 5 1' \
+    'nod /dev/null 0666 0 0 c 1 3'
+  printf 'file /init %s 0755 0 0\n' "$repo_root/initramfs/hikari-firstboot/init"
+} > "$list"
+
+"$gen_init_cpio" -t "$source_date_epoch" "$list" > "$archive"
+gzip -n -f -9 "$archive"
+"$repo_root/scripts/check-hikari-initramfs.sh" "$initramfs_build/$initramfs_name"
 sha256sum "$initramfs_build/$initramfs_name"
 echo "initramfs: $initramfs_build/$initramfs_name"

@@ -30,6 +30,10 @@ for option in \
     exit 1
   }
 done
+grep -qx 'CONFIG_CMDLINE="console=tty0 console=ttyGS0,115200"' "$config" || {
+  echo 'BOOT5_USB_CONFIG=FAIL missing late ttyGS0 console cmdline' >&2
+  exit 1
+}
 
 dump=$(fdtdump "$dtb")
 for required in \
