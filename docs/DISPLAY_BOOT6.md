@@ -66,6 +66,12 @@ verified USB gadget and ramoops support into the kernel.  The final DTB has
 reciprocal MDP4--DSI--panel endpoints, resolved supply/clock/reset references,
 and the observed ramoops region.  Host-side gates validate display, USB,
 ramoops, appended DTB, Sony ELF and ARM decompressor self-relocation layout.
+`make dtbs` passes.  The installed `dtschema` 2026.6 makes the kernel's
+bulk `make dtbs_check` invocation pass multiple DTB positional arguments after
+an option and prints an argument-parsing error for every DTB (while `make`
+still returns zero); it is therefore not counted as a schema pass.  Direct
+`dt-doc-validate` of each new binding and targeted `dt-validate` of the final
+Hikari DTB both pass with that same toolchain.
 
 ## Physical test and risks
 
