@@ -51,6 +51,10 @@ expect_hex() {
 
 expect_string /display-controller@5100000 compatible qcom,mdp4
 expect_hex /display-controller@5100000 reg '5100000 f0000'
+expect_string /display-controller@5100000 clock-names core_clk
+expect_string /display-controller@5100000 clock-names iface_clk
+expect_string /display-controller@5100000 clock-names bus_clk
+expect_string /display-controller@5100000 clock-names lut_clk
 expect_string /dsi@4700000 compatible qcom,msm8660-dsi-ctrl
 expect_hex /dsi@4700000 reg '4700000 200'
 expect_string /dsi@4700000/panel@0 compatible renesas,r63306-tmd-mdv22
