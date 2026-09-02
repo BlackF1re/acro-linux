@@ -1,32 +1,83 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-or-later
+# BOOT #5 PID 1.  This is deliberately independent of its optional USB
+# console: losing or closing a host terminal must never terminate PID 1.
 
 export PATH=/bin:/sbin
+
+log()
+{
+	echo "$*" >/dev/kmsg 2>/dev/null || true
+}
 
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
+mkdir -p /run /sys/kernel/config
+mount -t tmpfs -o mode=0755 tmpfs /run 2>/dev/null || true
 
-echo "HIKARI MAINLINE BOOT #4"
-echo "HIKARI INITRAMFS STARTED #4"
-echo "HIKARI_PERSIST_TEST_INIT_ENTERED" >/dev/kmsg 2>/dev/null || true
-uname -a
-echo "--- /proc/cpuinfo ---"
-cat /proc/cpuinfo
-echo "--- /proc/meminfo ---"
-cat /proc/meminfo
-echo "--- /proc/cmdline ---"
-cat /proc/cmdline
-echo "--- device-tree model ---"
-tr -d '\000' </proc/device-tree/model 2>/dev/null || true
-echo
-echo "--- /proc/uptime ---"
-cat /proc/uptime
-echo "--- /dev ---"
-ls -la /dev
-echo "--- mounts ---"
-mount
-echo "HIKARI_PERSIST_TEST_PROC_MOUNTED" >/dev/kmsg 2>/dev/null || true
-echo "HIKARI_PERSIST_TEST_END" >/dev/kmsg 2>/dev/null || true
-echo "Native diagnostic shell; no Android userspace is present."
-exec /bin/sh
+log "HIKARI BOOT5 INIT START"
+log "HIKARI BOOT5 DEV READY"
+
+configure_acm()
+{
+	mount -t configfs none /sys/kernel/config 2>/dev/null || {
+		log "HIKARI USB CONFIGFS UNAVAILABLE"
+		return
+	}
+
+	for node in /sys/class/udc/*; do
+		[ -e "$node" ] || continue
+		udc=${node##*/}
+		break
+	done
+	if [ -z "${udc:-}" ]; then
+		log "HIKARI USB UDC NOT PRESENT"
+		return
+	fi
+
+	log "HIKARI USB UDC READY"
+	g=/sys/kernel/config/usb_gadget/hikari_debug
+	[ -e "$g/UDC" ] && return
+	mkdir -p "$g"
+	echo 0x1d6b >"$g/idVendor"
+	echo 0x0104 >"$g/idProduct"
+	mkdir -p "$g/strings/0x409" "$g/configs/c.1/strings/0x409"
+	echo HIKARI-DEBUG >"$g/strings/0x409/serialnumber"
+	echo Hikari >"$g/strings/0x409/manufacturer"
+	echo 'Hikari Mainline Debug' >"$g/strings/0x409/product"
+	echo 'CDC ACM diagnostic console' >"$g/configs/c.1/strings/0x409/configuration"
+	echo 120 >"$g/configs/c.1/MaxPower"
+	mkdir -p "$g/functions/acm.GS0"
+	ln -s "$g/functions/acm.GS0" "$g/configs/c.1/acm.GS0"
+	echo "$udc" >"$g/UDC"
+
+	if [ -c /dev/ttyGS0 ]; then
+		log "HIKARI USB GADGET READY"
+		log "HIKARI USB TTYGS0 READY"
+	else
+		log "HIKARI USB GADGET BOUND WITHOUT TTYGS0"
+	fi
+}
+
+console_supervisor()
+{
+	while :; do
+		if [ -c /dev/ttyGS0 ]; then
+			log "HIKARI USB SHELL START"
+			/bin/sh -i </dev/ttyGS0 >/dev/ttyGS0 2>&1
+			log "HIKARI USB SHELL EXIT"
+		fi
+		sleep 2
+	done
+}
+
+configure_acm &
+console_supervisor &
+log "HIKARI BOOT5 SERVICES START"
+
+while :; do
+	set -- $(cat /proc/uptime 2>/dev/null || echo unknown)
+	log "HIKARI BOOT5 ALIVE $1"
+	sleep 30
+done
