@@ -50,6 +50,8 @@ test "$(od -An -tx1 -j "$zimage_size" -N 4 "$kernel_with_dtb" | tr -d '[:space:]
   --kernel-build "$kernel_build" --zimage "$zimage" --dtb "$dtb" \
   --ramdisk "$initramfs" --ramdisk-addr "$ramdisk_addr" \
   --kernel-load "$kernel_addr" --rpm "$rpm"
+"$repo_root/scripts/check-hikari-persistent-ram.sh" \
+  --config "$kernel_build/.config" --dtb "$dtb"
 
 python3 "$repo_root/tools/sony_elf.py" build \
   --kernel "$kernel_with_dtb" --ramdisk "$initramfs" --rpm "$rpm" \

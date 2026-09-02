@@ -83,6 +83,7 @@ page_offset = 0xc0000000
 zimage_load = int(kernel_load, 0)
 ramdisk_start = int(ramdisk_addr, 0)
 rpm_start = 0x00020000
+ramoops_start, ramoops_size = 0x7ffe0000, 0x20000
 
 # ARCH_QCOM_RESERVE_SMEM selects TEXT_OFFSET=0x00208000 in the pinned
 # upstream ARM Makefile.  That is 2 MiB plus 32 KiB after the physical
@@ -108,6 +109,7 @@ zimage_end = zimage_load + size(zimage)
 dtb_end = zimage_end + size(dtb)
 ramdisk_end = ramdisk_start + size(ramdisk)
 rpm_end = rpm_start + size(rpm)
+ramoops_end = ramoops_start + ramoops_size
 
 # In arch/arm/boot/compressed/head.S, when the final uncompressed image would
 # overwrite the executing zImage, the code copies its restart..r6 interval to
@@ -127,6 +129,7 @@ ranges = {
     'relocated decompressor + appended DTB': (relocated_start, relocated_end),
     'initramfs': (ramdisk_start, ramdisk_end),
     'RPM payload': (rpm_start, rpm_end),
+    'legacy-compatible persistent console': (ramoops_start, ramoops_end),
 }
 
 if zimage_load < smem_end:
@@ -138,6 +141,8 @@ for name in ('compressed zImage input', 'appended DTB input', 'decompressed kern
         raise SystemExit(f'{name} is not wholly inside the modeled first RAM bank outside SMEM')
 if rpm_end > ram_start:
     raise SystemExit('RPM payload unexpectedly reaches System RAM')
+if not (0x7ffe0000 <= ramoops_start < ramoops_end <= 0x80000000):
+    raise SystemExit('persistent console is not the physically observed 0x7ffe0000/0x20000 range')
 
 # The source image overlaps its final output on purpose.  Current ARM
 # compressed/head.S implements a backwards self-relocation before inflate;
@@ -149,15 +154,17 @@ for left, right in (
     ('relocated decompressor + appended DTB', 'Qualcomm SMEM reserve'),
     ('decompressed kernel', 'initramfs'),
     ('appended DTB input', 'initramfs'),
+    ('decompressed kernel', 'legacy-compatible persistent console'),
+    ('initramfs', 'legacy-compatible persistent console'),
 ):
     if overlap(ranges[left], ranges[right]):
         raise SystemExit(f'{left} overlaps {right}')
 
 for name in ('Qualcomm SMEM reserve', 'compressed zImage input', 'appended DTB input',
              'decompressed kernel', 'relocated decompressor + appended DTB', 'initramfs',
-             'RPM payload'):
+             'RPM payload', 'legacy-compatible persistent console'):
     show(name, *ranges[name])
 print(f'compressed relocation reserve: {reloc_reserve} bytes')
 print('ARM_ZIMAGE_SELF_RELOCATION=REQUIRED_AND_ACCOUNTED_FOR')
-print('THIRD_BOOT_MEMORY_SAFETY=PASS')
+print('BOOT4_MEMORY_SAFETY=PASS')
 PY
