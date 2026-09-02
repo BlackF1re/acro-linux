@@ -101,6 +101,17 @@ record, ftrace or pmsg zones competing for the 128 KiB.
 built-in Kconfig options plus the exact DTB node, range, console allocation,
 zero ECC and absence of `no-map`.
 
+## Local validation
+
+The local boot #4 build passed `make dtbs`, the Hikari-specific persistent-RAM
+gate, appended-DTB gate, Sony-ELF validator and a direct `dt-validate` of the
+built `qcom-msm8260-sony-hikari.dtb` against the pinned build's processed
+schema.  A scoped `make dtbs_check` completed with the current host
+`dtschema` 2026.6 after using colon-separated schema limits; it reported two
+pre-existing `qcom.yaml` violations for the unrelated OnePlus Bacon DTB.  It
+reported no Hikari diagnostic.  The Hikari DTB's direct schema validation is
+therefore the relevant clean result; no warning was suppressed or disabled.
+
 ## Limits
 
 The only verification at this point is the recovery reader path and its
