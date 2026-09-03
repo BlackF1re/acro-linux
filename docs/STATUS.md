@@ -97,11 +97,13 @@ is a precise software boot-blocker diagnosis, not a target-Linux display
 acceptance claim. See
 [the sanitized BOOT #7 evidence](../research/device/current/boot/boot7-display-component-crash.md).
 
-The next live USB-console run passed that crash but stopped DSI host probing at
-`dsi_get_config: Invalid version`. The generic version register physically
-read zero, no DRM card appeared, and AS3676 nevertheless probed and exported a
-backlight class. The next local artifact selects the MSM8x60 V2 host variant
-from `qcom,msm8660-dsi-ctrl`; it is built and validated but not deployed.
+The next live run passed component matching and DSI variant selection, then
+hard-stalled CPU0 before `/init` in DSI runtime suspend while waiting for an
+incorrectly described MMSS clock branch. Exact MSM8x60 source assigns DSI
+slave AHB halt bit 20, while the bootstrap MMCC driver used bit 21 and marked
+the branch critical. The current local kernel corrects that ownership/bit and
+also fixes truncated MDV22 command-table payloads. These corrections are built
+and validated but not deployed; display/fbcon remain `NOT_VERIFIED`.
 
 ## Status domains
 
@@ -120,9 +122,13 @@ tests.
 
 The first native BQ24160/BQ27520 charging stack is `IMPLEMENTING`. Both chips
 physically probed and USB input was online, but the observed state was `Not
-charging` with a hardware fault and negative battery current. The safe policy
-still caps unknown USB at 500 mA, treats BQ27520 data as read-only, and
-disables BQ27xxx NVM updates. The next artifact adds raw STAT/FAULT transition
-logging; it does not force charging. Cradle/IN and suspend charging remain
-blocked pending dedicated physical evidence. See
+charging` with negative battery current. Raw status `0x27` identifies a
+current USB-ready state plus a latched/read-to-clear fault-history value; the
+driver previously misclassified that history as a current fatal fault. The
+current local kernel fixes this without weakening the 500 mA cap,
+temperature/voltage policy, read-only BQ27520 use, or NVM prohibition. Native
+charging remains unverified pending positive-current/SOC testing. Raw
+STAT/FAULT transition logging remains diagnostic; it does not force charging.
+Cradle/IN and suspend charging remain blocked pending dedicated physical
+evidence. See
 [CHARGING.md](CHARGING.md).

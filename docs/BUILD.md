@@ -79,26 +79,28 @@ phone.
 
 ## Latest locally validated artifact
 
-The next locally validated, **not deployed** artifact is:
+The current locally validated, **not deployed** artifact is:
 
 ```text
-/home/paul/xperia/build/hikari-artifacts-g23-dsi-detect/hikari-dsi-detect.elf
-size:   12,515,013 bytes
-SHA-256 1f2ee7f9ba49f307fb0de45bca62777e9851bfd7b0500cf585897bbcd72a00d4
+/home/paul/xperia/build/hikari-artifacts-g24-display-charge/hikari-display-charge.elf
+size:   12,515,677 bytes
+SHA-256 72b4a74ee69a903d75402f152cebccf533a9c8da15069bb32c2025c31fc307b3
 ```
 
 It was built from external kernel tree HEAD
-`7853251fd2ec`. It preserves the verified memory, RPM, ramoops, stable PID 1,
-and USB ACM shell foundation. It adds an MSM8x60-compatible DSI V2 selection
-for hardware whose generic DSI version register reads zero, plus read-only
-BQ24160 STAT/FAULT transition logging. Display and charging remain unverified
-on the device.
+`d9c2a7315504d8c968cd928e1de89dc0c50051ab`. It preserves the verified
+memory, RPM, ramoops, stable PID 1, and USB ACM shell foundation. Relative to
+the last physical run it corrects the MSM8x60 DSI slave-AHB halt bit, removes
+an incorrect critical-clock override, sends the complete source-derived MDV22
+command payloads, and distinguishes current BQ24160 state from its latched
+read-to-clear fault history. Display and native charging remain unverified on
+the device until their acceptance tests pass.
 
 Its components are:
 
 ```text
-zImage:    11,274,248 bytes, c011b0d9c3d98f7ddcb2dce84467a925417ac7b888b1a14a68e52fddc3432416
-DTB:           13,206 bytes, be30aee7589f1e18ab388783d6f023595764a8af3fd293d6cbb7cd22fe9c80db
+zImage+DTB: 11,288,118 bytes, 4eb38d915fa7fa0a2cf7feabc96f9373b6537c10b200e7393e96701966bcfd98
+DTB:            13,206 bytes
 initramfs:  1,103,679 bytes, c9a0ea7651ffc6c8c7acb0695764e4278ec38bd984b53381f7cb2f0008ed3894
 ```
 

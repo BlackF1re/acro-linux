@@ -56,13 +56,20 @@ The BQ24160 driver is deliberately conservative.
 The legacy BQ24160 driver is a hardware and policy reference only; no Android
 charger framework, wakelock, or fuel-gauge programming code is retained.
 
-The first physical run occurred above the revision-`0x05` 4.00 V hold
-threshold, so the source-derived hysteresis may have deliberately disabled
-charging. Independently, `Unspecified failure` proves that the raw hardware
-fault field was non-zero. The next locally built kernel reports raw BQ24160
-STAT/FAULT transitions to distinguish those conditions. It does not relax the
-500 mA input cap, voltage/temperature limits, watchdog policy, or fuel-gauge
-write prohibition.
+The first physical run reported raw status `0x27`. In the BQ24160 encoding its
+current `STAT` field is USB-ready while its low fault field is the latched,
+read-to-clear history value 7. The old project driver incorrectly treated any
+non-zero history as a current fatal condition and could therefore disable a
+presently usable input. The corrected driver follows the TI/Sony separation:
+charge disable and `POWER_SUPPLY_HEALTH_UNSPEC_FAILURE` now require the current
+`STAT=FAULT` state (or an actually unsupported current state), while the fault
+history remains logged for diagnosis. This does not relax the 500 mA input
+cap, voltage/temperature limits, watchdog policy, revision-5 hysteresis, or
+fuel-gauge write prohibition.
+
+This is an evidence-backed software correction, not a physical charging
+claim. Acceptance still requires positive battery current and increasing
+state of charge on the Xperia.
 
 ## Required physical acceptance test
 

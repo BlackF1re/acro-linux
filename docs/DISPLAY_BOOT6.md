@@ -158,3 +158,29 @@ explicit `qcom,msm8660-dsi-ctrl` compatible. It does not change the verified
 USB path or the source-derived panel electrical data. Targeted DT schema,
 display static, memory, persistent-RAM and Sony ELF gates pass. The correction
 is `IMPLEMENTING`, not `VERIFIED`, until it registers DRM on the handset.
+
+## Runtime-suspend clock hang and panel payload correction
+
+The following physical run advanced beyond DSI variant selection and supplied
+a more precise pre-`/init` failure boundary. Its persistent log stopped in
+`msm_dsi_runtime_suspend()` while the clock framework waited forever for
+`dsi_m_ahb_clk` to report off; a later trace similarly named `amp_ahb_clk`.
+Consequently CPU0 never reached the initramfs, which also explains the missing
+or unreliable USB userspace diagnostics in that run. This is not evidence of
+a panel electrical failure.
+
+Exact Sony/OpenSEMC MSM8x60 clock data assigns MMSS halt bits 18, 19 and 20 to
+AMP AHB, DSI master AHB and DSI slave AHB respectively. The project bootstrap
+had assigned bit 21 to the slave clock and made it critical. Kernel commit
+`200115087c00` corrects the slave halt bit to 20 and returns all three branches
+to normal DSI runtime-PM ownership.
+
+An independent table audit against the exact Hikari ID00/ID01 MDV22 source
+found several project command entries whose declared payload count omitted the
+last byte. Kernel commit `6b09d9bff5cf` corrects C0 and C8--CE counts so the
+modern DRM panel driver transmits every source-derived byte. A build gate now
+checks the halt-bit rule and every command-table count before packaging.
+
+The resulting artifact is locally valid and retains the physically verified
+USB ACM and ramoops paths. Visible native-resolution scanout, panel enable and
+backlight remain `NOT_VERIFIED` until the artifact is tested on the phone.
