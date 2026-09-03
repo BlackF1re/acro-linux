@@ -29,16 +29,25 @@ def check_mmcc(kernel: Path) -> None:
 
     cfg = (kernel / "drivers/gpu/drm/msm/dsi/dsi_cfg.c").read_text()
     host = (kernel / "drivers/gpu/drm/msm/dsi/dsi_host.c").read_text()
-    if ".clear_clk_ctrl_on_suspend = true," not in cfg:
-        fail("MSM8x60 DSI must request clock-control cleanup on suspend")
+    phy = (
+        kernel / "drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c"
+    ).read_text()
+    if ".quiesce_msm8x60_boot_state = true," not in cfg:
+        fail("MSM8x60 DSI must request complete boot-state quiesce")
     required_suspend = (
-        "if (msm_host->cfg_hnd->cfg->clear_clk_ctrl_on_suspend)",
+        "if (msm_host->cfg_hnd->cfg->quiesce_msm8x60_boot_state)",
         "dsi_write(msm_host, REG_DSI_CLK_CTRL, 0);",
-        "wmb();",
+        "dsi_write(msm_host, REG_DSI_CTRL, 0);",
+        "msm_dsi_phy_quiesce_boot_state(msm_dsi->phy);",
+        "clk_disable_unprepare(msm_host->bus_clks[1].clk);",
+        "clk_disable_unprepare(msm_host->bus_clks[2].clk);",
+        "clk_disable_unprepare(msm_host->bus_clks[0].clk);",
     )
     for fragment in required_suspend:
         if fragment not in host:
             fail(f"MSM8x60 DSI suspend cleanup lacks: {fragment}")
+    if "writel(0, phy->pll_base);" not in phy:
+        fail("MSM8x60 45nm PHY quiesce must clear PLL_CTRL_0")
 
 
 def check_panel(kernel: Path) -> None:
