@@ -212,3 +212,19 @@ from silently restoring the invalid topology. Kernel commits `a9c320a7dbec`
 and `73e268175648` contain the link-clock and optional-MDP-rail corrections.
 These changes are locally validated only; visible display remains
 `NOT_VERIFIED` pending an owner-approved physical test.
+
+## MSM8x60 DSI controller quiesce
+
+The latest physical post-mortem advanced through MSM8x60 DSI V2 selection and
+MDP4 component binding, then stopped before `/init` in
+`msm_dsi_runtime_suspend()`. Clock disable waited indefinitely for the DSI
+slave/master and amplifier AHB branches to halt. Their MMCC halt-bit mapping
+already agrees with exact Sony source; the DSI controller still held the
+branches on through `CLK_CTRL` force-on bits.
+
+Exact Sony MSM8x60 `mipi_dsi.c` clears DSI `CLK_CTRL` (`+0x118`) and `CTRL`
+before disabling AHB clocks. The local DRM/MSM variant now clears
+`REG_DSI_CLK_CTRL` with a write barrier before bulk clock disable. The change
+is restricted by an MSM8x60 configuration flag and retains clock-framework
+halt verification. It is locally built and must still be verified on the
+physical panel.

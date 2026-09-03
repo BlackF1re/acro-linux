@@ -82,24 +82,25 @@ phone.
 The current locally validated, **not deployed** artifact is:
 
 ```text
-/home/paul/xperia/build/hikari-artifacts-g26-display/hikari-display-clockfix.elf
-size:   12,515,754 bytes
-SHA-256 5167fb0c5b1ee36185088aec182c8b545a4204a52029661f1041756237f23d9a
+/home/paul/xperia/build/hikari-artifacts-g27-display/hikari-display-dsi-quiesce.elf
+size:   12,515,794 bytes
+SHA-256 77df1b315303e746ff9292cc2b19f309e76ef6c64c91a6f18474c8f09562008b
 ```
 
 It was built from external kernel tree HEAD
-`73e2681756489af870c8f65ecaaa0fbaa84fe651`. It preserves the verified
+`07ed25b29aebeec40be0c90895da788eeaec98e4`. It preserves the verified
 memory, RPM, ramoops, stable PID 1, and USB ACM shell foundation. Relative to
-the last physical run it replaces the rejected APQ8064-style DSI clock-parent
-graph with the source-verified MSM8x60 direct byte branch, fixed PXO/2 escape
-clock, and shared MDP pixel RCG. It also makes the absent MDP regulator legal
-when the MSM8x60 GDSC supplies that power domain. Display and native charging
-remain unverified on the device until their acceptance tests pass.
+the latest physical run it clears MSM8x60 DSI controller clock-force bits
+before checked AHB gating, avoids a redundant voltage request on the already
+fixed 3.05 V USB PHY rail, and records successful BQ24160 CE/HZ release once.
+Display and native charging remain unverified on the device until their
+acceptance tests pass.
 
 Its components are:
 
 ```text
-zImage+DTB: 11,288,195 bytes
+zImage:     11,275,152 bytes
+zImage+DTB: 11,288,235 bytes
 DTB:            13,083 bytes
 initramfs:  1,103,679 bytes, c9a0ea7651ffc6c8c7acb0695764e4278ec38bd984b53381f7cb2f0008ed3894
 ```
@@ -112,7 +113,7 @@ local artifact integrity, not permission to flash or a hardware claim.
 The final Sony ELF segment table is:
 
 ```text
-segment 0: offset 0x001000, paddr 0x40208000, size 0xac3e83
-segment 1: offset 0xac4e83, paddr 0x42a00000, size 0x10d73f
-segment 2: offset 0xbd25c2, paddr 0x00020000, size 0x01d3e8
+segment 0: offset 0x001000, paddr 0x40208000, size 0xac3eab
+segment 1: offset 0xac4eab, paddr 0x42a00000, size 0x10d73f
+segment 2: offset 0xbd25ea, paddr 0x00020000, size 0x01d3e8
 ```

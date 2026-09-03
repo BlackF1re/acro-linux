@@ -64,3 +64,26 @@ MSM8x60 byte and fixed escape branches, and use the shared MDP pixel RCG at
 69.672960 MHz. The corresponding local kernel commits are
 `a9c320a7dbec` and `73e268175648`. Physical display and positive-current
 charging remain unverified.
+
+## Latest captured boundary
+
+The g26 physical attempt selected the explicit MSM8x60 DSI V2 configuration
+and bound MDP4, then stopped before `/init` in
+`msm_dsi_runtime_suspend()`. The last log repeatedly reported
+`dsi_s_ahb_clk`, `dsi_m_ahb_clk`, and `amp_ahb_clk` stuck on while
+`clk_bulk_disable()` waited for hardware halt. This common pre-userspace
+stall explains both the dark display and the missing stable USB terminal; it
+does not overturn the earlier physical USB PHY/UDC verification.
+
+The halt bits match the exact Sony MSM8x60 clock data. The missing operation
+was controller quiescence: Sony clears DSI `CLK_CTRL` and `CTRL` before
+gating those branches, whereas the generic DRM runtime-suspend path had left
+the MSM8x60 clock force-on bits set. The local MSM8x60-only fix clears
+`CLK_CTRL`, executes an ordering barrier, and then uses the normal checked
+clock-disable path. It does not bypass halt checking.
+
+AS3676 and both battery devices had already probed, and the charger status
+sample was `0x23`. Because execution stopped before initramfs diagnostics,
+that sample is not a positive-current charging test. The next kernel adds a
+one-time message after successful CE/HZ release so that hardware activation
+can be distinguished from charger policy and battery-current results.

@@ -40,3 +40,34 @@ clock regression or a mismatched command count.
 The corrected local artifact is documented in `docs/BUILD.md`. Only a
 physical run can establish DRM registration, visible panel output, backlight,
 fbcon, reliable USB enumeration during display probing, or charging.
+
+## Subsequent physical attempt: controller clock force-on
+
+The next physical artifact passed component matching and selected the
+MSM8x60 DSI V2 configuration. MDP4 bound successfully, but before `/init` the
+persistent log recorded three consecutive branch-disable stalls:
+
+```text
+dsi_s_ahb_clk status stuck at 'on'
+dsi_m_ahb_clk status stuck at 'on'
+amp_ahb_clk status stuck at 'on'
+```
+
+The stack is `clk_bulk_disable()` from `msm_dsi_runtime_suspend()`. There are
+no initramfs markers after it. This single pre-userspace stall accounts for
+both the dark display and unstable/no ACM terminal in that attempt; it is not
+evidence that the already verified USB PHY or UDC regressed.
+
+The halt-bit assignments are correct in the current MMCC. The missing step is
+hardware quiescence: exact Sony MSM8x60 `mipi_dsi.c` writes zero to DSI
+`CLK_CTRL` (`+0x118`) and `CTRL` before disabling the three AHB clocks. The
+generic DRM/MSM V2 runtime-suspend path only disabled the bulk clocks, leaving
+MSM8x60 force-on bits asserted. Kernel commit `f88018605bf7` adds a variant
+flag and clears `REG_DSI_CLK_CTRL` with an ordering barrier before gating the
+bus clocks. It does not weaken clock halt checking.
+
+The same local correction cycle avoids the redundant forbidden voltage-change
+request on the already fixed 3.05 V PM8058 L6 USB PHY rail and adds a one-time
+BQ24160 `charging enabled` transition message. Neither positive-current
+charging nor visible display output is claimed until the new artifact is run
+on the phone.

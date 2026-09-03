@@ -113,6 +113,15 @@ current local kernel and canonical project DTS implement that model; the build
 gate now rejects the obsolete assigned-parent topology. This is a precise
 software correction, not yet evidence of visible scanout or charging.
 
+The latest physical log selected the MSM8x60 DSI V2 configuration and bound
+MDP4, then stopped before `/init` while DSI runtime suspend tried to gate
+`dsi_s_ahb_clk`, `dsi_m_ahb_clk`, and `amp_ahb_clk`. Their halt bits match the
+Sony clock data; exact Sony DSI shutdown first clears controller `CLK_CTRL`
+force-on bits. The next local kernel performs that MSM8x60-specific quiesce
+before the normal checked clock-disable sequence. This accounts for the same
+run's missing stable ACM terminal without reclassifying the previously
+verified USB hardware. Physical display and charging acceptance remain open.
+
 ## Status domains
 
 status/hardware.yaml deliberately separates physical hardware evidence, the
@@ -137,6 +146,9 @@ current local kernel fixes this without weakening the 500 mA cap,
 temperature/voltage policy, read-only BQ27520 use, or NVM prohibition. Native
 charging remains unverified pending positive-current/SOC testing. Raw
 STAT/FAULT transition logging remains diagnostic; it does not force charging.
+The latest local kernel additionally logs successful CE/HZ release once; the
+last physical attempt stalled in DSI runtime suspend before initramfs could
+provide a complete charge-current observation.
 Cradle/IN and suspend charging remain blocked pending dedicated physical
 evidence. See
 [CHARGING.md](CHARGING.md).
