@@ -33,6 +33,18 @@
 		};
 	};
 
+	/* Sony-programmed BQ27520 gauge data is read-only to this kernel. */
+	battery: battery {
+		compatible = "simple-battery";
+		device-chemistry = "lithium-ion";
+		charge-full-design-microamp-hours = <1900000>;
+		voltage-min-design-microvolt = <3000000>;
+		voltage-max-design-microvolt = <4200000>;
+		constant-charge-current-max-microamp = <1525000>;
+		constant-charge-voltage-max-microvolt = <4200000>;
+		charge-term-current-microamp = <50000>;
+	};
+
 	/*
 	 * The low bank starts at the historical MSM8x60 shared-memory physical
 	 * base.  CONFIG_ARCH_QCOM_RESERVE_SMEM then retains its first 2 MiB for
@@ -277,6 +289,28 @@
 	backlight@40 {
 		compatible = "ams,as3676-backlight";
 		reg = <0x40>;
+		status = "okay";
+	};
+
+	/* Exact Fuji/Hikari GSBI8 addresses: BQ27520 = 0x55, BQ24160 = 0x6b. */
+	bq27520: fuel-gauge@55 {
+		compatible = "ti,bq27520";
+		reg = <0x55>;
+		monitored-battery = <&battery>;
+		status = "okay";
+	};
+
+	charger@6b {
+		compatible = "ti,bq24160";
+		reg = <0x6b>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <125 IRQ_TYPE_EDGE_BOTH>;
+		fuel-gauge = <&bq27520>;
+		ti,usb-input-current-limit-microamp = <500000>;
+		ti,constant-charge-current-max-microamp = <1525000>;
+		ti,constant-charge-voltage-max-microvolt = <4200000>;
+		ti,charge-term-current-microamp = <50000>;
+		wakeup-source;
 		status = "okay";
 	};
 };

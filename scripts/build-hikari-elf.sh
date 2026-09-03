@@ -15,6 +15,8 @@ rpm=${RPM_PAYLOAD:-/home/paul/xperia/p3-offline-analysis.rSjNfb/rpm.segment}
 artifact_dir=${ARTIFACT_DIR:-/home/paul/xperia/build/hikari-artifacts}
 output=${OUTPUT:-$artifact_dir/hikari-firstboot.elf}
 require_display_bringup=${REQUIRE_DISPLAY_BRINGUP:-0}
+require_usb_debug=${REQUIRE_USB_DEBUG:-0}
+require_charging=${REQUIRE_CHARGING:-0}
 ramdisk_addr=${RAMDISK_ADDR:-0x42a00000}
 kernel_addr=${KERNEL_ADDR:-0x40208000}
 p3_limit=$((20 * 1024 * 1024))
@@ -27,6 +29,9 @@ INITRAMFS_BUILD="$initramfs_build" INITRAMFS_NAME="$initramfs_name" \
   "$repo_root/scripts/build-hikari-initramfs.sh"
 KERNEL_SRC="$kernel_src" KERNEL_FRAGMENT="$kernel_fragment" \
   BUILD_DIR="$kernel_build" INITRAMFS_SOURCE="$initramfs" \
+  REQUIRE_USB_DEBUG="$require_usb_debug" \
+  REQUIRE_DISPLAY_BRINGUP="$require_display_bringup" \
+  REQUIRE_CHARGING="$require_charging" \
   "$repo_root/scripts/build-hikari-kernel.sh"
 
 zimage="$kernel_build/arch/arm/boot/zImage"
@@ -34,6 +39,9 @@ dtb="$kernel_build/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb"
 test -f "$zimage" && test -f "$dtb" || { echo "kernel build did not produce zImage and Hikari DTB" >&2; exit 1; }
 if [[ $require_display_bringup == 1 ]]; then
 	"$repo_root/scripts/check-hikari-display.sh" --config "$kernel_build/.config" --dtb "$dtb"
+fi
+if [[ $require_charging == 1 ]]; then
+  "$repo_root/scripts/check-hikari-charging.sh" --config "$kernel_build/.config" --dtb "$dtb"
 fi
 mkdir -p "$artifact_dir"
 kernel_with_dtb="$artifact_dir/hikari-zImage-appended-dtb"
