@@ -218,14 +218,10 @@
 		reg-names = "dsi_ctrl";
 		interrupts = <GIC_SPI 82 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&mmcc DSI_M_AHB_CLK>, <&mmcc DSI_S_AHB_CLK>,
-			 <&mmcc AMP_AHB_CLK>, <&mmcc DSI_SRC>,
-			 <&mmcc DSI1_BYTE_CLK>, <&mmcc DSI_PIXEL_CLK>,
+			 <&mmcc AMP_AHB_CLK>, <&mmcc DSI1_BYTE_CLK>,
+			 <&mmcc MDP_PIXEL_CLK>,
 			 <&mmcc DSI1_ESC_CLK>;
-		clock-names = "iface", "bus", "core_mmss", "src", "byte", "pixel", "core";
-		assigned-clocks = <&mmcc DSI_SRC>, <&mmcc DSI1_BYTE_CLK>,
-			 <&mmcc DSI_PIXEL_CLK>, <&mmcc DSI1_ESC_CLK>;
-		/* DSI_SRC/pixel use the DSI PLL; byte/escape use the byte PLL. */
-		assigned-clock-parents = <&dsi_phy 1>, <&dsi_phy 0>, <&dsi_phy 1>, <&dsi_phy 0>;
+		clock-names = "iface", "bus", "core_mmss", "byte", "pixel", "core";
 		phys = <&dsi_phy>;
 		phy-names = "dsi";
 		syscon-sfpb = <&mmss_sfpb>;

@@ -68,16 +68,21 @@ expect_string /dsi-phy@47000f0 compatible qcom,msm8660-dsi-phy-45nm
 expect_hex /dsi-phy@47000f0 reg '47000f0 1e0 4700200 d0'
 expect_hex /reserved-memory/ramoops@7ffe0000 reg '7ffe0000 20000'
 
-# MSM8x60 has two PHY outputs: the byte PLL feeds byte/escape clocks, while
-# the DSI PLL feeds DSI_SRC and the pixel RCG.  The order follows
-# assigned-clocks: source, byte, pixel, escape.
-phy_phandle=$(fdtget -t x "$dtb" /dsi-phy@47000f0 phandle)
-actual_parents=$(fdtget -t x "$dtb" /dsi@4700000 assigned-clock-parents | tr -s ' ' | sed 's/^ //;s/ $//')
-expected_parents="$phy_phandle 1 $phy_phandle 0 $phy_phandle 1 $phy_phandle 0"
-[[ $actual_parents == "$expected_parents" ]] || {
-	echo "incorrect Hikari DSI clock-parent graph: $actual_parents" >&2
+# The MSM8x60 V2 host exposes direct byte/pixel/escape inputs.  The source
+# divider is internal to the DSI PHY/host path; describing APQ8064-style src
+# clocks or assigned parents makes the clock core attempt unsupported runtime
+# reparent operations and prevented the physical Hikari from reaching /init.
+expected_names='iface bus core_mmss byte pixel core'
+actual_names=$(fdtget -t s "$dtb" /dsi@4700000 clock-names | tr -s ' ' | sed 's/^ //;s/ $//')
+[[ $actual_names == "$expected_names" ]] || {
+	echo "incorrect MSM8x60 DSI clock input list: $actual_names" >&2
 	exit 1
 }
+if fdtget "$dtb" /dsi@4700000 assigned-clock-parents >/dev/null 2>&1 ||
+   fdtget "$dtb" /dsi@4700000 assigned-clocks >/dev/null 2>&1; then
+	echo 'MSM8x60 DSI must not carry APQ8064-style assigned clock parents' >&2
+	exit 1
+fi
 
 # The panel must drive the physical AS3676 LCD backlight through the DRM panel
 # helper.  A standalone backlight node can probe while leaving the LCD dark.
