@@ -2,10 +2,12 @@
 
 ## Scope and state
 
-`HIKARI_NATIVE_CHARGING` is `IMPLEMENTING`: the BOOT #7 charging artifact is
-locally built and statically validated, but it has not been deployed to the
-physical Xperia.  No charging claim is `VERIFIED_DEVICE` until an acceptance
-test on the handset proves both external power and battery charging.
+`HIKARI_NATIVE_CHARGING` is `IMPLEMENTING`. The driver and physical I2C path
+have now run on the Xperia: BQ24160 and BQ27520 both probed, USB input was
+reported online at 500 mA, but the charger reported `Not charging` and
+`Unspecified failure` while battery current remained negative. No charging
+claim is `VERIFIED_DEVICE` until an acceptance test proves positive battery
+charge current and increasing state of charge.
 
 The existing proven USB gadget path, ramoops, initramfs supervisor, and display
 work remain independent of this stack.
@@ -44,11 +46,30 @@ The BQ24160 driver is deliberately conservative.
   12-second watchdog.  Suspend charging is therefore not yet implemented.
 - The revision-`0x05` legacy quirk uses the exact 4.00/3.90 V stop/restart
   hysteresis only when that revision is actually read.
+- Hardware `STAT=CHARGE_DONE` remains online and is exported as
+  `POWER_SUPPLY_STATUS_FULL`. The watchdog worker does not toggle charge
+  enable in that state, avoiding an unintended restart of the completed
+  cycle. This matches the Sony driver's interpretation of DONE.
 - The BQ27520 is never unsealed, reset, put into ROM mode, or written through
   DataFlash.  `CONFIG_BATTERY_BQ27XXX_DT_UPDATES_NVM` is explicitly disabled.
 
 The legacy BQ24160 driver is a hardware and policy reference only; no Android
 charger framework, wakelock, or fuel-gauge programming code is retained.
+
+The first physical run reported raw status `0x27`. In the BQ24160 encoding its
+current `STAT` field is USB-ready while its low fault field is the latched,
+read-to-clear history value 7. The old project driver incorrectly treated any
+non-zero history as a current fatal condition and could therefore disable a
+presently usable input. The corrected driver follows the TI/Sony separation:
+charge disable and `POWER_SUPPLY_HEALTH_UNSPEC_FAILURE` now require the current
+`STAT=FAULT` state (or an actually unsupported current state), while the fault
+history remains logged for diagnosis. This does not relax the 500 mA input
+cap, voltage/temperature limits, watchdog policy, revision-5 hysteresis, or
+fuel-gauge write prohibition.
+
+This is an evidence-backed software correction, not a physical charging
+claim. Acceptance still requires positive battery current and increasing
+state of charge on the Xperia.
 
 ## Required physical acceptance test
 

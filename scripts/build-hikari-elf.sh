@@ -24,6 +24,7 @@ p3_limit=$((20 * 1024 * 1024))
 case "$artifact_dir" in /home/paul/xperia/build/*) ;; *) echo "ARTIFACT_DIR must be below /home/paul/xperia/build" >&2; exit 1;; esac
 case "$output" in "$artifact_dir"/*) ;; *) echo "OUTPUT must be below ARTIFACT_DIR" >&2; exit 1;; esac
 test -f "$rpm" || { echo "RPM_PAYLOAD must name the private legacy RPM payload" >&2; exit 1; }
+python3 "$repo_root/tools/check_hikari_kernel_guards.py" --kernel-src "$kernel_src"
 
 # Prime the one canonical kernel output tree first.  Besides validating the
 # configuration this builds usr/gen_init_cpio, which a fresh initramfs build

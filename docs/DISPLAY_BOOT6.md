@@ -36,7 +36,7 @@ The final Hikari DTB describes:
 MMCC + legacy GDSC + MSM8x60 NoC/MMFAB
   -> MDP4 @ 0x05100000 (SPI 75)
   -> existing DRM/MSM DSI v2 host @ 0x04700000 (SPI 82)
-  -> new MSM8x60 45 nm PHY @ 0x04700000
+  -> new MSM8x60 45 nm PHY @ 0x047000f0 / PLL @ 0x04700200
   -> R63306/TMD MDV22 panel
   -> DRM fbdev emulation -> fbcon
 
@@ -65,13 +65,11 @@ AS3676 backlight, fbdev emulation, fbcon, MMCC, NoC, and all previously
 verified USB gadget and ramoops support into the kernel.  The final DTB has
 reciprocal MDP4--DSI--panel endpoints, resolved supply/clock/reset references,
 and the observed ramoops region.  Host-side gates validate display, USB,
-ramoops, appended DTB, Sony ELF and ARM decompressor self-relocation layout.
-`make dtbs` passes.  The installed `dtschema` 2026.6 makes the kernel's
-bulk `make dtbs_check` invocation pass multiple DTB positional arguments after
-an option and prints an argument-parsing error for every DTB (while `make`
-still returns zero); it is therefore not counted as a schema pass.  Direct
-`dt-doc-validate` of each new binding and targeted `dt-validate` of the final
-Hikari DTB both pass with that same toolchain.
+charging, ramoops, appended DTB, Sony ELF and ARM decompressor self-relocation
+layout. `make dtbs` passes. Targeted `make CHECK_DTBS=y
+qcom/qcom-msm8260-sony-hikari.dtb` now also passes without warnings, as do
+direct `dt-doc-validate` of each new binding and targeted `dt-validate` of the
+final Hikari DTB.
 
 ## Physical test and risks
 
@@ -91,6 +89,32 @@ display acceptance result.
 The physical success criterion is a lit internal panel with native fbcon.
 The minimum useful result is a live USB shell showing MDP4/DSI/DRM connector
 and modeset diagnostics without destabilizing USB.
+
+## BOOT #7 component-graph correction
+
+BOOT #7's TWRP-exported persistent log narrowed a pre-`/init` crash to
+`component_master_add_with_match()` from `msm_drv_probe()` during deferred
+DRM/MSM probing.  This was a concrete DT graph error, not a panel electrical
+result: the Hikari DSI endpoint used MDP4 port 0, which current DRM/MSM skips
+as the LCDC/LVDS output while building component matches.  DSI1 belongs on
+MDP4 port 1.  The next local artifact uses that port and its static gate both
+requires port 1 and rejects a DSI endpoint on port 0.  The USB and persistent
+logging foundations are unchanged.
+
+The same correction pass removed several API mismatches which could otherwise
+defer or mis-map the display chain: the DSI controller now has the generic
+fallback compatible and `dsi_ctrl` register name expected by current DRM/MSM,
+uses `phy-names = "dsi"` and `syscon-sfpb`, and gives the 45 nm PHY and PLL
+their exact non-overlapping subranges. A real MSM8660 MMSS SFPB binding was
+added instead of leaving that syscon unconstrained. The panel now participates
+in the normal DRM backlight lifecycle, and its display-on/off commands occur in
+panel enable/disable rather than prepare/unprepare.
+
+The optional MDP4 `vdd` dummy-supply diagnostic seen immediately beforehand is
+not the crash cause: current MDP4 code explicitly continues when its optional
+exclusive `vdd` lookup is unavailable.  Physical display status remains
+`IMPLEMENTING` until a later owner-approved boot demonstrates a connector or
+visible fbcon.
 
 ## Offline correction after the first display attempt
 
@@ -116,9 +140,47 @@ then-current bootstrap code:
   configuration before enabling the PLL.
 
 The source now programs those dividers, uses the correct output parents, and
-keeps the source-derived 418.037760 Mb/s per-lane target.  The clean corrected
-artifact is `hikari-artifacts-g14-dsi-clockfix/hikari-boot6-dsi-clockfix-v2.elf`
-(`0ab1e7b974e221679b677925394c180470a6c82252a81d07b0459b66c4bd8c9e`,
-12,502,307 bytes).  Previously built display ELF files are not silently
-relabelled as containing this corrected DTB.  Physical display status remains
-`NOT_VERIFIED` until a charged device is tested.
+keeps the source-derived 418.037760 Mb/s per-lane target. The latest canonical
+artifact and hashes are recorded in [BUILD.md](BUILD.md); historical display
+ELFs remain immutable experiment records. Physical display status remains
+`NOT_VERIFIED` until an owner-approved device test.
+
+## Live DSI host diagnosis
+
+The subsequent physically observed kernel kept the verified USB shell but did
+not register a DRM card. AS3676 did probe and export its backlight class. The
+terminal DSI error was `dsi_get_config: Invalid version`; a read-only hardware
+check returned zero from the generic DSI version register at `0x047001f0`.
+MSM8x60 therefore cannot use the later generic V2 identification path.
+
+The locally built successor selects the existing V2 configuration from the
+explicit `qcom,msm8660-dsi-ctrl` compatible. It does not change the verified
+USB path or the source-derived panel electrical data. Targeted DT schema,
+display static, memory, persistent-RAM and Sony ELF gates pass. The correction
+is `IMPLEMENTING`, not `VERIFIED`, until it registers DRM on the handset.
+
+## Runtime-suspend clock hang and panel payload correction
+
+The following physical run advanced beyond DSI variant selection and supplied
+a more precise pre-`/init` failure boundary. Its persistent log stopped in
+`msm_dsi_runtime_suspend()` while the clock framework waited forever for
+`dsi_m_ahb_clk` to report off; a later trace similarly named `amp_ahb_clk`.
+Consequently CPU0 never reached the initramfs, which also explains the missing
+or unreliable USB userspace diagnostics in that run. This is not evidence of
+a panel electrical failure.
+
+Exact Sony/OpenSEMC MSM8x60 clock data assigns MMSS halt bits 18, 19 and 20 to
+AMP AHB, DSI master AHB and DSI slave AHB respectively. The project bootstrap
+had assigned bit 21 to the slave clock and made it critical. Kernel commit
+`200115087c00` corrects the slave halt bit to 20 and returns all three branches
+to normal DSI runtime-PM ownership.
+
+An independent table audit against the exact Hikari ID00/ID01 MDV22 source
+found several project command entries whose declared payload count omitted the
+last byte. Kernel commit `6b09d9bff5cf` corrects C0 and C8--CE counts so the
+modern DRM panel driver transmits every source-derived byte. A build gate now
+checks the halt-bit rule and every command-table count before packaging.
+
+The resulting artifact is locally valid and retains the physically verified
+USB ACM and ramoops paths. Visible native-resolution scanout, panel enable and
+backlight remain `NOT_VERIFIED` until the artifact is tested on the phone.

@@ -77,26 +77,30 @@ low-memory base `0x40000000`, reserves its first 2 MiB through
 [FIRST_BOOT_MEMORY.md](FIRST_BOOT_MEMORY.md).  It has not been sent to the
 phone.
 
-## Current local artifact
+## Latest locally validated artifact
 
-The canonical locally validated, **not deployed** artifact is:
+The current locally validated, **not deployed** artifact is:
 
 ```text
-/home/paul/xperia/build/hikari-artifacts-current/hikari-current.elf
-size:   12,515,749 bytes
-SHA-256 7722f8f08b305121b4e303aebd8c584563e2e62b57e14402842602d9150d3352
+/home/paul/xperia/build/hikari-artifacts-g24-display-charge/hikari-display-charge.elf
+size:   12,515,677 bytes
+SHA-256 72b4a74ee69a903d75402f152cebccf533a9c8da15069bb32c2025c31fc307b3
 ```
 
 It was built from external kernel tree HEAD
-`6bb585bb5738e0f8074aad46c8719bd37c8eb3af`. It preserves the verified
-memory, RPM, ramoops, stable PID 1, and USB ACM shell foundation. Display and
-charging remain unverified on the device.
+`d9c2a7315504d8c968cd928e1de89dc0c50051ab`. It preserves the verified
+memory, RPM, ramoops, stable PID 1, and USB ACM shell foundation. Relative to
+the last physical run it corrects the MSM8x60 DSI slave-AHB halt bit, removes
+an incorrect critical-clock override, sends the complete source-derived MDV22
+command payloads, and distinguishes current BQ24160 state from its latched
+read-to-clear fault history. Display and native charging remain unverified on
+the device until their acceptance tests pass.
 
 Its components are:
 
 ```text
-zImage:    11,274,984 bytes, cd8968de8fa34a70f04335b8b6c2d64ab1b5d23b678f1fd28c5f0620254fd4d4
-DTB:           13,206 bytes, be30aee7589f1e18ab388783d6f023595764a8af3fd293d6cbb7cd22fe9c80db
+zImage+DTB: 11,288,118 bytes, 4eb38d915fa7fa0a2cf7feabc96f9373b6537c10b200e7393e96701966bcfd98
+DTB:            13,206 bytes
 initramfs:  1,103,679 bytes, c9a0ea7651ffc6c8c7acb0695764e4278ec38bd984b53381f7cb2f0008ed3894
 ```
 
