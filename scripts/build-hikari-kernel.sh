@@ -4,11 +4,12 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 kernel_src=${KERNEL_SRC:-/home/paul/xperia/src/linux}
-build_dir=${BUILD_DIR:-/home/paul/xperia/build/linux-hikari}
+build_dir=${BUILD_DIR:-/home/paul/xperia/build/linux-hikari-current}
 cross_compile=${CROSS_COMPILE:-arm-linux-gnueabihf-}
 jobs=${JOBS:-"$(nproc)"}
+targets=${TARGETS:-"zImage qcom/qcom-msm8260-sony-hikari.dtb"}
 initramfs_source=${INITRAMFS_SOURCE:-}
-kernel_fragment=${KERNEL_FRAGMENT:-"$repo_root/kernel/configs/hikari-firstboot.fragment"}
+kernel_fragment=${KERNEL_FRAGMENT:-"$repo_root/kernel/configs/hikari-boot6-display.fragment"}
 require_usb_debug=${REQUIRE_USB_DEBUG:-0}
 require_display_bringup=${REQUIRE_DISPLAY_BRINGUP:-0}
 require_charging=${REQUIRE_CHARGING:-0}
@@ -146,6 +147,12 @@ if [[ -n "$initramfs_source" ]]; then
     }
   fi
 fi
-make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" -j"$jobs" zImage qcom/qcom-msm8260-sony-hikari.dtb
-echo "zImage: $build_dir/arch/arm/boot/zImage"
-echo "DTB:    $build_dir/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb"
+read -r -a build_targets <<<"$targets"
+make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" \
+  -j"$jobs" "${build_targets[@]}"
+if [[ " $targets " == *" zImage "* ]]; then
+  echo "zImage: $build_dir/arch/arm/boot/zImage"
+fi
+if [[ " $targets " == *" qcom/qcom-msm8260-sony-hikari.dtb "* ]]; then
+  echo "DTB:    $build_dir/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb"
+fi

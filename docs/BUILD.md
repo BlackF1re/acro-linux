@@ -1,4 +1,4 @@
-# Local-only Hikari first-boot build
+# Local-only Hikari kernel build
 
 This is an offline development procedure. The scripts have no `adb`,
 `fastboot`, USB, flash, reboot, restore, or phone-writing operation. Sources
@@ -6,53 +6,61 @@ and generated output remain outside this Git repository.
 
 ## Pinned inputs
 
-- Linux source tree: `/home/paul/xperia/src/linux`, upstream commit
-  `786262be6048deab760f68c8acc2c85607165894`.
+- Canonical Linux source tree: `/home/paul/xperia/src/linux`.  Its exact HEAD
+  is recorded with each artifact; it contains the pinned Linus base plus the
+  documented, authorship-preserving MSM8x60 and Hikari bring-up commits.
 - BusyBox source tree: `/home/paul/xperia/src/busybox`, commit
   `74ac096e895acd6b02976bb010e9b3511234e899`.
-- Build output: `/home/paul/xperia/build/`.
+- Canonical active kernel output: `/home/paul/xperia/build/linux-hikari-current`.
+- Canonical active initramfs output:
+  `/home/paul/xperia/build/hikari-initramfs-current`.
+- Canonical active artifact output:
+  `/home/paul/xperia/build/hikari-artifacts-current`.
 - Private RPM input: the confirmed p3 RPM segment outside the repository.
 
 The Hikari DTS is copied into the external Linux worktree by
-`scripts/prepare-hikari-kernel-tree.sh`; it is not an upstream claim and does
-not alter the source commit recorded above.
+`scripts/prepare-hikari-kernel-tree.sh`.  Kernel sources and generated output
+remain outside this repository, while project-owned DTS/config/build inputs
+remain reviewable here.
+
+Historical `linux-hikari-boot*`, `hikari-artifacts-g*`, and similarly named
+directories are immutable experiment records.  They are not alternative
+active source trees and must not be selected by default.  New work uses the
+three `*-current` locations above, preventing silent builds against a stale
+worktree while preserving the exact files used in previous physical tests.
 
 ## Reproducible host commands
 
 ```sh
-./scripts/build-hikari-initramfs.sh
-./scripts/build-hikari-kernel.sh
 ./scripts/build-hikari-elf.sh
 ./scripts/test-sony-elf.sh
 ./scripts/test-hikari-firstboot-artifact.sh
 ```
 
-`build-hikari-elf.sh` composes the zImage and appended DTB, builds a native
-static BusyBox diagnostic initramfs, and constructs a local Sony ELF32 with the
-three segment classes observed in p3. It refuses to overwrite output and
+`build-hikari-elf.sh` is the canonical end-to-end entry point.  On a fresh
+output directory it first builds the host `gen_init_cpio` helper, then builds
+the native static BusyBox diagnostic initramfs, rebuilds the kernel with that
+initramfs, appends the Hikari DTB, and constructs a local Sony ELF32 with the
+three segment classes observed in p3.  It refuses to overwrite output and
 rejects output outside `/home/paul/xperia/build/`. The private RPM binary,
 kernel outputs and ELF prototype are never added to Git.
 
 ## Validation results at this revision
 
 - `make ... zImage qcom/qcom-msm8260-sony-hikari.dtb`: passed.
-- `make ... dtbs`: passed as part of the build; no DTC warning was emitted for
-  the new DTS.
-- The relevant Hikari DT is validated directly with `dt-validate` against the
-  processed schema and the controller, PHY and RPM regulator bindings. The
-  current `dtschema` 2026.6 command-line interface is incompatible with this
-  pinned kernel's broad `make dtbs_check` invocation: it reports positional
-  DTBs as unrecognized while the kernel intentionally ignores checker exit
-  status. This is a host-tool/version integration issue, not a Hikari schema
-  pass; it is recorded explicitly and the direct targeted validation is the
-  effective BOOT #5 gate. `dtschema` remains in the isolated build venv, not
-  the global Python.
+- `make ... dtbs`: passed; no DTC warning was emitted for the Hikari DTS.
+- Targeted `make O=/home/paul/xperia/build/linux-hikari-current CHECK_DTBS=y
+  qcom/qcom-msm8260-sony-hikari.dtb`: passed without a schema warning. The
+  missing MSM8660 MMSS SFPB schema, DSI PHY name, controller fallback and
+  register-name issues found by this check were fixed rather than suppressed.
+- Direct `dt-doc-validate` of the project-added bindings and targeted
+  `dt-validate` of the final Hikari DTB also passed. `dtschema` 2026.6 is kept
+  in `/home/paul/xperia/build/dtschema-venv`, not global Python.
 - The ELF self-test and artifact validator passed. The latter checks the
   original offline p3 hash and size, p3 capacity, appended-DTB tail, ELF32
   header, segment ranges and load-address overlap.
-- Reproducibility of the BOOT #5 serial-gadget artifact is not yet an
-  acceptance condition. Its exact local build output is recorded below and
-  must be hash-checked before any owner-approved deployment.
+- Exact hashes and ranges of the current local artifact are recorded below and
+  must be checked again before any owner-approved deployment.
 
 This establishes local build integrity only. It is neither a boot test nor
 authorization to deploy any artifact. The current deployment gate is in
@@ -69,36 +77,30 @@ low-memory base `0x40000000`, reserves its first 2 MiB through
 [FIRST_BOOT_MEMORY.md](FIRST_BOOT_MEMORY.md).  It has not been sent to the
 phone.
 
-## BOOT #5 interactive local artifact
+## Current local artifact
 
-The current locally validated, **not deployed** artifact is:
+The canonical locally validated, **not deployed** artifact is:
 
 ```text
-/home/paul/xperia/build/hikari-artifacts-g7-serial/hikari-boot5-interactive-serial.elf
-size:   11,969,796 bytes
-SHA-256 48bba59faeaf610a93053ea18d8422c6c0a67afb7679e660259e60974a6821b2
+/home/paul/xperia/build/hikari-artifacts-current/hikari-current.elf
+size:   12,515,749 bytes
+SHA-256 7722f8f08b305121b4e303aebd8c584563e2e62b57e14402842602d9150d3352
 ```
 
-It preserves the verified BOOT #4 load model and adds only a persistent PID 1
-and the narrow built-in HSUSB peripheral/static-g_serial/CDC-ACM path described in
-[USB.md](USB.md).  Display is intentionally absent; its blockers are recorded
-in [DISPLAY.md](DISPLAY.md).
+It was built from external kernel tree HEAD
+`6bb585bb5738e0f8074aad46c8719bd37c8eb3af`. It preserves the verified
+memory, RPM, ramoops, stable PID 1, and USB ACM shell foundation. Display and
+charging remain unverified on the device.
 
-To reproduce this artifact from the external source worktree, use explicit
-paths rather than shell-profile defaults:
+Its components are:
 
-```sh
-KERNEL_SRC=/home/paul/xperia/src/linux-hikari-boot5 \
-KERNEL_BUILD=/home/paul/xperia/build/linux-hikari-boot5 \
-KERNEL_FRAGMENT=kernel/configs/hikari-boot5.fragment \
-REQUIRE_USB_DEBUG=1 \
-ARTIFACT_DIR=/home/paul/xperia/build/hikari-artifacts-g7-serial \
-OUTPUT=/home/paul/xperia/build/hikari-artifacts-g7-serial/hikari-boot5-interactive-serial.elf \
-./scripts/build-hikari-elf.sh
+```text
+zImage:    11,274,984 bytes, cd8968de8fa34a70f04335b8b6c2d64ab1b5d23b678f1fd28c5f0620254fd4d4
+DTB:           13,206 bytes, be30aee7589f1e18ab388783d6f023595764a8af3fd293d6cbb7cd22fe9c80db
+initramfs:  1,103,679 bytes, c9a0ea7651ffc6c8c7acb0695764e4278ec38bd984b53381f7cb2f0008ed3894
 ```
 
-The following are required local gates for that exact build: the Sony ELF
-inspector, appended-DTB and memory checks in
-`test-hikari-firstboot-artifact.sh`, the persistent-RAM check, and
-`check-hikari-boot5-interactive.sh`.  Passing them establishes local artifact
-integrity only; it does not establish USB or display functionality.
+The Sony ELF loads segment 0 at `0x40208000`, segment 1 at `0x42a00000`, and
+the private RPM segment at `0x00020000`. All decompressor, appended-DTB,
+initramfs, RPM, SMEM and ramoops range gates pass. Passing these checks is
+local artifact integrity, not permission to flash or a hardware claim.
