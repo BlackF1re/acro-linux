@@ -190,17 +190,21 @@
 		ports {
 			#address-cells = <1>;
 			#size-cells = <0>;
-			port@0 {
-				reg = <0>;
+			/*
+			 * MDP4 port 0 is the internal LCDC/LVDS path.  The DRM/MSM
+			 * component walker deliberately skips it; DSI1 is port 1.
+			 */
+			port@1 {
+				reg = <1>;
 				mdp_out: endpoint { remote-endpoint = <&dsi_in>; };
 			};
 		};
 	};
 
-	/* The MSM8x60 PHY and PLL share the DSI register aperture. */
-	dsi_phy: dsi-phy {
+	/* The MSM8x60 PHY and PLL live inside the DSI register aperture. */
+	dsi_phy: dsi-phy@47000f0 {
 		compatible = "qcom,msm8660-dsi-phy-45nm";
-		reg = <0x04700000 0x400>, <0x04700000 0x400>;
+		reg = <0x047000f0 0x1e0>, <0x04700200 0xd0>;
 		reg-names = "dsi_phy", "dsi_pll";
 		vdda-supply = <&pm8058_l0>;
 		#clock-cells = <1>;
@@ -209,8 +213,9 @@
 	};
 
 	dsi: dsi@4700000 {
-		compatible = "qcom,msm8660-dsi-ctrl";
+		compatible = "qcom,msm8660-dsi-ctrl", "qcom,mdss-dsi-ctrl";
 		reg = <0x04700000 0x200>;
+		reg-names = "dsi_ctrl";
 		interrupts = <GIC_SPI 82 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&mmcc DSI_M_AHB_CLK>, <&mmcc DSI_S_AHB_CLK>,
 			 <&mmcc AMP_AHB_CLK>, <&mmcc DSI_SRC>,
@@ -222,8 +227,8 @@
 		/* DSI_SRC/pixel use the DSI PLL; byte/escape use the byte PLL. */
 		assigned-clock-parents = <&dsi_phy 1>, <&dsi_phy 0>, <&dsi_phy 1>, <&dsi_phy 0>;
 		phys = <&dsi_phy>;
-		phy-names = "dsi-phy";
-		qcom,mmss-sfpb = <&mmss_sfpb>;
+		phy-names = "dsi";
+		syscon-sfpb = <&mmss_sfpb>;
 		vdda-supply = <&pm8058_l0>;
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -241,6 +246,7 @@
 			reg = <0>;
 			vci-supply = <&pm8901_l2>;
 			vddio-supply = <&pm8901_lvs1>;
+			backlight = <&lcd_backlight>;
 			power-gpios = <&tlmm 18 GPIO_ACTIVE_HIGH>;
 			reset-gpios = <&tlmm 70 GPIO_ACTIVE_HIGH>;
 			port { panel_in: endpoint { remote-endpoint = <&dsi_out>; }; };
@@ -286,7 +292,7 @@
 	clock-frequency = <400000>;
 	status = "okay";
 
-	backlight@40 {
+	lcd_backlight: backlight@40 {
 		compatible = "ams,as3676-backlight";
 		reg = <0x40>;
 		status = "okay";
