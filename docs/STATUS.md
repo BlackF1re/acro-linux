@@ -105,6 +105,14 @@ the branch critical. The current local kernel corrects that ownership/bit and
 also fixes truncated MDV22 command-table payloads. These corrections are built
 and validated but not deployed; display/fbcon remain `NOT_VERIFIED`.
 
+A later physical log advanced to DSI link-clock setup and rejected three
+unsupported runtime reparent operations with `-EINVAL`. Exact Fuji clock data
+shows that MSM8x60 uses a direct byte branch, fixed PXO/2 escape clock, and the
+shared MDP pixel RCG rather than the APQ8064-style source-clock graph. The
+current local kernel and canonical project DTS implement that model; the build
+gate now rejects the obsolete assigned-parent topology. This is a precise
+software correction, not yet evidence of visible scanout or charging.
+
 ## Status domains
 
 status/hardware.yaml deliberately separates physical hardware evidence, the

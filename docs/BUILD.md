@@ -82,25 +82,25 @@ phone.
 The current locally validated, **not deployed** artifact is:
 
 ```text
-/home/paul/xperia/build/hikari-artifacts-g24-display-charge/hikari-display-charge.elf
-size:   12,515,677 bytes
-SHA-256 72b4a74ee69a903d75402f152cebccf533a9c8da15069bb32c2025c31fc307b3
+/home/paul/xperia/build/hikari-artifacts-g26-display/hikari-display-clockfix.elf
+size:   12,515,754 bytes
+SHA-256 5167fb0c5b1ee36185088aec182c8b545a4204a52029661f1041756237f23d9a
 ```
 
 It was built from external kernel tree HEAD
-`d9c2a7315504d8c968cd928e1de89dc0c50051ab`. It preserves the verified
+`73e2681756489af870c8f65ecaaa0fbaa84fe651`. It preserves the verified
 memory, RPM, ramoops, stable PID 1, and USB ACM shell foundation. Relative to
-the last physical run it corrects the MSM8x60 DSI slave-AHB halt bit, removes
-an incorrect critical-clock override, sends the complete source-derived MDV22
-command payloads, and distinguishes current BQ24160 state from its latched
-read-to-clear fault history. Display and native charging remain unverified on
-the device until their acceptance tests pass.
+the last physical run it replaces the rejected APQ8064-style DSI clock-parent
+graph with the source-verified MSM8x60 direct byte branch, fixed PXO/2 escape
+clock, and shared MDP pixel RCG. It also makes the absent MDP regulator legal
+when the MSM8x60 GDSC supplies that power domain. Display and native charging
+remain unverified on the device until their acceptance tests pass.
 
 Its components are:
 
 ```text
-zImage+DTB: 11,288,118 bytes, 4eb38d915fa7fa0a2cf7feabc96f9373b6537c10b200e7393e96701966bcfd98
-DTB:            13,206 bytes
+zImage+DTB: 11,288,195 bytes
+DTB:            13,083 bytes
 initramfs:  1,103,679 bytes, c9a0ea7651ffc6c8c7acb0695764e4278ec38bd984b53381f7cb2f0008ed3894
 ```
 
@@ -108,3 +108,11 @@ The Sony ELF loads segment 0 at `0x40208000`, segment 1 at `0x42a00000`, and
 the private RPM segment at `0x00020000`. All decompressor, appended-DTB,
 initramfs, RPM, SMEM and ramoops range gates pass. Passing these checks is
 local artifact integrity, not permission to flash or a hardware claim.
+
+The final Sony ELF segment table is:
+
+```text
+segment 0: offset 0x001000, paddr 0x40208000, size 0xac3e83
+segment 1: offset 0xac4e83, paddr 0x42a00000, size 0x10d73f
+segment 2: offset 0xbd25c2, paddr 0x00020000, size 0x01d3e8
+```

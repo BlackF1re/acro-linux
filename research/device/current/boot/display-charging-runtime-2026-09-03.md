@@ -47,3 +47,20 @@ cause can be identified without register writes.
 
 Raw console output remains outside Git and no unique bootloader/device
 identifier is included here.
+
+## Later display/charging attempt
+
+The later g24 artifact retained the same three `-EINVAL` DSI reparent
+failures, physically detected AS3676 (`0xae`, `0x52`), enabled the backlight,
+and reported the BQ24160 raw state as `0x23` (`STAT=2`, latched `FAULT=3`).
+It then failed to provide a stable userspace USB terminal. The retained log
+does not establish a panel command failure or a current charger fault: it
+establishes that the invalid DSI clock graph was still present in the final
+DTB and that the read-to-clear charger fault history was observable.
+
+The exact Fuji clock model led to one focused correction: remove the
+APQ8064-style DSI source/assigned-parent DT description, expose the direct
+MSM8x60 byte and fixed escape branches, and use the shared MDP pixel RCG at
+69.672960 MHz. The corresponding local kernel commits are
+`a9c320a7dbec` and `73e268175648`. Physical display and positive-current
+charging remain unverified.

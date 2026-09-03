@@ -184,3 +184,31 @@ checks the halt-bit rule and every command-table count before packaging.
 The resulting artifact is locally valid and retains the physically verified
 USB ACM and ramoops paths. Visible native-resolution scanout, panel enable and
 backlight remain `NOT_VERIFIED` until the artifact is tested on the phone.
+
+## MSM8x60 DSI link-clock correction
+
+The next physical log proved that the AHB halt-bit correction worked far
+enough to reach link-clock setup, but exposed an APQ8064-derived topology that
+does not exist on the Fuji clock controller:
+
+```text
+failed to reparent dsi1_byte_clk to dsi1pllbyte: -22
+failed to reparent dsi1_pixel_clk to dsi1pll: -22
+failed to reparent dsi1_esc_clk to dsi1pllbyte: -22
+```
+
+The exact Sony `clock-8x60.c` model instead has a direct DSI byte branch at
+`MISC_CC[2]`, a fixed PXO/2 escape clock at `MISC_CC[0]`, and the shared MDP
+pixel RCG at `PIXEL_CC/MD/NS`. The DRM/MSM MSM8x60 host variant now requests
+only those direct `byte`, `pixel`, and `core` inputs: it does not request an
+APQ8064-style `src` clock and does not attempt to program the fixed escape
+rate. The MMCC implementation supplies the exact direct branches and the
+69.672960 MHz `567/3125` PLL8 pixel rate.
+
+The project-owned canonical DTS and its copied kernel-tree DTS are now kept
+identical. The display gate rejects `assigned-clocks` or
+`assigned-clock-parents` on the MSM8x60 DSI node, preventing the build system
+from silently restoring the invalid topology. Kernel commits `a9c320a7dbec`
+and `73e268175648` contain the link-clock and optional-MDP-rail corrections.
+These changes are locally validated only; visible display remains
+`NOT_VERIFIED` pending an owner-approved physical test.
