@@ -113,14 +113,18 @@ current local kernel and canonical project DTS implement that model; the build
 gate now rejects the obsolete assigned-parent topology. This is a precise
 software correction, not yet evidence of visible scanout or charging.
 
-The latest physical log selected the MSM8x60 DSI V2 configuration and bound
-MDP4, then stopped before `/init` while DSI runtime suspend tried to gate
-`dsi_s_ahb_clk`, `dsi_m_ahb_clk`, and `amp_ahb_clk`. Their halt bits match the
-Sony clock data; exact Sony DSI shutdown first clears controller `CLK_CTRL`
-force-on bits. The next local kernel performs that MSM8x60-specific quiesce
-before the normal checked clock-disable sequence. This accounts for the same
-run's missing stable ACM terminal without reclassifying the previously
-verified USB hardware. Physical display and charging acceptance remain open.
+The g27 physical log selected the MSM8x60 DSI V2 configuration and bound MDP4,
+then emitted checked-disable warnings for `dsi_s_ahb_clk`, `dsi_m_ahb_clk`,
+and `amp_ahb_clk` before the persistent ring became corrupt/truncated. It did
+not reach an observable `/init` or stable ACM terminal. The individual halt
+poll is bounded, so the warnings identify an incomplete boot-state teardown,
+not a proven infinite loop or exact terminal instruction. Exact Sony shutdown
+clears DSI `CLK_CTRL`, `CTRL`, and the 45 nm PLL, then disables master, slave,
+and AMP AHB in that order. The current local kernel implements that complete
+MSM8x60-only sequence and retains halt checking. Physical display acceptance
+remains open. The same g27 log physically verified charger activation and a
+status transition, but not positive battery current or increasing state of
+charge.
 
 ## Status domains
 

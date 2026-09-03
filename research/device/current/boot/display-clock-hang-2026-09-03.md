@@ -54,20 +54,35 @@ amp_ahb_clk status stuck at 'on'
 ```
 
 The stack is `clk_bulk_disable()` from `msm_dsi_runtime_suspend()`. There are
-no initramfs markers after it. This single pre-userspace stall accounts for
-both the dark display and unstable/no ACM terminal in that attempt; it is not
-evidence that the already verified USB PHY or UDC regressed.
+no initramfs markers after it. The individual halt poll is bounded to about
+200 microseconds; the warning path continues, and persistent-console stack
+output explains most of the gaps between messages. Thus this is a proven
+incomplete DSI teardown before userspace, but not a proven infinite loop or
+the exact final instruction. It is not evidence that the already verified USB
+PHY or UDC regressed.
 
 The halt-bit assignments are correct in the current MMCC. The missing step is
 hardware quiescence: exact Sony MSM8x60 `mipi_dsi.c` writes zero to DSI
-`CLK_CTRL` (`+0x118`) and `CTRL` before disabling the three AHB clocks. The
-generic DRM/MSM V2 runtime-suspend path only disabled the bulk clocks, leaving
-MSM8x60 force-on bits asserted. Kernel commit `f88018605bf7` adds a variant
-flag and clears `REG_DSI_CLK_CTRL` with an ordering barrier before gating the
-bus clocks. It does not weaken clock halt checking.
+`CLK_CTRL` (`+0x118`) and `CTRL`, disables its PLL, and then gates DSI master,
+DSI slave, and AMP AHB in that order. The generic DRM/MSM V2 runtime-suspend
+path only disabled the bulk clocks. Kernel commit `f88018605bf7` tested a
+`CLK_CTRL`-only correction; physical g27 evidence showed that it was
+insufficient. Kernel commit `b44a7cd030f7` implements the complete
+MSM8x60-only sequence while retaining clock halt checking.
 
 The same local correction cycle avoids the redundant forbidden voltage-change
 request on the already fixed 3.05 V PM8058 L6 USB PHY rail and adds a one-time
 BQ24160 `charging enabled` transition message. Neither positive-current
 charging nor visible display output is claimed until the new artifact is run
 on the phone.
+
+## g27 physical result
+
+Artifact SHA-256
+`77df1b315303e746ff9292cc2b19f309e76ef6c64c91a6f18474c8f09562008b`
+physically reached DSI configuration and MDP4 binding. The `CLK_CTRL`-only
+quiesce still produced slave, master, and AMP AHB stuck-on warnings. The log
+then became corrupt/truncated and contains no `/init` markers; the phone also
+had no stable ACM interface or visible pixels. This narrows the required
+change to the remaining source-derived quiesce operations but does not prove
+where execution ultimately stopped.

@@ -162,12 +162,13 @@ is `IMPLEMENTING`, not `VERIFIED`, until it registers DRM on the handset.
 ## Runtime-suspend clock hang and panel payload correction
 
 The following physical run advanced beyond DSI variant selection and supplied
-a more precise pre-`/init` failure boundary. Its persistent log stopped in
-`msm_dsi_runtime_suspend()` while the clock framework waited forever for
-`dsi_m_ahb_clk` to report off; a later trace similarly named `amp_ahb_clk`.
-Consequently CPU0 never reached the initramfs, which also explains the missing
-or unreliable USB userspace diagnostics in that run. This is not evidence of
-a panel electrical failure.
+a more precise pre-`/init` failure boundary. Its persistent log recorded
+checked-disable warnings for `dsi_m_ahb_clk` and `amp_ahb_clk`; initramfs and
+USB-userspace markers were not observed. The clock driver's individual halt
+poll is bounded to roughly 200 microseconds. Stack-trace output accounts for
+most of the wall-clock gap, so this evidence does not prove an infinite loop
+inside clock disable. It does prove that the DSI boot state was not fully
+quiesced before gating. This is not evidence of a panel electrical failure.
 
 Exact Sony/OpenSEMC MSM8x60 clock data assigns MMSS halt bits 18, 19 and 20 to
 AMP AHB, DSI master AHB and DSI slave AHB respectively. The project bootstrap
@@ -215,16 +216,17 @@ These changes are locally validated only; visible display remains
 
 ## MSM8x60 DSI controller quiesce
 
-The latest physical post-mortem advanced through MSM8x60 DSI V2 selection and
-MDP4 component binding, then stopped before `/init` in
-`msm_dsi_runtime_suspend()`. Clock disable waited indefinitely for the DSI
-slave/master and amplifier AHB branches to halt. Their MMCC halt-bit mapping
-already agrees with exact Sony source; the DSI controller still held the
-branches on through `CLK_CTRL` force-on bits.
+The g27 physical post-mortem advanced through MSM8x60 DSI V2 selection and
+MDP4 component binding. `msm_dsi_runtime_suspend()` then reported all three
+DSI AHB branches still on. The bounded polls returned after warning, but no
+initramfs marker or stable ACM terminal followed before the persistent ring
+became corrupt/truncated. The exact later failure instruction therefore
+remains unknown. Their MMCC halt-bit mapping already agrees with exact Sony
+source; clearing `CLK_CTRL` alone did not release the branches.
 
-Exact Sony MSM8x60 `mipi_dsi.c` clears DSI `CLK_CTRL` (`+0x118`) and `CTRL`
-before disabling AHB clocks. The local DRM/MSM variant now clears
-`REG_DSI_CLK_CTRL` with a write barrier before bulk clock disable. The change
-is restricted by an MSM8x60 configuration flag and retains clock-framework
-halt verification. It is locally built and must still be verified on the
-physical panel.
+Exact Sony MSM8x60 `mipi_dsi.c` clears DSI `CLK_CTRL` (`+0x118`) and `CTRL`,
+stops the 45 nm PLL, and disables DSI master, DSI slave, then AMP AHB. The
+local DRM/MSM variant now reproduces that complete no-continuous-splash
+handoff before the checked clock disables. The change is restricted by an
+MSM8x60 configuration flag and retains clock-framework halt verification. It
+is locally built and must still be verified on the physical panel.

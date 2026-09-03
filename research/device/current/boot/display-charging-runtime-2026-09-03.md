@@ -67,23 +67,24 @@ charging remain unverified.
 
 ## Latest captured boundary
 
-The g26 physical attempt selected the explicit MSM8x60 DSI V2 configuration
-and bound MDP4, then stopped before `/init` in
-`msm_dsi_runtime_suspend()`. The last log repeatedly reported
-`dsi_s_ahb_clk`, `dsi_m_ahb_clk`, and `amp_ahb_clk` stuck on while
-`clk_bulk_disable()` waited for hardware halt. This common pre-userspace
-stall explains both the dark display and the missing stable USB terminal; it
-does not overturn the earlier physical USB PHY/UDC verification.
+The g27 physical attempt selected the explicit MSM8x60 DSI V2 configuration
+and bound MDP4, then reported `dsi_s_ahb_clk`, `dsi_m_ahb_clk`, and
+`amp_ahb_clk` still on during runtime suspend. Each halt poll is bounded; the
+warnings do not themselves prove an infinite hang. No `/init` marker or
+stable USB terminal followed before the persistent ring became
+corrupt/truncated, so the exact final instruction remains unknown. This does
+not overturn the earlier physical USB PHY/UDC verification.
 
 The halt bits match the exact Sony MSM8x60 clock data. The missing operation
-was controller quiescence: Sony clears DSI `CLK_CTRL` and `CTRL` before
-gating those branches, whereas the generic DRM runtime-suspend path had left
-the MSM8x60 clock force-on bits set. The local MSM8x60-only fix clears
-`CLK_CTRL`, executes an ordering barrier, and then uses the normal checked
-clock-disable path. It does not bypass halt checking.
+was complete controller/PHY quiescence: Sony clears DSI `CLK_CTRL`, `CTRL`,
+and the PLL before gating master, slave, and AMP AHB in that order. Physical
+g27 evidence proved that clearing only `CLK_CTRL` was insufficient. Kernel
+commit `b44a7cd030f7` implements the remaining source-derived sequence without
+bypassing halt checking.
 
-AS3676 and both battery devices had already probed, and the charger status
-sample was `0x23`. Because execution stopped before initramfs diagnostics,
-that sample is not a positive-current charging test. The next kernel adds a
-one-time message after successful CE/HZ release so that hardware activation
-can be distinguished from charger policy and battery-current results.
+AS3676 and both battery devices probed. The g27 log recorded raw charger state
+`0x23`, a successful `charging enabled` transition at the conservative 500 mA
+input limit, and later raw state `0x40` with `FAULT=0`. This is physical
+evidence that the native driver programmed and activated the charger and that
+status changed. It is still not the charging acceptance test: no reliable
+positive battery-current sample or increasing state of charge was captured.
