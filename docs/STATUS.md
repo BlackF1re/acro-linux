@@ -88,6 +88,15 @@ backlight, fbdev emulation and fbcon while preserving the verified USB and
 ramoops paths.  These are implementation/static-validation states, not
 display acceptance claims.  See [DISPLAY_BOOT6.md](DISPLAY_BOOT6.md).
 
+BOOT #7 supplied the first display-path post-mortem: deferred DRM/MSM probing
+faulted before `/init` because the Hikari DTS connected DSI to MDP4 port 0,
+which current DRM/MSM deliberately excludes from component matching.  DSI1 is
+MDP4 port 1.  The corrected DT graph is built into the canonical locally
+validated artifact, and its static gate rejects the old port-0 topology. This
+is a precise software boot-blocker diagnosis, not a target-Linux display
+acceptance claim. See
+[the sanitized BOOT #7 evidence](../research/device/current/boot/boot7-display-component-crash.md).
+
 ## Status domains
 
 status/hardware.yaml deliberately separates physical hardware evidence, the
@@ -106,5 +115,7 @@ tests.
 The first native BQ24160/BQ27520 charging stack is `IMPLEMENTING`, not yet a
 device claim.  It reuses GSBI8 without conflicting with AS3676, caps unknown
 USB sources at 500 mA, treats BQ27520 data as read-only, and explicitly
-disables BQ27xxx NVM updates.  Cradle/IN charging and suspend charging remain
-blocked pending dedicated physical evidence.  See [CHARGING.md](CHARGING.md).
+disables BQ27xxx NVM updates. Hardware `DONE` is reported as full without
+restarting a terminated charge cycle. Cradle/IN charging and suspend charging
+remain blocked pending dedicated physical evidence. See
+[CHARGING.md](CHARGING.md).

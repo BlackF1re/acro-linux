@@ -44,6 +44,10 @@ The BQ24160 driver is deliberately conservative.
   12-second watchdog.  Suspend charging is therefore not yet implemented.
 - The revision-`0x05` legacy quirk uses the exact 4.00/3.90 V stop/restart
   hysteresis only when that revision is actually read.
+- Hardware `STAT=CHARGE_DONE` remains online and is exported as
+  `POWER_SUPPLY_STATUS_FULL`. The watchdog worker does not toggle charge
+  enable in that state, avoiding an unintended restart of the completed
+  cycle. This matches the Sony driver's interpretation of DONE.
 - The BQ27520 is never unsealed, reset, put into ROM mode, or written through
   DataFlash.  `CONFIG_BATTERY_BQ27XXX_DT_UPDATES_NVM` is explicitly disabled.
 
