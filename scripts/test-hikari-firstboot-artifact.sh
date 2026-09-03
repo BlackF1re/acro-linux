@@ -4,12 +4,12 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-artifact=${ARTIFACT:-/home/paul/xperia/build/hikari-artifacts/hikari-firstboot.elf}
-kernel_build=${KERNEL_BUILD:-/home/paul/xperia/build/linux-hikari}
-kernel_with_dtb=${KERNEL_WITH_DTB:-/home/paul/xperia/build/hikari-artifacts/hikari-zImage-appended-dtb}
-dtb=${DTB:-/home/paul/xperia/build/linux-hikari/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb}
-zimage=${ZIMAGE:-/home/paul/xperia/build/linux-hikari/arch/arm/boot/zImage}
-initramfs=${INITRAMFS:-/home/paul/xperia/build/hikari-initramfs/hikari-firstboot.cpio.gz}
+artifact=${ARTIFACT:-/home/paul/xperia/build/hikari-artifacts-current/hikari-current.elf}
+kernel_build=${KERNEL_BUILD:-/home/paul/xperia/build/linux-hikari-current}
+kernel_with_dtb=${KERNEL_WITH_DTB:-/home/paul/xperia/build/hikari-artifacts-current/hikari-zImage-appended-dtb}
+dtb=${DTB:-/home/paul/xperia/build/linux-hikari-current/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb}
+zimage=${ZIMAGE:-/home/paul/xperia/build/linux-hikari-current/arch/arm/boot/zImage}
+initramfs=${INITRAMFS:-/home/paul/xperia/build/hikari-initramfs-current/hikari-firstboot.cpio.gz}
 ramdisk_addr=${RAMDISK_ADDR:-0x42a00000}
 kernel_addr=${KERNEL_ADDR:-0x40208000}
 p3=${ORIGINAL_P3:-/home/paul/xperia/p3-offline-analysis.rSjNfb/mmcblk0p3.img}

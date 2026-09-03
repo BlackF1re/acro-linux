@@ -4,10 +4,10 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 busybox_src=${BUSYBOX_SRC:-/home/paul/xperia/src/busybox}
-busybox_build=${BUSYBOX_BUILD:-/home/paul/xperia/build/busybox-hikari}
-initramfs_build=${INITRAMFS_BUILD:-/home/paul/xperia/build/hikari-initramfs}
+busybox_build=${BUSYBOX_BUILD:-/home/paul/xperia/build/busybox-hikari-current}
+initramfs_build=${INITRAMFS_BUILD:-/home/paul/xperia/build/hikari-initramfs-current}
 initramfs_name=${INITRAMFS_NAME:-hikari-firstboot.cpio.gz}
-gen_init_cpio=${GEN_INIT_CPIO:-/home/paul/xperia/build/linux-hikari/usr/gen_init_cpio}
+gen_init_cpio=${GEN_INIT_CPIO:-/home/paul/xperia/build/linux-hikari-current/usr/gen_init_cpio}
 cross_compile=${CROSS_COMPILE:-arm-linux-gnueabihf-}
 jobs=${JOBS:-"$(nproc)"}
 source_date_epoch=${SOURCE_DATE_EPOCH:-0}
@@ -24,7 +24,14 @@ mkdir -p "$busybox_build" "$initramfs_build"
 if [[ ! -f "$busybox_build/.config" ]]; then
   # BusyBox does not provide Linux's scripts/config helper.  Accepting the
   # upstream defaults here is deterministic and gives a diagnostic shell.
-  yes '' | make -C "$busybox_src" O="$busybox_build" ARCH=arm CROSS_COMPILE="$cross_compile" defconfig
+  # BusyBox's development-tree defconfig may ask about newly added symbols.
+  # Feed empty answers to select their defaults. `yes` is expected to receive
+  # SIGPIPE once Kconfig has consumed all input, so isolate it from pipefail.
+  (
+    set +o pipefail
+    yes '' | make -C "$busybox_src" O="$busybox_build" \
+      ARCH=arm CROSS_COMPILE="$cross_compile" defconfig
+  )
 fi
 if grep -q '^# CONFIG_STATIC is not set$' "$busybox_build/.config"; then
   sed -i 's/^# CONFIG_STATIC is not set$/CONFIG_STATIC=y/' "$busybox_build/.config"

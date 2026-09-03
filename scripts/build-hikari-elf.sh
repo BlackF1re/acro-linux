@@ -5,16 +5,18 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-kernel_build=${KERNEL_BUILD:-/home/paul/xperia/build/linux-hikari}
+kernel_build=${KERNEL_BUILD:-/home/paul/xperia/build/linux-hikari-current}
 kernel_src=${KERNEL_SRC:-/home/paul/xperia/src/linux}
-kernel_fragment=${KERNEL_FRAGMENT:-$repo_root/kernel/configs/hikari-firstboot.fragment}
-initramfs=${INITRAMFS:-/home/paul/xperia/build/hikari-initramfs/hikari-firstboot.cpio.gz}
-initramfs_build=${INITRAMFS_BUILD:-/home/paul/xperia/build/hikari-initramfs}
+kernel_fragment=${KERNEL_FRAGMENT:-$repo_root/kernel/configs/hikari-boot6-display.fragment}
+initramfs=${INITRAMFS:-/home/paul/xperia/build/hikari-initramfs-current/hikari-firstboot.cpio.gz}
+initramfs_build=${INITRAMFS_BUILD:-/home/paul/xperia/build/hikari-initramfs-current}
 initramfs_name=${INITRAMFS_NAME:-$(basename -- "$initramfs")}
 rpm=${RPM_PAYLOAD:-/home/paul/xperia/p3-offline-analysis.rSjNfb/rpm.segment}
-artifact_dir=${ARTIFACT_DIR:-/home/paul/xperia/build/hikari-artifacts}
-output=${OUTPUT:-$artifact_dir/hikari-firstboot.elf}
-require_display_bringup=${REQUIRE_DISPLAY_BRINGUP:-0}
+artifact_dir=${ARTIFACT_DIR:-/home/paul/xperia/build/hikari-artifacts-current}
+output=${OUTPUT:-$artifact_dir/hikari-current.elf}
+require_display_bringup=${REQUIRE_DISPLAY_BRINGUP:-1}
+require_usb_debug=${REQUIRE_USB_DEBUG:-1}
+require_charging=${REQUIRE_CHARGING:-1}
 ramdisk_addr=${RAMDISK_ADDR:-0x42a00000}
 kernel_addr=${KERNEL_ADDR:-0x40208000}
 p3_limit=$((20 * 1024 * 1024))
@@ -23,10 +25,24 @@ case "$artifact_dir" in /home/paul/xperia/build/*) ;; *) echo "ARTIFACT_DIR must
 case "$output" in "$artifact_dir"/*) ;; *) echo "OUTPUT must be below ARTIFACT_DIR" >&2; exit 1;; esac
 test -f "$rpm" || { echo "RPM_PAYLOAD must name the private legacy RPM payload" >&2; exit 1; }
 
-INITRAMFS_BUILD="$initramfs_build" INITRAMFS_NAME="$initramfs_name" \
+# Prime the one canonical kernel output tree first.  Besides validating the
+# configuration this builds usr/gen_init_cpio, which a fresh initramfs build
+# needs before CONFIG_INITRAMFS_SOURCE can point back at the resulting archive.
+KERNEL_SRC="$kernel_src" KERNEL_FRAGMENT="$kernel_fragment" \
+  BUILD_DIR="$kernel_build" \
+  TARGETS=usr/gen_init_cpio \
+  REQUIRE_USB_DEBUG="$require_usb_debug" \
+  REQUIRE_DISPLAY_BRINGUP="$require_display_bringup" \
+  REQUIRE_CHARGING="$require_charging" \
+  "$repo_root/scripts/build-hikari-kernel.sh"
+GEN_INIT_CPIO="$kernel_build/usr/gen_init_cpio" \
+  INITRAMFS_BUILD="$initramfs_build" INITRAMFS_NAME="$initramfs_name" \
   "$repo_root/scripts/build-hikari-initramfs.sh"
 KERNEL_SRC="$kernel_src" KERNEL_FRAGMENT="$kernel_fragment" \
   BUILD_DIR="$kernel_build" INITRAMFS_SOURCE="$initramfs" \
+  REQUIRE_USB_DEBUG="$require_usb_debug" \
+  REQUIRE_DISPLAY_BRINGUP="$require_display_bringup" \
+  REQUIRE_CHARGING="$require_charging" \
   "$repo_root/scripts/build-hikari-kernel.sh"
 
 zimage="$kernel_build/arch/arm/boot/zImage"
@@ -34,6 +50,9 @@ dtb="$kernel_build/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb"
 test -f "$zimage" && test -f "$dtb" || { echo "kernel build did not produce zImage and Hikari DTB" >&2; exit 1; }
 if [[ $require_display_bringup == 1 ]]; then
 	"$repo_root/scripts/check-hikari-display.sh" --config "$kernel_build/.config" --dtb "$dtb"
+fi
+if [[ $require_charging == 1 ]]; then
+  "$repo_root/scripts/check-hikari-charging.sh" --config "$kernel_build/.config" --dtb "$dtb"
 fi
 mkdir -p "$artifact_dir"
 kernel_with_dtb="$artifact_dir/hikari-zImage-appended-dtb"

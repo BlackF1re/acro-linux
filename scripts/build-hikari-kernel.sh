@@ -4,13 +4,15 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 kernel_src=${KERNEL_SRC:-/home/paul/xperia/src/linux}
-build_dir=${BUILD_DIR:-/home/paul/xperia/build/linux-hikari}
+build_dir=${BUILD_DIR:-/home/paul/xperia/build/linux-hikari-current}
 cross_compile=${CROSS_COMPILE:-arm-linux-gnueabihf-}
 jobs=${JOBS:-"$(nproc)"}
+targets=${TARGETS:-"zImage qcom/qcom-msm8260-sony-hikari.dtb"}
 initramfs_source=${INITRAMFS_SOURCE:-}
-kernel_fragment=${KERNEL_FRAGMENT:-"$repo_root/kernel/configs/hikari-firstboot.fragment"}
+kernel_fragment=${KERNEL_FRAGMENT:-"$repo_root/kernel/configs/hikari-boot6-display.fragment"}
 require_usb_debug=${REQUIRE_USB_DEBUG:-0}
 require_display_bringup=${REQUIRE_DISPLAY_BRINGUP:-0}
+require_charging=${REQUIRE_CHARGING:-0}
 
 # Keep local prototype bytes reproducible across repeated builds from the same
 # source and inputs. Callers may deliberately override these conventional
@@ -72,6 +74,19 @@ if [[ "$require_display_bringup" == 1 ]]; then
     }
   done
 fi
+if [[ "$require_charging" == 1 ]]; then
+  for required in CONFIG_POWER_SUPPLY=y CONFIG_BATTERY_BQ27XXX=y \
+    CONFIG_BATTERY_BQ27XXX_I2C=y CONFIG_CHARGER_BQ24160=y CONFIG_I2C_QUP=y; do
+    grep -qx "$required" "$build_dir/.config" || {
+      echo "Hikari charging build requires $required" >&2
+      exit 1
+    }
+  done
+  grep -qx '# CONFIG_BATTERY_BQ27XXX_DT_UPDATES_NVM is not set' "$build_dir/.config" || {
+    echo 'Hikari charging build must not enable BQ27xxx NVM updates' >&2
+    exit 1
+  }
+fi
 if [[ -n "$initramfs_source" ]]; then
   test -f "$initramfs_source" || { echo "INITRAMFS_SOURCE is not a regular file" >&2; exit 1; }
   "$kernel_src/scripts/config" --file "$build_dir/.config" --set-str INITRAMFS_SOURCE "$initramfs_source"
@@ -118,7 +133,26 @@ if [[ -n "$initramfs_source" ]]; then
       }
     done
   fi
+  if [[ "$require_charging" == 1 ]]; then
+    for required in CONFIG_POWER_SUPPLY=y CONFIG_BATTERY_BQ27XXX=y \
+      CONFIG_BATTERY_BQ27XXX_I2C=y CONFIG_CHARGER_BQ24160=y CONFIG_I2C_QUP=y; do
+      grep -qx "$required" "$build_dir/.config" || {
+        echo "Hikari charging build lost $required" >&2
+        exit 1
+      }
+    done
+    grep -qx '# CONFIG_BATTERY_BQ27XXX_DT_UPDATES_NVM is not set' "$build_dir/.config" || {
+      echo 'Hikari charging build enabled BQ27xxx NVM updates' >&2
+      exit 1
+    }
+  fi
 fi
-make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" -j"$jobs" zImage qcom/qcom-msm8260-sony-hikari.dtb
-echo "zImage: $build_dir/arch/arm/boot/zImage"
-echo "DTB:    $build_dir/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb"
+read -r -a build_targets <<<"$targets"
+make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" \
+  -j"$jobs" "${build_targets[@]}"
+if [[ " $targets " == *" zImage "* ]]; then
+  echo "zImage: $build_dir/arch/arm/boot/zImage"
+fi
+if [[ " $targets " == *" qcom/qcom-msm8260-sony-hikari.dtb "* ]]; then
+  echo "DTB:    $build_dir/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb"
+fi

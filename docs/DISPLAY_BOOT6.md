@@ -91,3 +91,34 @@ display acceptance result.
 The physical success criterion is a lit internal panel with native fbcon.
 The minimum useful result is a live USB shell showing MDP4/DSI/DRM connector
 and modeset diagnostics without destabilizing USB.
+
+## Offline correction after the first display attempt
+
+The first display-enabled artifacts did not produce a visible panel and the
+later attempt did not retain a usable USB shell long enough to locate the
+failure at runtime.  This is not evidence that the panel, DRM, or USB path
+cannot work; it is a failure to be diagnosed with a newly built artifact.
+
+An offline comparison of the actual DRM/MSM DSI v2 clock requests with the
+exact Fuji MDV22 clock chain found three concrete implementation errors in the
+then-current bootstrap code:
+
+- DSI source and pixel clocks were parented to the PHY byte output, while byte
+  and escape clocks were parented to the DSI output.  MSM8x60 requires the
+  inverse relationship: DSI source/pixel use the 209.018880 MHz DSI PLL and
+  byte/escape use the 52.254720 MHz byte PLL.
+- The PHY advertised 69.672960 MHz as its DSI PLL output.  That is the panel
+  pixel rate, not the source rate requested by the v2 host.  The historical
+  chain is 836 MHz VCO / 4 = 209.018880 MHz, then / 3 for pixels and / 16 for
+  the byte clock.
+- The fixed-rate 45 nm PHY initialized the analog/PLL tables but did not
+  program the source, byte, and DSI divider registers used by the Fuji PHY
+  configuration before enabling the PLL.
+
+The source now programs those dividers, uses the correct output parents, and
+keeps the source-derived 418.037760 Mb/s per-lane target.  The clean corrected
+artifact is `hikari-artifacts-g14-dsi-clockfix/hikari-boot6-dsi-clockfix-v2.elf`
+(`0ab1e7b974e221679b677925394c180470a6c82252a81d07b0459b66c4bd8c9e`,
+12,502,307 bytes).  Previously built display ELF files are not silently
+relabelled as containing this corrected DTB.  Physical display status remains
+`NOT_VERIFIED` until a charged device is tested.
