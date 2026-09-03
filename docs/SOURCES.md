@@ -102,3 +102,10 @@ above.  No MSM8x60 MMCC or interconnect series is applied to BOOT #5: neither
 is a static dependency of the minimal ChipIdea device-mode path.  Their merge
 state and need for later display/high-bandwidth work remain separate research
 items.
+
+## Native charging references (checked 2026-09-03)
+
+| Source | Revision / path | Extracted information | Use and confidence |
+| --- | --- | --- | --- |
+| OpenSEMC Fuji/Hikari charging BSP | Local `opensemc-msm8x60` checkout `c4784b04c08d30f799b8b14b597aeb2124d2e6e1`: `board-semc_fuji.c`, `charger-fuji_hikari.c`, `drivers/power/bq24160_charger.c`, `battery_chargalg.c` | GSBI8 addresses AS3676 `0x40`, BQ27520 `0x55`, BQ24160 `0x6b`; BQ24160 GPIO125 IRQ, BQ27520 GPIO123 SOC interrupt, cradle GPIO126; Hikari voltage/current/thermal/watchdog policy and revision-`0x05` hysteresis. | `HISTORICAL_SOURCE`, exact board-level wiring/policy reference only. |
+| Linus Linux BQ27xxx | Local upstream checkout `786262be6048deab760f68c8acc2c85607165894`: `drivers/power/supply/bq27xxx_battery*.c`, `Documentation/devicetree/bindings/power/supply/bq27xxx.yaml` | Maintained BQ27520 power-supply driver and binding; NVM update handling is separately guarded by `CONFIG_BATTERY_BQ27XXX_DT_UPDATES_NVM`. | `VERIFIED_UPSTREAM`; used read-only for the existing programmed gauge. |

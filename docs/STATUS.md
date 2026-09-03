@@ -101,3 +101,10 @@ progress nor functional verification.
 VERIFIED is reserved for a defined acceptance test on the physical Xperia.
 This pass was topology collection only; it performed no functional acceptance
 tests.
+## Native charging (local implementation)
+
+The first native BQ24160/BQ27520 charging stack is `IMPLEMENTING`, not yet a
+device claim.  It reuses GSBI8 without conflicting with AS3676, caps unknown
+USB sources at 500 mA, treats BQ27520 data as read-only, and explicitly
+disables BQ27xxx NVM updates.  Cradle/IN charging and suspend charging remain
+blocked pending dedicated physical evidence.  See [CHARGING.md](CHARGING.md).

@@ -141,7 +141,7 @@ subsystems:
   gnss: { physical: { evidence: UNKNOWN }, legacy_baseline: { implementation: UNKNOWN }, target_linux: { implementation: UNKNOWN } }
   nfc: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   fm_radio: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
-  battery_charging: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  battery_charging: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: IMPLEMENTING, evidence: VERIFIED_VENDOR_SOURCE, notes: "BOOT #7 local-only BQ24160/BQ27520 power_supply implementation reuses GSBI8, caps unknown USB at 500 mA, and forbids BQ27520 NVM updates. No target charging acceptance test yet; cradle/IN and suspend charging remain BLOCKED." } }
   thermal: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   rtc: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   watchdog: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
