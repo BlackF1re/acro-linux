@@ -2,10 +2,12 @@
 
 ## Scope and state
 
-`HIKARI_NATIVE_CHARGING` is `IMPLEMENTING`: the BOOT #7 charging artifact is
-locally built and statically validated, but it has not been deployed to the
-physical Xperia.  No charging claim is `VERIFIED_DEVICE` until an acceptance
-test on the handset proves both external power and battery charging.
+`HIKARI_NATIVE_CHARGING` is `IMPLEMENTING`. The driver and physical I2C path
+have now run on the Xperia: BQ24160 and BQ27520 both probed, USB input was
+reported online at 500 mA, but the charger reported `Not charging` and
+`Unspecified failure` while battery current remained negative. No charging
+claim is `VERIFIED_DEVICE` until an acceptance test proves positive battery
+charge current and increasing state of charge.
 
 The existing proven USB gadget path, ramoops, initramfs supervisor, and display
 work remain independent of this stack.
@@ -53,6 +55,14 @@ The BQ24160 driver is deliberately conservative.
 
 The legacy BQ24160 driver is a hardware and policy reference only; no Android
 charger framework, wakelock, or fuel-gauge programming code is retained.
+
+The first physical run occurred above the revision-`0x05` 4.00 V hold
+threshold, so the source-derived hysteresis may have deliberately disabled
+charging. Independently, `Unspecified failure` proves that the raw hardware
+fault field was non-zero. The next locally built kernel reports raw BQ24160
+STAT/FAULT transitions to distinguish those conditions. It does not relax the
+500 mA input cap, voltage/temperature limits, watchdog policy, or fuel-gauge
+write prohibition.
 
 ## Required physical acceptance test
 

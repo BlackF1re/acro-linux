@@ -97,6 +97,12 @@ is a precise software boot-blocker diagnosis, not a target-Linux display
 acceptance claim. See
 [the sanitized BOOT #7 evidence](../research/device/current/boot/boot7-display-component-crash.md).
 
+The next live USB-console run passed that crash but stopped DSI host probing at
+`dsi_get_config: Invalid version`. The generic version register physically
+read zero, no DRM card appeared, and AS3676 nevertheless probed and exported a
+backlight class. The next local artifact selects the MSM8x60 V2 host variant
+from `qcom,msm8660-dsi-ctrl`; it is built and validated but not deployed.
+
 ## Status domains
 
 status/hardware.yaml deliberately separates physical hardware evidence, the
@@ -112,10 +118,11 @@ This pass was topology collection only; it performed no functional acceptance
 tests.
 ## Native charging (local implementation)
 
-The first native BQ24160/BQ27520 charging stack is `IMPLEMENTING`, not yet a
-device claim.  It reuses GSBI8 without conflicting with AS3676, caps unknown
-USB sources at 500 mA, treats BQ27520 data as read-only, and explicitly
-disables BQ27xxx NVM updates. Hardware `DONE` is reported as full without
-restarting a terminated charge cycle. Cradle/IN charging and suspend charging
-remain blocked pending dedicated physical evidence. See
+The first native BQ24160/BQ27520 charging stack is `IMPLEMENTING`. Both chips
+physically probed and USB input was online, but the observed state was `Not
+charging` with a hardware fault and negative battery current. The safe policy
+still caps unknown USB at 500 mA, treats BQ27520 data as read-only, and
+disables BQ27xxx NVM updates. The next artifact adds raw STAT/FAULT transition
+logging; it does not force charging. Cradle/IN and suspend charging remain
+blocked pending dedicated physical evidence. See
 [CHARGING.md](CHARGING.md).

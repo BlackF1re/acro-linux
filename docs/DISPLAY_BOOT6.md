@@ -144,3 +144,17 @@ keeps the source-derived 418.037760 Mb/s per-lane target. The latest canonical
 artifact and hashes are recorded in [BUILD.md](BUILD.md); historical display
 ELFs remain immutable experiment records. Physical display status remains
 `NOT_VERIFIED` until an owner-approved device test.
+
+## Live DSI host diagnosis
+
+The subsequent physically observed kernel kept the verified USB shell but did
+not register a DRM card. AS3676 did probe and export its backlight class. The
+terminal DSI error was `dsi_get_config: Invalid version`; a read-only hardware
+check returned zero from the generic DSI version register at `0x047001f0`.
+MSM8x60 therefore cannot use the later generic V2 identification path.
+
+The locally built successor selects the existing V2 configuration from the
+explicit `qcom,msm8660-dsi-ctrl` compatible. It does not change the verified
+USB path or the source-derived panel electrical data. Targeted DT schema,
+display static, memory, persistent-RAM and Sony ELF gates pass. The correction
+is `IMPLEMENTING`, not `VERIFIED`, until it registers DRM on the handset.

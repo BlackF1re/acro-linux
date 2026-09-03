@@ -77,25 +77,27 @@ low-memory base `0x40000000`, reserves its first 2 MiB through
 [FIRST_BOOT_MEMORY.md](FIRST_BOOT_MEMORY.md).  It has not been sent to the
 phone.
 
-## Current local artifact
+## Latest locally validated artifact
 
-The canonical locally validated, **not deployed** artifact is:
+The next locally validated, **not deployed** artifact is:
 
 ```text
-/home/paul/xperia/build/hikari-artifacts-current/hikari-current.elf
-size:   12,515,749 bytes
-SHA-256 7722f8f08b305121b4e303aebd8c584563e2e62b57e14402842602d9150d3352
+/home/paul/xperia/build/hikari-artifacts-g23-dsi-detect/hikari-dsi-detect.elf
+size:   12,515,013 bytes
+SHA-256 1f2ee7f9ba49f307fb0de45bca62777e9851bfd7b0500cf585897bbcd72a00d4
 ```
 
 It was built from external kernel tree HEAD
-`6bb585bb5738e0f8074aad46c8719bd37c8eb3af`. It preserves the verified
-memory, RPM, ramoops, stable PID 1, and USB ACM shell foundation. Display and
-charging remain unverified on the device.
+`7853251fd2ec`. It preserves the verified memory, RPM, ramoops, stable PID 1,
+and USB ACM shell foundation. It adds an MSM8x60-compatible DSI V2 selection
+for hardware whose generic DSI version register reads zero, plus read-only
+BQ24160 STAT/FAULT transition logging. Display and charging remain unverified
+on the device.
 
 Its components are:
 
 ```text
-zImage:    11,274,984 bytes, cd8968de8fa34a70f04335b8b6c2d64ab1b5d23b678f1fd28c5f0620254fd4d4
+zImage:    11,274,248 bytes, c011b0d9c3d98f7ddcb2dce84467a925417ac7b888b1a14a68e52fddc3432416
 DTB:           13,206 bytes, be30aee7589f1e18ab388783d6f023595764a8af3fd293d6cbb7cd22fe9c80db
 initramfs:  1,103,679 bytes, c9a0ea7651ffc6c8c7acb0695764e4278ec38bd984b53381f7cb2f0008ed3894
 ```
