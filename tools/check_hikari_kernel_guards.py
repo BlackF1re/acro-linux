@@ -27,6 +27,19 @@ def check_mmcc(kernel: Path) -> None:
     if "CLK_IS_CRITICAL" in body:
         fail("MSM8x60 DSI slave AHB clock must follow runtime-PM ownership")
 
+    cfg = (kernel / "drivers/gpu/drm/msm/dsi/dsi_cfg.c").read_text()
+    host = (kernel / "drivers/gpu/drm/msm/dsi/dsi_host.c").read_text()
+    if ".clear_clk_ctrl_on_suspend = true," not in cfg:
+        fail("MSM8x60 DSI must request clock-control cleanup on suspend")
+    required_suspend = (
+        "if (msm_host->cfg_hnd->cfg->clear_clk_ctrl_on_suspend)",
+        "dsi_write(msm_host, REG_DSI_CLK_CTRL, 0);",
+        "wmb();",
+    )
+    for fragment in required_suspend:
+        if fragment not in host:
+            fail(f"MSM8x60 DSI suspend cleanup lacks: {fragment}")
+
 
 def check_panel(kernel: Path) -> None:
     source = (
@@ -72,6 +85,20 @@ def check_charger(kernel: Path) -> None:
         fail("BQ24160 still disables charging solely on latched fault history")
 
 
+def check_usb_phy(kernel: Path) -> None:
+    source = (
+        kernel / "drivers/phy/qualcomm/phy-qcom-usb-hs.c"
+    ).read_text()
+    required = (
+        "state = regulator_get_voltage(uphy->v3p3);",
+        "if (state < 3050000 || state > 3300000)",
+        "regulator_set_voltage_triplet(uphy->v3p3, 3050000,",
+    )
+    for fragment in required:
+        if fragment not in source:
+            fail(f"Qualcomm HS PHY fixed-rail handling lacks: {fragment}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--kernel-src", type=Path, required=True)
@@ -81,6 +108,7 @@ def main() -> None:
     check_mmcc(args.kernel_src)
     check_panel(args.kernel_src)
     check_charger(args.kernel_src)
+    check_usb_phy(args.kernel_src)
     print("HIKARI_KERNEL_SOURCE_GUARDS=PASS")
 
 
