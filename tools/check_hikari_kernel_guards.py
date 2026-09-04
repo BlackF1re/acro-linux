@@ -28,24 +28,60 @@ def check_mmcc(kernel: Path) -> None:
         fail("MSM8x60 DSI slave AHB clock must follow runtime-PM ownership")
 
     cfg = (kernel / "drivers/gpu/drm/msm/dsi/dsi_cfg.c").read_text()
+    dsi = (kernel / "drivers/gpu/drm/msm/dsi/dsi.c").read_text()
     host = (kernel / "drivers/gpu/drm/msm/dsi/dsi_host.c").read_text()
     phy = (
         kernel / "drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c"
     ).read_text()
     if ".quiesce_msm8x60_boot_state = true," not in cfg:
         fail("MSM8x60 DSI must request complete boot-state quiesce")
-    required_suspend = (
-        "if (msm_host->cfg_hnd->cfg->quiesce_msm8x60_boot_state)",
+
+    init_body = dsi[dsi.find("static struct msm_dsi *dsi_init(") :]
+    init_body = init_body[: init_body.find("static void dsi_destroy(")]
+    if "msm_dsi_host_quiesce_boot_state(msm_dsi->host," not in init_body:
+        fail("MSM8x60 firmware state must be quiesced once during DSI init")
+
+    quiesce_body = host[host.find("int msm_dsi_host_quiesce_boot_state(") :]
+    quiesce_body = quiesce_body[: quiesce_body.find("int msm_dsi_runtime_suspend(")]
+    required_quiesce = (
+        "if (!msm_host->cfg_hnd->cfg->quiesce_msm8x60_boot_state)",
+        "clk_bulk_prepare_enable(msm_host->num_bus_clks,",
         "dsi_write(msm_host, REG_DSI_CLK_CTRL, 0);",
         "dsi_write(msm_host, REG_DSI_CTRL, 0);",
-        "msm_dsi_phy_quiesce_boot_state(msm_dsi->phy);",
-        "clk_disable_unprepare(msm_host->bus_clks[1].clk);",
-        "clk_disable_unprepare(msm_host->bus_clks[2].clk);",
-        "clk_disable_unprepare(msm_host->bus_clks[0].clk);",
+        "msm_dsi_phy_quiesce_boot_state(phy);",
+        "msm_host->keep_bus_clks_on = true;",
     )
-    for fragment in required_suspend:
-        if fragment not in host:
-            fail(f"MSM8x60 DSI suspend cleanup lacks: {fragment}")
+    for fragment in required_quiesce:
+        if fragment not in quiesce_body:
+            fail(f"MSM8x60 one-shot quiesce lacks: {fragment}")
+
+    suspend_body = host[host.find("int msm_dsi_runtime_suspend(") :]
+    suspend_body = suspend_body[: suspend_body.find("int msm_dsi_runtime_resume(")]
+    if "if (msm_host->keep_bus_clks_on)" not in suspend_body:
+        fail("MSM8x60 DSI runtime suspend must retain its tracked AHB clocks")
+    for forbidden in (
+        "REG_DSI_CLK_CTRL",
+        "REG_DSI_CTRL",
+        "msm_dsi_phy_quiesce_boot_state",
+    ):
+        if forbidden in suspend_body:
+            fail(f"destructive DSI quiesce leaked into runtime suspend: {forbidden}")
+
+    resume_body = host[host.find("int msm_dsi_runtime_resume(") :]
+    resume_body = resume_body[: resume_body.find("int dsi_link_clk_set_rate_6g(")]
+    if "if (msm_host->keep_bus_clks_on)" not in resume_body:
+        fail("MSM8x60 DSI runtime resume must preserve the retained-clock refcount")
+
+    destroy_body = host[host.find("void msm_dsi_host_destroy(") :]
+    destroy_body = destroy_body[: destroy_body.find("int msm_dsi_host_modeset_init(")]
+    required_destroy = (
+        "if (msm_host->keep_bus_clks_on)",
+        "clk_bulk_disable_unprepare(msm_host->num_bus_clks,",
+        "msm_host->keep_bus_clks_on = false;",
+    )
+    for fragment in required_destroy:
+        if fragment not in destroy_body:
+            fail(f"MSM8x60 retained DSI clock teardown lacks: {fragment}")
     if "writel(0, phy->pll_base);" not in phy:
         fail("MSM8x60 45nm PHY quiesce must clear PLL_CTRL_0")
 
