@@ -16,6 +16,12 @@ case "$busybox_build" in /home/paul/xperia/build/*) ;; *) echo "BUSYBOX_BUILD mu
 case "$initramfs_build" in /home/paul/xperia/build/*) ;; *) echo "INITRAMFS_BUILD must be below /home/paul/xperia/build" >&2; exit 1;; esac
 test -f "$busybox_src/Makefile" || { echo "missing external BusyBox source tree" >&2; exit 1; }
 test -f "$repo_root/initramfs/hikari-firstboot/init" || { echo "missing project init" >&2; exit 1; }
+for helper in hikari-diag hikari-display-diag hikari-power-diag; do
+  test -f "$repo_root/initramfs/hikari-firstboot/usr/sbin/$helper" || {
+    echo "missing project diagnostic helper: $helper" >&2
+    exit 1
+  }
+done
 test -x "$gen_init_cpio" || { echo "missing executable gen_init_cpio: $gen_init_cpio" >&2; exit 1; }
 [[ "$source_date_epoch" =~ ^[0-9]+$ ]] || { echo "SOURCE_DATE_EPOCH must be an integer" >&2; exit 1; }
 [[ "$initramfs_name" != */* && "$initramfs_name" = *.cpio.gz ]] || { echo "INITRAMFS_NAME must be a .cpio.gz filename" >&2; exit 1; }
@@ -88,6 +94,10 @@ archive="$initramfs_build/${initramfs_name%.gz}"
     'nod /dev/console 0600 0 0 c 5 1' \
     'nod /dev/null 0666 0 0 c 1 3'
   printf 'file /init %s 0755 0 0\n' "$repo_root/initramfs/hikari-firstboot/init"
+  for helper in hikari-diag hikari-display-diag hikari-power-diag; do
+    printf 'file /usr/sbin/%s %s 0755 0 0\n' "$helper" \
+      "$repo_root/initramfs/hikari-firstboot/usr/sbin/$helper"
+  done
 } > "$list"
 
 "$gen_init_cpio" -t "$source_date_epoch" "$list" > "$archive"
