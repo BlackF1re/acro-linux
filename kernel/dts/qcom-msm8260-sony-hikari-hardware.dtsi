@@ -14,13 +14,19 @@
 };
 
 /*
- * Exact downstream SDCC rails:
+ * Exact downstream rails:
+ *   ClearPad VDD     = PM8901 L1, 3.05 V
  *   SDCC1/eMMC VDD  = PM8901 L5, 2.85 V, always on
  *   SDCC1/eMMC VCCQ = PM8901 LVS0, always on
  *   SDCC3/microSD   = PM8058 L14, 2.85 V
  */
 &rpm {
 	regulators-0 {
+		pm8901_l1: l1 {
+			regulator-min-microvolt = <3050000>;
+			regulator-max-microvolt = <3050000>;
+		};
+
 		pm8901_l5: l5 {
 			regulator-min-microvolt = <2850000>;
 			regulator-max-microvolt = <2850000>;
@@ -37,6 +43,22 @@
 			regulator-min-microvolt = <2850000>;
 			regulator-max-microvolt = <2850000>;
 		};
+	};
+};
+
+&tlmm {
+	hikari_gsbi3_i2c_pins: gsbi3-i2c-state {
+		pins = "gpio43", "gpio44";
+		function = "gsbi3";
+		drive-strength = <8>;
+		bias-disable;
+	};
+
+	hikari_touch_irq: touch-irq-state {
+		pins = "gpio127";
+		function = "gpio";
+		input-enable;
+		bias-disable;
 	};
 };
 
@@ -67,4 +89,40 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&hikari_sd_detect>;
 	status = "okay";
+};
+
+/*
+ * Hikari ClearPad is a Synaptics RMI4 device on GSBI3 I2C address 0x2c.
+ * Sony's legacy driver used F11 and a falling-edge IRQ on TLMM GPIO127.
+ * Its pointer area is 720x1280; the extra strip below Y=1279 was translated
+ * by Sony-specific software into BACK/HOME/MENU virtual keys, so do not
+ * invent an F1A hardware function here.
+ */
+&gsbi3 {
+	qcom,mode = <GSBI_PROT_I2C>;
+	status = "okay";
+};
+
+&gsbi3_i2c {
+	pinctrl-names = "default";
+	pinctrl-0 = <&hikari_gsbi3_i2c_pins>;
+	status = "okay";
+
+	touchscreen@2c {
+		compatible = "syna,rmi4-i2c";
+		reg = <0x2c>;
+		interrupts-extended = <&tlmm 127 IRQ_TYPE_EDGE_FALLING>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&hikari_touch_irq>;
+		vdd-supply = <&pm8901_l1>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		rmi4-f11@11 {
+			reg = <0x11>;
+			syna,sensor-type = <1>;
+			syna,clip-x-high = <719>;
+			syna,clip-y-high = <1279>;
+		};
+	};
 };
