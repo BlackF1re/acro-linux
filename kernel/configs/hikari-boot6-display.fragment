@@ -61,8 +61,18 @@ CONFIG_DRM_MSM_DSI=y
 CONFIG_DRM_MSM_DSI_45NM_PHY=y
 CONFIG_DRM_PANEL_RENESAS_R63306_TMD_MDV22=y
 CONFIG_DRM_FBDEV_EMULATION=y
+
+# Make a successful DRM/fbdev bind visibly useful on first boot. tty0 is the
+# first preferred console in CONFIG_CMDLINE; do not defer fbcon takeover, so
+# the console binds as soon as DRM creates fb0 instead of waiting for later
+# userspace output.
+CONFIG_VT=y
+CONFIG_VT_CONSOLE=y
+CONFIG_FB=y
 CONFIG_FRAMEBUFFER_CONSOLE=y
 CONFIG_FRAMEBUFFER_CONSOLE_DETECT_PRIMARY=y
+# CONFIG_FRAMEBUFFER_CONSOLE_DEFERRED_TAKEOVER is not set
+
 CONFIG_LEDS_CLASS=y
 CONFIG_BACKLIGHT_CLASS_DEVICE=y
 CONFIG_BACKLIGHT_AS3676=y

@@ -108,6 +108,24 @@ def main() -> int:
         "MDV22 power-off order",
     )
 
+    # A backlight phandle in DT is not enough by itself.  Modern drm_panel
+    # drivers explicitly resolve it so drm_panel_enable()/disable() can switch
+    # the backlight after/before the panel's prepared state.  Without this the
+    # AS3676 can probe and expose brightness while remaining disconnected from
+    # the KMS lifecycle.
+    replace_once(
+        panel,
+        "m->reset=devm_gpiod_get(&dsi->dev,\"reset\",GPIOD_OUT_LOW);"
+        "if(IS_ERR(m->reset))return PTR_ERR(m->reset);"
+        "ret=devm_drm_panel_add(&dsi->dev,&m->panel);",
+        "m->reset=devm_gpiod_get(&dsi->dev,\"reset\",GPIOD_OUT_LOW);"
+        "if(IS_ERR(m->reset))return PTR_ERR(m->reset);"
+        "ret=drm_panel_of_backlight(&m->panel);"
+        "if(ret)return dev_err_probe(&dsi->dev,ret,\"failed to get backlight\\n\");"
+        "ret=devm_drm_panel_add(&dsi->dev,&m->panel);",
+        "MDV22 DRM backlight binding",
+    )
+
     print("HIKARI_DISPLAY_FINALIZATION_TRANSFORM=PASS")
     return 0
 

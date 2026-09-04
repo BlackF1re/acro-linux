@@ -85,7 +85,57 @@ console_supervisor()
 	done
 }
 
+# A first successful DRM/fbdev bind should immediately produce something that
+# can be judged by eye.  This service is intentionally independent of the USB
+# shell and PID 1: if DRM never creates fb0 it only waits and cannot take the
+# proven ttyGS0 diagnostic path down with it.
+display_supervisor()
+{
+	wait_logged=0
+	while :; do
+		if [ -e /sys/class/graphics/fb0 ] && [ -c /dev/tty0 ]; then
+			log "HIKARI DISPLAY FB0 READY"
+			[ -r /sys/class/graphics/fb0/virtual_size ] &&
+				log "HIKARI DISPLAY SIZE $(cat /sys/class/graphics/fb0/virtual_size)"
+
+			# Give fbcon a moment to complete its takeover after fb0 appears.
+			/bin/sleep 1
+			{
+				printf '\033[2J\033[H'
+				echo '============================================================'
+				echo ' HIKARI MAINLINE LINUX - DISPLAY / FBCON IS ALIVE'
+				echo '============================================================'
+				uname -a
+				if [ -r /sys/class/graphics/fb0/virtual_size ]; then
+					printf 'fb0 virtual_size: '
+					cat /sys/class/graphics/fb0/virtual_size
+				fi
+				echo '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+				echo '---------------- recent kernel log ----------------'
+				dmesg | tail -n 100
+				echo '---------------- end kernel log -------------------'
+			} >/dev/tty0 2>&1
+			log "HIKARI DISPLAY WITNESS WRITTEN"
+
+			# Keep a small moving witness on-screen so a frozen scanout can be
+			# distinguished from a live framebuffer without flooding the console.
+			while :; do
+				set -- $(cat /proc/uptime 2>/dev/null || echo unknown)
+				printf '\nHIKARI DISPLAY ALIVE uptime=%s\n' "$1" >/dev/tty0 2>&1
+				/bin/sleep 30
+			done
+		fi
+
+		if [ "$wait_logged" -eq 0 ]; then
+			log "HIKARI WAIT FB0"
+			wait_logged=1
+		fi
+		/bin/sleep 2
+	done
+}
+
 console_supervisor &
+display_supervisor &
 log "HIKARI BOOT5 SERVICES START"
 
 while :; do
