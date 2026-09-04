@@ -13,6 +13,7 @@
 
 #include <linux/backlight.h>
 #include <linux/bitops.h>
+#include <linux/delay.h>
 #include <linux/i2c.h>
 #include <linux/kernel.h>
 #include <linux/leds.h>
@@ -34,7 +35,6 @@
 #define AS3676_CURR43		0x15
 #define AS3676_DCDC1		0x21
 #define AS3676_DCDC2		0x22
-#define AS3676_CP_CONTROL	0x23
 #define AS3676_CURR6		0x2f
 #define AS3676_ID1		0x3e
 #define AS3676_ID2		0x3f
@@ -42,6 +42,18 @@
 #define AS3676_ID1_VALUE	0xae
 #define AS3676_ID2_MASK		0xf0
 #define AS3676_ID2_VALUE	0x50
+
+/*
+ * Exact Sony Ericsson Hikari/Fuji AS3676 step-up startup sequence from
+ * leds-as3676_semc.c.  Writing current-sink values without this sequence can
+ * make sysfs brightness look correct while the LCD LED boost converter is
+ * still off.
+ */
+#define HIKARI_AS3676_DCDC1		0x62
+#define HIKARI_AS3676_DCDC2_PRECHARGE	0x0c
+#define HIKARI_AS3676_CONTROL_ON	0x0d
+#define HIKARI_AS3676_DCDC2_ON		0x8c
+#define HIKARI_AS3676_STARTUP_US	12000
 
 /* One register step is 150 uA; Hikari declares 20 mA maximum for all LEDs. */
 #define HIKARI_LED_MAX_UA	20000
@@ -66,6 +78,59 @@ struct as3676 {
 	struct as3676_led green;
 	struct as3676_led blue;
 };
+
+static int as3676_hikari_start_dcdc(struct device *dev, struct as3676 *as)
+{
+	unsigned int control, dcdc1, dcdc2;
+	int ret;
+
+	/*
+	 * This ordering and 12 ms dwell are hardware initialization, not a
+	 * brightness policy.  Keep them byte-for-byte equivalent to Sony's Hikari
+	 * driver so the step-up converter is actually running before sinks 1/2/6
+	 * are asked for current.
+	 */
+	ret = regmap_write(as->regmap, AS3676_DCDC1, HIKARI_AS3676_DCDC1);
+	if (ret)
+		return ret;
+	ret = regmap_write(as->regmap, AS3676_DCDC2,
+			   HIKARI_AS3676_DCDC2_PRECHARGE);
+	if (ret)
+		return ret;
+	ret = regmap_write(as->regmap, AS3676_CONTROL,
+			   HIKARI_AS3676_CONTROL_ON);
+	if (ret)
+		return ret;
+
+	usleep_range(HIKARI_AS3676_STARTUP_US,
+		     HIKARI_AS3676_STARTUP_US + 500);
+
+	ret = regmap_write(as->regmap, AS3676_DCDC2, HIKARI_AS3676_DCDC2_ON);
+	if (ret)
+		return ret;
+
+	/* Read back the three control registers for physical bring-up evidence. */
+	ret = regmap_read(as->regmap, AS3676_CONTROL, &control);
+	if (ret)
+		return ret;
+	ret = regmap_read(as->regmap, AS3676_DCDC1, &dcdc1);
+	if (ret)
+		return ret;
+	ret = regmap_read(as->regmap, AS3676_DCDC2, &dcdc2);
+	if (ret)
+		return ret;
+
+	dev_info(dev, "Hikari DCDC started: CTRL=%#x DCDC1=%#x DCDC2=%#x\n",
+		 control, dcdc1, dcdc2);
+
+	if (control != HIKARI_AS3676_CONTROL_ON ||
+	    dcdc1 != HIKARI_AS3676_DCDC1 ||
+	    dcdc2 != HIKARI_AS3676_DCDC2_ON)
+		dev_warn(dev,
+			 "Hikari DCDC readback differs from Sony startup values\n");
+
+	return 0;
+}
 
 static int as3676_backlight_update_status(struct backlight_device *bl)
 {
@@ -201,22 +266,10 @@ static int as3676_probe(struct i2c_client *client)
 		return dev_err_probe(&client->dev, -ENODEV,
 				     "unexpected AS3676 IDs %#x %#x\n", id1, id2);
 
-	/*
-	 * Match the Sony AS3676 startup: automatic charge-pump mode and the
-	 * application-note DCDC auto-feedback setup used by LCD sinks 1/2/6.
-	 */
-	ret = regmap_write(as->regmap, AS3676_CONTROL, 0);
+	ret = as3676_hikari_start_dcdc(&client->dev, as);
 	if (ret)
-		return ret;
-	ret = regmap_write(as->regmap, AS3676_CP_CONTROL, 0x40);
-	if (ret)
-		return ret;
-	ret = regmap_update_bits(as->regmap, AS3676_DCDC2, BIT(7), BIT(7));
-	if (ret)
-		return ret;
-	ret = regmap_update_bits(as->regmap, AS3676_DCDC1, GENMASK(2, 1), BIT(1));
-	if (ret)
-		return ret;
+		return dev_err_probe(&client->dev, ret,
+				     "failed to start Hikari LCD DCDC\n");
 
 	as->bl = devm_backlight_device_register(&client->dev, "as3676-backlight",
 					     &client->dev, as,
