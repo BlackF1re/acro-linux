@@ -81,7 +81,29 @@ GIT_COMMITTER_EMAIL=hikari-materializer@localhost \
 GIT_COMMITTER_DATE=2026-09-04T20:30:00+03:00 \
 git -C "$out" commit -q -m $'clk: qcom: correct MSM8x60 MMCC branch mappings\n\nMatch exact Sony/CAF MSM8x60 VPE, ROT, IMEM and VCODEC branch mappings and remove unsupported critical semantics from optional multimedia branches.\n\nSigned-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>'
 
+# Project correction #38 closes the remaining source-verifiable Hikari panel
+# mismatches.  Sony's MDV22 profile requires BGR channel order in the MSM DSI
+# host and a specific regulator/reset/LCD_PWR_EN sequence.  Keep this as a
+# strict transform so a future upstream change fails loudly instead of
+# silently dropping the board quirk.
+python3 "$repo_root/scripts/apply-hikari-display-finalization.py" "$out"
+git -C "$out" add \
+  drivers/gpu/drm/msm/dsi/dsi_host.c \
+  drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
+if git -C "$out" diff --cached --quiet; then
+  echo 'Hikari display finalization produced no diff; refusing ambiguous materialization' >&2
+  exit 6
+fi
+GIT_AUTHOR_NAME=BlackF1re \
+GIT_AUTHOR_EMAIL=55582873+BlackF1re@users.noreply.github.com \
+GIT_AUTHOR_DATE=2026-09-04T17:30:00+03:00 \
+GIT_COMMITTER_NAME="Hikari Patch Materializer" \
+GIT_COMMITTER_EMAIL=hikari-materializer@localhost \
+GIT_COMMITTER_DATE=2026-09-04T17:30:00+03:00 \
+git -C "$out" commit -q -m $'drm: msm: finalize Hikari MDV22 signalling\n\nMatch the Sony Hikari MDV22 BGR channel order and reproduce the exact reset/LCD power sequencing around panel initialization and shutdown.\n\nSigned-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>'
+
 "$repo_root/scripts/check-msm8660-mmcc-source.sh" "$out"
+python3 "$repo_root/scripts/check-hikari-display-source.py" "$out"
 "$repo_root/scripts/prepare-hikari-kernel-tree.sh" "$out"
 
 printf 'Hikari kernel materialized successfully.\n'
