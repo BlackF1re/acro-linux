@@ -312,7 +312,7 @@
 
 	/* Exact Fuji/Hikari GSBI8 addresses: BQ27520 = 0x55, BQ24160 = 0x6b. */
 	bq27520: fuel-gauge@55 {
-		compatible = "ti,bq27520";
+		compatible = "ti,bq27520g1";
 		reg = <0x55>;
 		monitored-battery = <&battery>;
 		status = "okay";
