@@ -82,13 +82,13 @@ phone.
 The current locally validated, **not deployed** artifact is:
 
 ```text
-/home/paul/xperia/build/hikari-artifacts-g29-display/hikari-display-runtime-pm-safe.elf
-size:   12,517,010 bytes
-SHA-256 6ee18dc8f1efdbd0771524ea66e85086edbecddc325250df1730e3d1aecad465
+/home/paul/xperia/build/hikari-artifacts-g30-display/hikari-display-mdp-gdsc.elf
+size:   12,515,732 bytes
+SHA-256 2705e0c4cd7e0afd6b109ea84ec63dc476d116592518fe465876b449956929a3
 ```
 
 It was built from signed external kernel tree HEAD
-`3c1ddf679af0bfc5ac1af2c9f39afa5fbdf16035`. It preserves the verified
+`2b964964f5fd3258df2a8782830adf0365b1645c`. It preserves the verified
 memory, RPM, ramoops, stable PID 1, and USB ACM shell foundation. The
 source-derived firmware-state reset now runs exactly once during DSI probe,
 with a tracked common-clock-framework reference held across the operation.
@@ -98,15 +98,17 @@ reset or enter the physically failing branch-disable path. Driver removal and
 probe unwind release the reference. This deliberately trades display-block
 idle power for deterministic bring-up; it is not the final runtime-PM policy.
 Display and useful positive-current charging remain unverified until physical
-acceptance tests pass.
+acceptance tests pass. It additionally powers MDP4 through MMCC `MDP_GDSC`
+before its first register access and probes MDP4/DSI asynchronously as a
+USB-console fail-safe.
 
 Its components are:
 
 ```text
-zImage:     11,276,368 bytes, b050e0e3201ee3d2831548fe88d1bb55ceafe8ee439193505e382f872003167a
-zImage+DTB: 11,289,451 bytes, 24cc76f4b660f10beaa55784f87e3d630ac46e0d0deed0c4b5205712f78d2291
-DTB:            13,083 bytes
-DTB SHA-256: 29e9279fad22afafab2fafe3cad9af7fc5af4444ad82a54501d7d34a78f0a42c
+zImage:     11,275,056 bytes, 6dcf12e13a1662ad1b961708948f411edb729322e9d246d895b1ed9ca4e1b576
+zImage+DTB: 11,288,173 bytes, d8fb5f75d2b151d72a54618521c9ba724268bb63c724f8cb3305444750c12953
+DTB:            13,117 bytes
+DTB SHA-256: a2ea5a7bc629e090064992763bb34dd41ea3a994061f4f806c3268291a12fd3c
 initramfs:  1,103,679 bytes, c9a0ea7651ffc6c8c7acb0695764e4278ec38bd984b53381f7cb2f0008ed3894
 ```
 
@@ -118,7 +120,7 @@ local artifact integrity, not permission to flash or a hardware claim.
 The final Sony ELF segment table is:
 
 ```text
-segment 0: offset 0x001000, paddr 0x40208000, size 0xac436b
-segment 1: offset 0xac536b, paddr 0x42a00000, size 0x10d73f
-segment 2: offset 0xbd2aaa, paddr 0x00020000, size 0x01d3e8
+segment 0: offset 0x001000, paddr 0x40208000, size 0xac3e6d
+segment 1: offset 0xac4e6d, paddr 0x42a00000, size 0x10d73f
+segment 2: offset 0xbd25ac, paddr 0x00020000, size 0x01d3e8
 ```

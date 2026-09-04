@@ -249,3 +249,25 @@ removes the evidenced pre-init failure path without pretending that final
 runtime PM is solved. The locally validated g29 artifact is recorded in
 [BUILD.md](BUILD.md); physical panel, fbcon and charging acceptance remain
 open.
+
+## g29 post-mortem: missing MDP power domain
+
+The g29 physical attempt proved that the one-shot DSI quiesce completed and
+retained its AHB clocks. It advanced through MSM8x60 DSI V2 selection and
+MDP4/DSI component binding, then the synchronous kernel-init thread stopped
+progressing. Charger workqueue messages continued for 72 seconds, so this was
+not a whole-kernel panic. There was no `MDP4 version`, initramfs release,
+`/init`, or Hikari userspace marker.
+
+The deployed MDP4 node lacked a power domain. Exact Sony MSM8x60 source puts
+`mdp.0` behind `FS_MDP` and maps its clocks to `footswitch-8x60.4`; the current
+MMCC driver exposes the same island as `MDP_GDSC` ID 4. The corrected Hikari
+node uses `power-domains = <&mmcc MDP_GDSC>`, so the platform core powers the
+island before `mdp4_kms_init()` performs its first revision-register read.
+The binding and final-DTB gate enforce this relationship.
+
+The bring-up cmdline also uses asynchronous `mdp4,msm_dsi` probing. This is a
+diagnostic fail-open measure: another display-side MMIO stall will no longer
+prevent later USB initcalls from registering the ttyGS0 kernel console. The
+full sanitized diagnosis is in
+[g29-display-mdp-power-stall.md](../research/device/current/boot/g29-display-mdp-power-stall.md).

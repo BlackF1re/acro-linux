@@ -131,6 +131,15 @@ acceptance remains open. The same g27 log physically verified charger
 activation and a status transition, but not positive battery current or
 increasing state of charge.
 
+The subsequent g29 physical log proves that the one-shot DSI quiesce completed
+and that the failure moved forward: MDP4 bound DSI, then stopped before its
+revision message while background charger work continued. The final DTB had
+omitted the Sony-required MDP footswitch. The current local correction attaches
+MDP4 to MMCC `MDP_GDSC` ID 4, which the platform core powers before probe, and
+makes display probing asynchronous so a future MMSS stall cannot suppress the
+later USB kernel console. This is an evidence-backed boot-blocker fix, not a
+claim that scanout or fbcon is working.
+
 ## Status domains
 
 status/hardware.yaml deliberately separates physical hardware evidence, the
