@@ -56,6 +56,21 @@ expect_string /display-controller@5100000 clock-names core_clk
 expect_string /display-controller@5100000 clock-names iface_clk
 expect_string /display-controller@5100000 clock-names bus_clk
 expect_string /display-controller@5100000 clock-names lut_clk
+
+# Sony's MSM8x60 BSP supplies mdp.0 through footswitch FS_MDP (ID 4).  A
+# clock-only MDP description can hang the CPU on its first 0x05100000 read.
+mmcc_phandle=$(fdtget -t x "$dtb" /clock-controller@4000000 phandle)
+mdp_domain=$(fdtget -t x "$dtb" /display-controller@5100000 power-domains |
+	tr -s ' ' | sed 's/^ //;s/ $//')
+[[ $mdp_domain == "$mmcc_phandle 4" ]] || {
+	echo "MDP power-domain must resolve to MMCC MDP_GDSC (4), got '$mdp_domain'" >&2
+	exit 1
+}
+
+grep -Eq '^CONFIG_CMDLINE=".*driver_async_probe=([^ "]*,)*mdp4(,[^ "]*)*.*"$' "$config" || {
+	echo 'display bring-up requires asynchronous mdp4 probe as a USB-console fail-safe' >&2
+	exit 1
+}
 expect_string /dsi@4700000 compatible qcom,msm8660-dsi-ctrl
 expect_string /dsi@4700000 compatible qcom,mdss-dsi-ctrl
 expect_hex /dsi@4700000 reg '4700000 200'

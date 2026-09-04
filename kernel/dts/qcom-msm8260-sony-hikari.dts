@@ -180,10 +180,11 @@
 		/* Names are the MDP4 DRM driver's DT ABI, not descriptive labels. */
 		clock-names = "core_clk", "iface_clk", "bus_clk", "lut_clk",
 			      "hdmi_clk", "tv_clk";
+		power-domains = <&mmcc MDP_GDSC>;
 		/*
-		 * MDP4 DRM neither attaches a genpd nor votes an interconnect path;
-		 * do not describe unused properties outside the current MDP4 binding.
-		 * MMCC performs the required MMSS fabric unhalt before MDP clocks run.
+		 * The Sony MSM8x60 BSP powers mdp.0 through footswitch FS_MDP (4).
+		 * MMCC's MDP_GDSC is its genpd representation; the platform core
+		 * attaches and powers it before MDP4 may access 0x05100000.
 		 */
 		status = "okay";
 
