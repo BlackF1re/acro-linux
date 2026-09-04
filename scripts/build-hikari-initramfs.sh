@@ -3,17 +3,23 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+hikari_build_root=${HIKARI_BUILD_ROOT:-/home/paul/xperia/build}
 busybox_src=${BUSYBOX_SRC:-/home/paul/xperia/src/busybox}
-busybox_build=${BUSYBOX_BUILD:-/home/paul/xperia/build/busybox-hikari-current}
-initramfs_build=${INITRAMFS_BUILD:-/home/paul/xperia/build/hikari-initramfs-current}
+busybox_build=${BUSYBOX_BUILD:-"$hikari_build_root/busybox-hikari-current"}
+initramfs_build=${INITRAMFS_BUILD:-"$hikari_build_root/hikari-initramfs-current"}
 initramfs_name=${INITRAMFS_NAME:-hikari-firstboot.cpio.gz}
-gen_init_cpio=${GEN_INIT_CPIO:-/home/paul/xperia/build/linux-hikari-current/usr/gen_init_cpio}
+gen_init_cpio=${GEN_INIT_CPIO:-"$hikari_build_root/linux-hikari-current/usr/gen_init_cpio"}
 cross_compile=${CROSS_COMPILE:-arm-linux-gnueabihf-}
 jobs=${JOBS:-"$(nproc)"}
 source_date_epoch=${SOURCE_DATE_EPOCH:-0}
 
-case "$busybox_build" in /home/paul/xperia/build/*) ;; *) echo "BUSYBOX_BUILD must be below /home/paul/xperia/build" >&2; exit 1;; esac
-case "$initramfs_build" in /home/paul/xperia/build/*) ;; *) echo "INITRAMFS_BUILD must be below /home/paul/xperia/build" >&2; exit 1;; esac
+mkdir -p "$hikari_build_root"
+hikari_build_root=$(realpath -m -- "$hikari_build_root")
+busybox_build=$(realpath -m -- "$busybox_build")
+initramfs_build=$(realpath -m -- "$initramfs_build")
+for output in "$busybox_build" "$initramfs_build"; do
+  case "$output" in "$hikari_build_root"/*) ;; *) echo "output must be below HIKARI_BUILD_ROOT=$hikari_build_root: $output" >&2; exit 1;; esac
+done
 test -f "$busybox_src/Makefile" || { echo "missing external BusyBox source tree" >&2; exit 1; }
 test -f "$repo_root/initramfs/hikari-firstboot/init" || { echo "missing project init" >&2; exit 1; }
 for helper in hikari-diag hikari-display-diag hikari-power-diag; do

@@ -71,24 +71,26 @@ authorization to deploy any artifact. The current deployment gate is in
 Following post-mortem analysis, the third local build uses the physical MSM8x60
 low-memory base `0x40000000`, reserves its first 2 MiB through
 `CONFIG_ARCH_QCOM_RESERVE_SMEM=y`, and uses the resulting upstream
-`0x40208000` zImage load candidate.  Its initramfs is deliberately moved to
-`0x42a00000`.  The exact artifact and code-derived range checks are recorded in
+`0x40208000` zImage load candidate.  The current initramfs is deliberately
+placed at `0x42c10000`: the larger current kernel relocates through
+`0x42c03d39`, so the former `0x42a00000` address is no longer safe.  The exact
+artifact and code-derived range checks are recorded in
 [THIRD_BOOT_PLAN.md](THIRD_BOOT_PLAN.md) and
-[FIRST_BOOT_MEMORY.md](FIRST_BOOT_MEMORY.md).  It has not been sent to the
-phone.
+[FIRST_BOOT_MEMORY.md](FIRST_BOOT_MEMORY.md).  Deployment remains a separate,
+owner-approved operation.
 
 ## Latest locally validated artifact
 
 The current locally validated, **not deployed** artifact is:
 
 ```text
-/home/paul/xperia/build/hikari-artifacts-g34-display/hikari-display-scm-provider.elf
-size:   12,519,195 bytes
-SHA-256 82979892a9a431bec11b8e75cb8648acab8212cd79414c0f81840c4c5fdb32fc
+/home/paul/xperia/build/hikari-artifacts-current/hikari-current.elf
+size:   13,357,633 bytes
+SHA-256 a85034101356d98efe79067dc419320adba73510b9613a8db132d9c5808e4648
 ```
 
 It was built from signed external kernel tree HEAD
-`073f7ab967d08d6c60f9c491e7ac2fa81fb1600f`. It preserves the verified
+`9d823ead2c7bedb424dff16f547c2c1cdce910d7`. It preserves the verified
 memory, RPM, ramoops, stable PID 1, and USB ACM shell foundation. The
 source-derived firmware-state reset now runs exactly once during DSI probe,
 with a tracked common-clock-framework reference held across the operation.
@@ -113,14 +115,14 @@ display, and power/charging diagnosis. It retains the same BusyBox binary and
 Its components are:
 
 ```text
-zImage:     11,277,096 bytes, 82c31ad9075c2dacadfdeee1ec0ee693acb88ee29315f8cfd1c81229dd4d7932
-zImage+DTB: 11,290,325 bytes, cbdbf9d7d388cb9258b6c06fed7051d1ee5d9cf49867f95ed412a7716157d736
-DTB:            13,229 bytes
-DTB SHA-256: 91a672b32e3dfd06f83e5385a1ba081a03b442b85ace12da9b9ae3246f9abd09
-initramfs:  1,104,990 bytes, 0481f7e2764ba10fb2a70e1f07983df5e0d09ad7c656c3686223e0aa3777b690
+zImage:     12,108,208 bytes, 40599ab4391be985ec9b9cd891920402df49c3a99cc8b8f02684c262086a42b7
+zImage+DTB: 12,128,762 bytes, e0859c50013bea576fdc945b8492d1b05f642c172f7bfe6dd7c3a138625d8aec
+DTB:            20,554 bytes
+DTB SHA-256: 20afcc7bd765a8cdd7197572fffd3ba22314e40b12dee89e23da3f4afcd6b68a
+initramfs:  1,104,991 bytes, 075ec51ce74d873c5673dd1ff0475fbe855f951fb42bd720d5035d382f494c5b
 ```
 
-The Sony ELF loads segment 0 at `0x40208000`, segment 1 at `0x42a00000`, and
+The Sony ELF loads segment 0 at `0x40208000`, segment 1 at `0x42c10000`, and
 the private RPM segment at `0x00020000`. All decompressor, appended-DTB,
 initramfs, RPM, SMEM and ramoops range gates pass. Passing these checks is
 local artifact integrity, not permission to flash or a hardware claim.
@@ -128,7 +130,7 @@ local artifact integrity, not permission to flash or a hardware claim.
 The final Sony ELF segment table is:
 
 ```text
-segment 0: offset 0x001000, paddr 0x40208000, size 0xac46d5
-segment 1: offset 0xac56d5, paddr 0x42a00000, size 0x10dc5e
-segment 2: offset 0xbd3333, paddr 0x00020000, size 0x01d3e8
+segment 0: offset 0x001000, paddr 0x40208000, size 0xb911fa
+segment 1: offset 0xb921fa, paddr 0x42c10000, size 0x10dc5f
+segment 2: offset 0xc9fe59, paddr 0x00020000, size 0x01d3e8
 ```
