@@ -1,0 +1,86 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Fri, 4 Sep 2026 20:30:00 +0300
+Subject: [PATCH 37/37] clk: qcom: correct MSM8x60 MMCC branch mappings
+
+The public MSM8x60 MMCC v1 transcription carries several branch-clock
+mappings that do not match the exact Sony/CAF MSM8x60 clock-8x60.c data.
+The VPE error is fatal during provider registration because the branch was
+also marked critical: enabling 0x0018[26] waits on the VPE halt bit and can
+return -EBUSY, aborting the whole MMCC provider and consequently deferring
+MDP4 and DSI forever.
+
+Match the source-backed MSM8x60 mappings:
+
+  - VPE AXI: MAXI_EN2 (0x0020), bit 26; not critical
+  - ROT AXI: MAXI_EN2 (0x0020), bit 24
+  - MMSS IMEM AHB halt: DBG_BUS_VEC_F bit 10; not critical
+  - VCODEC AHB halt: DBG_BUS_VEC_F bit 12
+
+None of these clocks is part of the verified USB diagnostic path. Removing
+the unsupported critical flags also prevents an unrelated multimedia branch
+from making MMCC registration all-or-nothing during early boot.
+
+Source: Sony/CAF arch/arm/mach-msm/clock-8x60.c as carried by the Xperia
+MSM8660 vendor tree.
+
+Signed-off-by: BlackF1re <plevickij57@gmail.com>
+---
+ drivers/clk/qcom/mmcc-msm8660.c | 12 +++++-------
+ 1 file changed, 5 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -1989,14 +1989,13 @@ static struct clk_branch vpe_axi_clk = {
+ 	.halt_reg = 0x01d8,
+ 	.halt_bit = 1,
+ 	.clkr = {
+-		.enable_reg = 0x0018,
++		.enable_reg = 0x0020,
+ 		.enable_mask = BIT(26),
+ 		.hw.init = &(struct clk_init_data){
+ 			.name = "vpe_axi_clk",
+ 			.ops = &clk_branch_ops,
+-			.flags = CLK_IS_CRITICAL,
+ 		},
+ 	},
+ };
+@@ -2020,7 +2019,7 @@ static struct clk_branch rot_axi_clk = {
+ 	.halt_check = BRANCH_HALT_SKIP,
+ 	.clkr = {
+ 		.enable_reg = 0x0020,
+-		.enable_mask = BIT(22),
++		.enable_mask = BIT(24),
+ 		.hw.init = &(struct clk_init_data){
+ 			.name = "rot_axi_clk",
+ 			.ops = &clk_branch_ops,
+@@ -2222,14 +2221,13 @@ static struct clk_branch mdp_ahb_clk = {
+ 
+ static struct clk_branch mmss_imem_ahb_clk = {
+ 	.halt_reg = 0x01dc,
+-	.halt_bit = 12,
++	.halt_bit = 10,
+ 	.clkr = {
+ 		.enable_reg = 0x0008,
+ 		.enable_mask = BIT(6),
+ 		.hw.init = &(struct clk_init_data){
+ 			.name = "mmss_imem_ahb_clk",
+ 			.ops = &clk_branch_ops,
+-			.flags = CLK_IS_CRITICAL,
+ 		},
+ 	},
+ };
+@@ -2273,9 +2271,9 @@ static struct clk_branch tv_enc_ahb_clk = {
+ 
+ static struct clk_branch vcodec_ahb_clk = {
+ 	.halt_reg = 0x01dc,
+-	.halt_bit = 10,
++	.halt_bit = 12,
+ 	/*
+-	 * The halt bit at 0x01dc[10] does not settle within the standard
++	 * The halt bit at 0x01dc[12] does not settle within the standard
+ 	 * 200 µs poll window when this branch is disabled (e.g. on VIDC
+ 	 * runtime suspend), producing "vcodec_ahb_clk status stuck at 'on'"
+-- 
+2.51.0

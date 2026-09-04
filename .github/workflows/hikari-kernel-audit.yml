@@ -1,0 +1,59 @@
+name: Hikari kernel audit
+
+on:
+  push:
+    branches:
+      - chatgpt/hikari-mainline-audit
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kernel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git make gcc-arm-linux-gnueabihf bc bison flex \
+            libssl-dev libelf-dev device-tree-compiler python3-dtschema
+
+      - name: Materialize pinned Hikari kernel
+        run: |
+          ./scripts/materialize-hikari-kernel.sh "$RUNNER_TEMP/linux-hikari"
+
+      - name: Configure Hikari diagnostic kernel
+        run: |
+          KERNEL="$RUNNER_TEMP/linux-hikari"
+          BUILD="$RUNNER_TEMP/build-hikari"
+          make -C "$KERNEL" O="$BUILD" ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- qcom_defconfig
+          "$KERNEL/scripts/kconfig/merge_config.sh" -m -O "$BUILD" \
+            "$BUILD/.config" "$GITHUB_WORKSPACE/kernel/configs/hikari-boot6-display.fragment"
+          make -C "$KERNEL" O="$BUILD" ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- olddefconfig
+
+      - name: Build kernel and Hikari DTB
+        run: |
+          KERNEL="$RUNNER_TEMP/linux-hikari"
+          BUILD="$RUNNER_TEMP/build-hikari"
+          make -C "$KERNEL" O="$BUILD" ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- \
+            -j2 zImage qcom/qcom-msm8260-sony-hikari.dtb
+
+      - name: Validate Hikari DTB schemas
+        run: |
+          KERNEL="$RUNNER_TEMP/linux-hikari"
+          BUILD="$RUNNER_TEMP/build-hikari"
+          make -C "$KERNEL" O="$BUILD" ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- \
+            CHECK_DTBS=y qcom/qcom-msm8260-sony-hikari.dtb
+
+      - name: Run project display and charging gates
+        run: |
+          BUILD="$RUNNER_TEMP/build-hikari"
+          DTB="$BUILD/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb"
+          ./scripts/check-hikari-display.sh --config "$BUILD/.config" --dtb "$DTB"
+          ./scripts/check-hikari-charging.sh --config "$BUILD/.config" --dtb "$DTB"
