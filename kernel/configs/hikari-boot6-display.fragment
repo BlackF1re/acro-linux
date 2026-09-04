@@ -10,9 +10,6 @@ CONFIG_ARCH_QCOM_RESERVE_SMEM=y
 CONFIG_ARM_APPENDED_DTB=y
 CONFIG_ARM_ATAG_DTB_COMPAT=y
 CONFIG_ARM_ATAG_DTB_COMPAT_CMDLINE_EXTEND=y
-# Keep display component binding off the synchronous initcall path.  If an
-# MMSS MMIO access stalls, later USB initcalls can still register ttyGS0 and
-# expose the kernel console for diagnosis (kernel_init will wait before /init).
 CONFIG_CMDLINE="console=tty0 console=ttyGS0,115200 driver_async_probe=mdp4,msm_dsi"
 CONFIG_DEVTMPFS=y
 CONFIG_DEVTMPFS_MOUNT=y
@@ -40,11 +37,7 @@ CONFIG_USB_GADGET=y
 CONFIG_USB_G_SERIAL=y
 CONFIG_U_SERIAL_CONSOLE=y
 
-# MSM8x60 DRM/KMS display chain.  Nothing below depends on Adreno userspace.
 CONFIG_COMMON_CLK_QCOM=y
-# DRM/MSM is built in for fbcon.  Its Kconfig dependency chain inherits the
-# generic Qualcomm LLCC option from qcom_defconfig; keep it built in too so it
-# cannot demote DRM_MSM to a module.
 CONFIG_QCOM_LLCC=y
 CONFIG_MSM_MMCC_8660=y
 CONFIG_INTERCONNECT=y
@@ -64,12 +57,10 @@ CONFIG_I2C_QUP=y
 CONFIG_POWER_SUPPLY=y
 CONFIG_BATTERY_BQ27XXX=y
 CONFIG_BATTERY_BQ27XXX_I2C=y
-# The physical gauge's programmed data is authoritative; never update its NVM.
 # CONFIG_BATTERY_BQ27XXX_DT_UPDATES_NVM is not set
 CONFIG_CHARGER_BQ24160=y
 
-# Source-backed board hardware baseline.  These remain built in so storage,
-# PMIC input/RTC and diagnostic ADC telemetry are available before userspace.
+# Source-backed board hardware baseline.
 CONFIG_MMC=y
 CONFIG_MMC_BLOCK=y
 CONFIG_MMC_ARMMMCI=y
@@ -90,4 +81,8 @@ CONFIG_RMI4_CORE=y
 CONFIG_RMI4_I2C=y
 CONFIG_RMI4_F11=y
 # CONFIG_RMI4_F34 is not set
+
+# Native IIO motion stack: MPU3050 + BMA250 behind its auxiliary I2C gate.
+CONFIG_MPU3050_I2C=y
+CONFIG_BMA180=y
 # CONFIG_DEBUG_INFO is not set

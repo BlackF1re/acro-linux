@@ -15,10 +15,12 @@
 
 /*
  * Exact downstream rails:
- *   ClearPad VDD     = PM8901 L1, 3.05 V
- *   SDCC1/eMMC VDD  = PM8901 L5, 2.85 V, always on
- *   SDCC1/eMMC VCCQ = PM8901 LVS0, always on
- *   SDCC3/microSD   = PM8058 L14, 2.85 V
+ *   ClearPad VDD        = PM8901 L1, 3.05 V
+ *   SDCC1/eMMC VDD     = PM8901 L5, 2.85 V, always on
+ *   SDCC1/eMMC VCCQ    = PM8901 LVS0, always on
+ *   shared sensor VIO  = PM8058 L8, 1.80 V, enabled at board init
+ *   shared sensor VDD  = PM8058 L10, 2.85 V, enabled at board init
+ *   SDCC3/microSD VDD  = PM8058 L14, 2.85 V
  */
 &rpm {
 	regulators-0 {
@@ -39,6 +41,18 @@
 	};
 
 	regulators-1 {
+		pm8058_l8: l8 {
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+			regulator-always-on;
+		};
+
+		pm8058_l10: l10 {
+			regulator-min-microvolt = <2850000>;
+			regulator-max-microvolt = <2850000>;
+			regulator-always-on;
+		};
+
 		pm8058_l14: l14 {
 			regulator-min-microvolt = <2850000>;
 			regulator-max-microvolt = <2850000>;
@@ -58,6 +72,13 @@
 		pins = "gpio127";
 		function = "gpio";
 		input-enable;
+		bias-disable;
+	};
+
+	hikari_gsbi12_i2c_pins: gsbi12-i2c-state {
+		pins = "gpio115", "gpio116";
+		function = "gsbi12";
+		drive-strength = <16>;
 		bias-disable;
 	};
 };
@@ -123,6 +144,42 @@
 			syna,sensor-type = <1>;
 			syna,clip-x-high = <719>;
 			syna,clip-y-high = <1279>;
+		};
+	};
+};
+
+/*
+ * Motion stack.  Hikari's exact downstream data places MPU3050 on GSBI12
+ * primary I2C and BMA250 on the MPU3050 secondary bus.  Use the mainline
+ * MPU3050 i2c-gate instead of carrying the old InvenSense MPL glue.
+ */
+&gsbi12_i2c {
+	pinctrl-names = "default";
+	pinctrl-0 = <&hikari_gsbi12_i2c_pins>;
+	status = "okay";
+
+	gyroscope@68 {
+		compatible = "invensense,mpu3050";
+		reg = <0x68>;
+		vlogic-supply = <&pm8058_l8>;
+		vdd-supply = <&pm8058_l10>;
+		mount-matrix = "0", "1", "0",
+			       "1", "0", "0",
+			       "0", "0", "-1";
+
+		i2c-gate {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			accelerometer@18 {
+				compatible = "bosch,bma250";
+				reg = <0x18>;
+				vddio-supply = <&pm8058_l8>;
+				vdd-supply = <&pm8058_l10>;
+				mount-matrix = "1", "0", "0",
+					       "0", "-1", "0",
+					       "0", "0", "-1";
+			};
 		};
 	};
 };
