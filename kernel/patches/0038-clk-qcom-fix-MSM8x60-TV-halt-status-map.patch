@@ -1,0 +1,68 @@
+From 3a8e6f0e4abcfef82e91bb2d9827190790125aab Mon Sep 17 00:00:00 2001
+From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+Date: Sat, 5 Sep 2026 03:20:00 +0700
+Subject: [PATCH] clk: qcom: fix MSM8x60 TV halt status map
+
+The MSM8660 MMCC port transcribed the four DBG_BUS_VEC_D halt bits one
+position high / in the wrong order.  This became a physical boot blocker on
+Sony Hikari: the MDP footswitch successfully reached mdp_tv_clk enable, but
+clk_branch_toggle() polled bit 12 and returned -EBUSY with
+"mdp_tv_clk status stuck at 'off'".
+
+Use the exact MSM8x60 clock-8x60.c map instead of disabling halt polling:
+
+  tv_enc_clk   bit 8
+  tv_dac_clk   bit 9
+  mdp_tv_clk   bit 11
+  hdmi_tv_clk  bit 10
+
+The branch enable and reset bits already match downstream and are left
+unchanged.  Keeping normal clk_branch_ops preserves a real hardware-state
+check while fixing which state bit is observed.
+
+Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+---
+ drivers/clk/qcom/mmcc-msm8660.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -1494,7 +1494,7 @@ static struct clk_rcg tv_src = {
+ 
+ static struct clk_branch tv_enc_clk = {
+ 	.halt_reg = 0x01d4,
+-	.halt_bit = 9,
++	.halt_bit = 8,
+ 	.clkr = {
+ 		.enable_reg = 0x00ec,
+ 		.enable_mask = BIT(8),
+@@ -1514,7 +1514,7 @@ static struct clk_branch tv_enc_clk = {
+ 
+ static struct clk_branch tv_dac_clk = {
+ 	.halt_reg = 0x01d4,
+-	.halt_bit = 10,
++	.halt_bit = 9,
+ 	.clkr = {
+ 		.enable_reg = 0x00ec,
+ 		.enable_mask = BIT(10),
+@@ -1534,7 +1534,7 @@ static struct clk_branch tv_dac_clk = {
+ 
+ static struct clk_branch mdp_tv_clk = {
+ 	.halt_reg = 0x01d4,
+-	.halt_bit = 12,
++	.halt_bit = 11,
+ 	.clkr = {
+ 		.enable_reg = 0x00ec,
+ 		.enable_mask = BIT(0),
+@@ -1554,7 +1554,7 @@ static struct clk_branch mdp_tv_clk = {
+ 
+ static struct clk_branch hdmi_tv_clk = {
+ 	.halt_reg = 0x01d4,
+-	.halt_bit = 11,
++	.halt_bit = 10,
+ 	.clkr = {
+ 		.enable_reg = 0x00ec,
+ 		.enable_mask = BIT(12),
+-- 
+2.53.0
