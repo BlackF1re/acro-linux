@@ -38,6 +38,17 @@ CONFIG_USB_GADGET=y
 CONFIG_USB_G_SERIAL=y
 CONFIG_U_SERIAL_CONSOLE=y
 
+# Diagnostic-survival policy: recoverable peripheral faults should leave the
+# kernel alive long enough for ttyGS0 and ramoops to report the failure.  A
+# true fatal panic still stops execution, but must not be triggered merely by
+# an oops, hung-task report or soft-lockup warning in experimental drivers.
+# CONFIG_PANIC_ON_OOPS is not set
+CONFIG_PANIC_TIMEOUT=0
+CONFIG_DETECT_HUNG_TASK=y
+CONFIG_BOOTPARAM_HUNG_TASK_PANIC=0
+CONFIG_SOFTLOCKUP_DETECTOR=y
+CONFIG_BOOTPARAM_SOFTLOCKUP_PANIC=0
+
 CONFIG_COMMON_CLK_QCOM=y
 CONFIG_QCOM_LLCC=y
 CONFIG_MSM_MMCC_8660=y

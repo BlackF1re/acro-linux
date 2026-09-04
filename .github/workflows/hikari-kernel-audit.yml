@@ -54,6 +54,14 @@ jobs:
           make -C "$KERNEL" O="$BUILD" ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- \
             CHECK_DTBS=y qcom/qcom-msm8260-sony-hikari.dtb
 
+      - name: Validate diagnostic survival path
+        run: |
+          KERNEL="$RUNNER_TEMP/linux-hikari"
+          BUILD="$RUNNER_TEMP/build-hikari"
+          DTB="$BUILD/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb"
+          ./scripts/check-hikari-diagnostic-survival.sh \
+            --kernel-src "$KERNEL" --config "$BUILD/.config" --dtb "$DTB"
+
       - name: Validate Hikari display gate
         run: |
           BUILD="$RUNNER_TEMP/build-hikari"
