@@ -116,19 +116,19 @@ static int as3676_led_set(struct led_classdev *cdev,
 {
 	struct as3676_led *led = container_of(cdev, struct as3676_led, cdev);
 	struct as3676 *as = led->as;
-	u8 current = as3676_led_current(brightness);
+	u8 current_code = as3676_led_current(brightness);
 	int ret;
 
 	mutex_lock(&as->lock);
 
 	if (led->button_group) {
-		ret = regmap_write(as->regmap, AS3676_RGB1, current);
+		ret = regmap_write(as->regmap, AS3676_RGB1, current_code);
 		if (ret)
 			goto out;
-		ret = regmap_write(as->regmap, AS3676_RGB2, current);
+		ret = regmap_write(as->regmap, AS3676_RGB2, current_code);
 		if (ret)
 			goto out;
-		ret = regmap_write(as->regmap, AS3676_RGB3, current);
+		ret = regmap_write(as->regmap, AS3676_RGB3, current_code);
 		if (ret)
 			goto out;
 
@@ -136,7 +136,7 @@ static int as3676_led_set(struct led_classdev *cdev,
 		ret = regmap_update_bits(as->regmap, AS3676_CURR_RGB_CTRL, 0x3f,
 					 brightness ? 0x15 : 0x00);
 	} else {
-		ret = regmap_write(as->regmap, led->current_reg, current);
+		ret = regmap_write(as->regmap, led->current_reg, current_code);
 		if (ret)
 			goto out;
 		ret = regmap_update_bits(as->regmap, AS3676_CURR4_CTRL,
