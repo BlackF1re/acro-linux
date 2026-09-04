@@ -1,0 +1,310 @@
+From a9c320a7dbec7c8342b6311c4b75e6fa843b085e Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Fri, 4 Sep 2026 00:10:57 +0700
+Subject: [PATCH 21/36] drm/msm/dsi: correct MSM8x60 link clock topology
+
+---
+ .../dts/qcom/qcom-msm8260-sony-hikari.dts     | 10 +--
+ drivers/clk/qcom/mmcc-msm8660.c               | 79 ++++++-------------
+ drivers/gpu/drm/msm/dsi/dsi.h                 |  4 +-
+ drivers/gpu/drm/msm/dsi/dsi_cfg.c             | 12 ++-
+ drivers/gpu/drm/msm/dsi/dsi_host.c            | 55 +++++++++++++
+ 5 files changed, 91 insertions(+), 69 deletions(-)
+
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+index 54284d0fb21b9e1af07591dde150dc9d111f989b..1e45f8b7bdcf0ef1aaa5020958afd97fdc214cc2 100644
+--- a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
++++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+@@ -218,14 +218,10 @@ dsi: dsi@4700000 {
+ 		reg-names = "dsi_ctrl";
+ 		interrupts = <GIC_SPI 82 IRQ_TYPE_LEVEL_HIGH>;
+ 		clocks = <&mmcc DSI_M_AHB_CLK>, <&mmcc DSI_S_AHB_CLK>,
+-			 <&mmcc AMP_AHB_CLK>, <&mmcc DSI_SRC>,
+-			 <&mmcc DSI1_BYTE_CLK>, <&mmcc DSI_PIXEL_CLK>,
++			 <&mmcc AMP_AHB_CLK>, <&mmcc DSI1_BYTE_CLK>,
++			 <&mmcc MDP_PIXEL_CLK>,
+ 			 <&mmcc DSI1_ESC_CLK>;
+-		clock-names = "iface", "bus", "core_mmss", "src", "byte", "pixel", "core";
+-		assigned-clocks = <&mmcc DSI_SRC>, <&mmcc DSI1_BYTE_CLK>,
+-			 <&mmcc DSI_PIXEL_CLK>, <&mmcc DSI1_ESC_CLK>;
+-		/* DSI_SRC/pixel use the DSI PLL; byte/escape use the byte PLL. */
+-		assigned-clock-parents = <&dsi_phy 1>, <&dsi_phy 0>, <&dsi_phy 1>, <&dsi_phy 0>;
++		clock-names = "iface", "bus", "core_mmss", "byte", "pixel", "core";
+ 		phys = <&dsi_phy>;
+ 		phy-names = "dsi";
+ 		syscon-sfpb = <&mmss_sfpb>;
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+index a5daad10634be0aa2e1d44711c8ae051137dafc6..1671eee49f77d921c3b1e70a21d7034b2ba295cc 100644
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -617,39 +617,15 @@ static struct clk_branch dsi1_clk = {
+ 	},
+ };
+ 
+-static struct clk_rcg dsi1_byte_src = {
+-	.ns_reg = 0x00b0,
+-	.p = {
+-		.pre_div_shift = 12,
+-		.pre_div_width = 4,
+-	},
+-	.s = {
+-		.src_sel_shift = 0,
+-		.parent_map = mmcc_pxo_dsi1_dsi2_byte_map,
+-	},
+-	.clkr = {
+-		.enable_reg = 0x0090,
+-		.enable_mask = BIT(2),
+-		.hw.init = &(struct clk_init_data){
+-			.name = "dsi1_byte_src",
+-			.parent_data = mmcc_pxo_dsi1_dsi2_byte,
+-			.num_parents = ARRAY_SIZE(mmcc_pxo_dsi1_dsi2_byte),
+-			.ops = &clk_rcg_bypass_ops,
+-			.flags = CLK_SET_RATE_PARENT,
+-		},
+-	},
+-};
+-
+ static struct clk_branch dsi1_byte_clk = {
+-	.halt_reg = 0x01cc,
+-	.halt_bit = 21,
++	.halt_check = BRANCH_HALT_DELAY,
+ 	.clkr = {
+-		.enable_reg = 0x0090,
+-		.enable_mask = BIT(0),
++		.enable_reg = 0x0058,
++		.enable_mask = BIT(2),
+ 		.hw.init = &(struct clk_init_data){
+ 			.name = "dsi1_byte_clk",
+-			.parent_hws = (const struct clk_hw*[]){
+-				&dsi1_byte_src.clkr.hw
++			.parent_data = (const struct clk_parent_data[]){
++				{ .fw_name = "dsi1pllbyte", .name = "dsi1pllbyte" },
+ 			},
+ 			.num_parents = 1,
+ 			.ops = &clk_branch_ops,
+@@ -658,39 +634,29 @@ static struct clk_branch dsi1_byte_clk = {
+ 	},
+ };
+ 
+-static struct clk_rcg dsi1_esc_src = {
+-	.ns_reg = 0x00b8,
+-	.p = {
+-		.pre_div_shift = 12,
+-		.pre_div_width = 4,
+-	},
+-	.s = {
+-		.src_sel_shift = 0,
+-		.parent_map = mmcc_pxo_dsi1_dsi2_byte_map,
+-	},
+-	.clkr = {
+-		.enable_reg = 0x00b4,
+-		.enable_mask = BIT(2),
+-		.hw.init = &(struct clk_init_data){
+-			.name = "dsi1_esc_src",
+-			.parent_data = mmcc_pxo_dsi1_dsi2_byte,
+-			.num_parents = ARRAY_SIZE(mmcc_pxo_dsi1_dsi2_byte),
+-			.ops = &clk_rcg_bypass_ops,
+-			.flags = CLK_SET_RATE_PARENT,
++static struct clk_fixed_factor dsi1_esc_src = {
++	.mult = 1,
++	.div = 2,
++	.hw.init = &(struct clk_init_data){
++		.name = "dsi1_esc_src",
++		.parent_data = (const struct clk_parent_data[]){
++			{ .fw_name = "pxo", .name = "pxo_board" },
+ 		},
++		.num_parents = 1,
++		.ops = &clk_fixed_factor_ops,
+ 	},
+ };
+ 
+ static struct clk_branch dsi1_esc_clk = {
+-	.halt_reg = 0x01e8,
+-	.halt_bit = 1,
++	.halt_reg = 0x01cc,
++	.halt_bit = 24,
+ 	.clkr = {
+-		.enable_reg = 0x00b4,
++		.enable_reg = 0x0058,
+ 		.enable_mask = BIT(0),
+ 		.hw.init = &(struct clk_init_data){
+ 			.name = "dsi1_esc_clk",
+ 			.parent_hws = (const struct clk_hw*[]){
+-				&dsi1_esc_src.clkr.hw
++				&dsi1_esc_src.hw,
+ 			},
+ 			.num_parents = 1,
+ 			.ops = &clk_branch_ops,
+@@ -1234,6 +1200,7 @@ static const struct freq_tbl clk_tbl_mdp_pixel[] = {
+ 	{  53990000, P_PLL8, 2, 169,  601 },	/* 384 / 2 * 169/601 =  53.99 MHz */
+ 	{  64000000, P_PLL8, 3,   1,    2 },	/* 384 / 3 * 1/2     =  64 MHz */
+ 	{  69300000, P_PLL8, 1, 231, 1280 },	/* 384 * 231/1280    =  69.3 MHz - HP TouchPad panel */
++	{  69672960, P_PLL8, 1, 567, 3125 },	/* Hikari MDV22: 384 * 567/3125 */
+ 	{  76800000, P_PLL8, 1,   1,    5 },	/* 384 * 1/5         =  76.8 MHz */
+ 	{  85333000, P_PLL8, 1,   2,    9 },	/* 384 * 2/9         =  85.333 MHz */
+ 	{  96000000, P_PLL8, 4,   0,    0 },	/* 384 / 4           =  96 MHz */
+@@ -2333,9 +2300,7 @@ static struct clk_regmap *mmcc_msm8660_clks[] = {
+ 	[MDP_PIXEL_SRC] = &mdp_pixel_src.clkr,
+ 	[MDP_PIXEL_CLK] = &mdp_pixel_clk.clkr,
+ 	[MDP_LCDC_CLK] = &mdp_lcdc_clk.clkr,
+-	[DSI1_BYTE_SRC] = &dsi1_byte_src.clkr,
+ 	[DSI1_BYTE_CLK] = &dsi1_byte_clk.clkr,
+-	[DSI1_ESC_SRC] = &dsi1_esc_src.clkr,
+ 	[DSI1_ESC_CLK] = &dsi1_esc_clk.clkr,
+ 	[ROT_SRC] = &rot_src.clkr,
+ 	[ROT_CLK] = &rot_clk.clkr,
+@@ -2364,6 +2329,10 @@ static struct clk_regmap *mmcc_msm8660_clks[] = {
+ 	[PLL2] = &pll2.clkr,
+ };
+ 
++static struct clk_hw *mmcc_msm8660_hws[] = {
++	&dsi1_esc_src.hw,
++};
++
+ static const struct qcom_reset_map mmcc_msm8660_resets[] = {
+ 	[GFX3D_AXI_RESET] = { 0x0208, 17 },
+ 	[VPE_AXI_RESET] = { 0x0208, 15 },
+@@ -2649,6 +2618,8 @@ static const struct qcom_cc_desc mmcc_msm8660_desc = {
+ 	.config = &mmcc_msm8660_regmap_config,
+ 	.clks = mmcc_msm8660_clks,
+ 	.num_clks = ARRAY_SIZE(mmcc_msm8660_clks),
++	.clk_hws = mmcc_msm8660_hws,
++	.num_clk_hws = ARRAY_SIZE(mmcc_msm8660_hws),
+ 	.resets = mmcc_msm8660_resets,
+ 	.num_resets = ARRAY_SIZE(mmcc_msm8660_resets),
+ 	.gdscs = mmcc_msm8660_gdscs,
+diff --git a/drivers/gpu/drm/msm/dsi/dsi.h b/drivers/gpu/drm/msm/dsi/dsi.h
+index 93c028a122f3a59b1632da76472e0a3e781c6ae8..86996d98512347bdccaf7e7781cc516d446857a6 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi.h
++++ b/drivers/gpu/drm/msm/dsi/dsi.h
+@@ -100,10 +100,13 @@ int msm_dsi_runtime_resume(struct device *dev);
+ int dsi_link_clk_set_rate_6g(struct msm_dsi_host *msm_host);
+ int dsi_link_clk_set_rate_6g_v2_9(struct msm_dsi_host *msm_host);
+ int dsi_link_clk_set_rate_v2(struct msm_dsi_host *msm_host);
++int dsi_link_clk_set_rate_msm8x60(struct msm_dsi_host *msm_host);
+ int dsi_link_clk_enable_6g(struct msm_dsi_host *msm_host);
+ int dsi_link_clk_enable_v2(struct msm_dsi_host *msm_host);
++int dsi_link_clk_enable_msm8x60(struct msm_dsi_host *msm_host);
+ void dsi_link_clk_disable_6g(struct msm_dsi_host *msm_host);
+ void dsi_link_clk_disable_v2(struct msm_dsi_host *msm_host);
++void dsi_link_clk_disable_msm8x60(struct msm_dsi_host *msm_host);
+ unsigned long dsi_byte_clk_get_rate(struct mipi_dsi_host *host, bool is_bonded_dsi,
+ 				    const struct drm_display_mode *mode);
+ int dsi_tx_buf_alloc_6g(struct msm_dsi_host *msm_host, int size);
+@@ -152,4 +155,3 @@ void msm_dsi_phy_snapshot(struct msm_disp_state *disp_state, struct msm_dsi_phy
+ bool msm_dsi_phy_set_continuous_clock(struct msm_dsi_phy *phy, bool enable);
+ 
+ #endif /* __DSI_CONNECTOR_H__ */
+-
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_cfg.c b/drivers/gpu/drm/msm/dsi/dsi_cfg.c
+index 083986221972a4549a224a48259b51af4cc6a4f5..04c1dba7699e67ac0adb64f0fe117291181f17f3 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_cfg.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_cfg.c
+@@ -252,14 +252,12 @@ static const struct msm_dsi_config sa8775p_dsi_cfg = {
+ 	},
+ };
+ 
+-static const struct msm_dsi_host_cfg_ops msm_dsi_v2_host_ops = {
+-	.link_clk_set_rate = dsi_link_clk_set_rate_v2,
+-	.link_clk_enable = dsi_link_clk_enable_v2,
+-	.link_clk_disable = dsi_link_clk_disable_v2,
+-	.clk_init_ver = dsi_clk_init_v2,
++static const struct msm_dsi_host_cfg_ops msm8x60_dsi_v2_host_ops = {
++	.link_clk_set_rate = dsi_link_clk_set_rate_msm8x60,
++	.link_clk_enable = dsi_link_clk_enable_msm8x60,
++	.link_clk_disable = dsi_link_clk_disable_msm8x60,
+ 	.tx_buf_alloc = dsi_tx_buf_alloc_v2,
+ 	.tx_buf_get = dsi_tx_buf_get_v2,
+-	.tx_buf_put = NULL,
+ 	.dma_base_get = dsi_dma_base_get_v2,
+ 	.calc_clk_rate = dsi_calc_clk_rate_v2,
+ };
+@@ -302,7 +300,7 @@ static const struct msm_dsi_host_cfg_ops msm_dsi_6g_v2_9_host_ops = {
+ 
+ static const struct msm_dsi_cfg_handler dsi_cfg_handlers[] = {
+ 	{MSM_DSI_VER_MAJOR_V2, MSM_DSI_V2_VER_MINOR_8064,
+-		&msm8x60_dsi_cfg, &msm_dsi_v2_host_ops},
++		&msm8x60_dsi_cfg, &msm8x60_dsi_v2_host_ops},
+ 	{MSM_DSI_VER_MAJOR_6G, MSM_DSI_6G_VER_MINOR_V1_0,
+ 		&msm8974_apq8084_dsi_cfg, &msm_dsi_6g_host_ops},
+ 	{MSM_DSI_VER_MAJOR_6G, MSM_DSI_6G_VER_MINOR_V1_0_2,
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
+index 148dd1c8a5d27d90267cc47b10c762fad4408e37..bef189a84f2feb79c6077503d858cb10c1b31d73 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -520,6 +520,29 @@ int dsi_link_clk_set_rate_v2(struct msm_dsi_host *msm_host)
+ 	return 0;
+ }
+ 
++/*
++ * MSM8x60 predates the separate DSI source clock used by APQ8064.  Its
++ * escape clock is fixed to PXO/2 in MMCC and the pixel clock is the shared
++ * MDP pixel clock.  Only the PHY byte clock and MDP pixel clock are
++ * programmable link clocks.
++ */
++int dsi_link_clk_set_rate_msm8x60(struct msm_dsi_host *msm_host)
++{
++	int ret;
++
++	ret = clk_set_rate(msm_host->byte_clk, msm_host->byte_clk_rate);
++	if (ret)
++		return dev_err_probe(&msm_host->pdev->dev, ret,
++				     "failed to set DSI byte clock rate\n");
++
++	ret = clk_set_rate(msm_host->pixel_clk, msm_host->pixel_clk_rate);
++	if (ret)
++		return dev_err_probe(&msm_host->pdev->dev, ret,
++				     "failed to set DSI pixel clock rate\n");
++
++	return 0;
++}
++
+ int dsi_link_clk_enable_v2(struct msm_dsi_host *msm_host)
+ {
+ 	int ret;
+@@ -560,6 +583,31 @@ int dsi_link_clk_enable_v2(struct msm_dsi_host *msm_host)
+ 	return ret;
+ }
+ 
++int dsi_link_clk_enable_msm8x60(struct msm_dsi_host *msm_host)
++{
++	int ret;
++
++	ret = clk_prepare_enable(msm_host->byte_clk);
++	if (ret)
++		return ret;
++
++	ret = clk_prepare_enable(msm_host->esc_clk);
++	if (ret)
++		goto disable_byte;
++
++	ret = clk_prepare_enable(msm_host->pixel_clk);
++	if (ret)
++		goto disable_esc;
++
++	return 0;
++
++disable_esc:
++	clk_disable_unprepare(msm_host->esc_clk);
++disable_byte:
++	clk_disable_unprepare(msm_host->byte_clk);
++	return ret;
++}
++
+ void dsi_link_clk_disable_6g(struct msm_dsi_host *msm_host)
+ {
+ 	clk_disable_unprepare(msm_host->esc_clk);
+@@ -576,6 +624,13 @@ void dsi_link_clk_disable_v2(struct msm_dsi_host *msm_host)
+ 	clk_disable_unprepare(msm_host->byte_clk);
+ }
+ 
++void dsi_link_clk_disable_msm8x60(struct msm_dsi_host *msm_host)
++{
++	clk_disable_unprepare(msm_host->pixel_clk);
++	clk_disable_unprepare(msm_host->esc_clk);
++	clk_disable_unprepare(msm_host->byte_clk);
++}
++
+ /**
+  * dsi_adjust_pclk_for_compression() - Adjust the pclk rate for compression case
+  * @mode: The selected mode for the DSI output

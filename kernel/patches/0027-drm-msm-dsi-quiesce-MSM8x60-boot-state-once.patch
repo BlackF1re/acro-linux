@@ -1,0 +1,174 @@
+From 3c1ddf679af0bfc5ac1af2c9f39afa5fbdf16035 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Fri, 4 Sep 2026 11:57:47 +0700
+Subject: [PATCH 27/36] drm/msm/dsi: quiesce MSM8x60 boot state once
+
+---
+ drivers/gpu/drm/msm/dsi/dsi.c      |  9 +++-
+ drivers/gpu/drm/msm/dsi/dsi.h      |  4 +-
+ drivers/gpu/drm/msm/dsi/dsi_host.c | 70 ++++++++++++++++++++----------
+ 3 files changed, 57 insertions(+), 26 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/dsi/dsi.c b/drivers/gpu/drm/msm/dsi/dsi.c
+index 3c9f01ed62713313b2cfe8147415bc8733247cb7..71a194855ee0e9111267ffea431fc251ad583143 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi.c
++++ b/drivers/gpu/drm/msm/dsi/dsi.c
+@@ -103,6 +103,14 @@ static struct msm_dsi *dsi_init(struct platform_device *pdev)
+ 	if (ret)
+ 		goto destroy_dsi;
+ 
++	/* Discard firmware display state before normal runtime PM begins. */
++	ret = msm_dsi_host_quiesce_boot_state(msm_dsi->host,
++					      msm_dsi->phy);
++	if (ret) {
++		dev_err(&pdev->dev, "failed to quiesce boot state: %d\n", ret);
++		goto destroy_dsi;
++	}
++
+ 	/* Register to dsi manager */
+ 	ret = msm_dsi_manager_register(msm_dsi);
+ 	if (ret)
+@@ -267,4 +275,3 @@ void msm_dsi_snapshot(struct msm_disp_state *disp_state, struct msm_dsi *msm_dsi
+ 	msm_dsi_host_snapshot(disp_state, msm_dsi->host);
+ 	msm_dsi_phy_snapshot(disp_state, msm_dsi->phy);
+ }
+-
+diff --git a/drivers/gpu/drm/msm/dsi/dsi.h b/drivers/gpu/drm/msm/dsi/dsi.h
+index d8c2e70cce0de7ed11dd5c0d7af6fb6a4e8dee28..9b3433d3f899e7abd5b72ac59bbdb732ee470ff6 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi.h
++++ b/drivers/gpu/drm/msm/dsi/dsi.h
+@@ -58,6 +58,7 @@ void msm_dsi_manager_tpg_enable(void);
+ 
+ /* dsi host */
+ struct msm_dsi_host;
++struct msm_dsi_phy;
+ int msm_dsi_host_xfer_prepare(struct mipi_dsi_host *host,
+ 					const struct mipi_dsi_msg *msg);
+ void msm_dsi_host_xfer_restore(struct mipi_dsi_host *host,
+@@ -95,6 +96,8 @@ void msm_dsi_host_destroy(struct mipi_dsi_host *host);
+ int msm_dsi_host_modeset_init(struct mipi_dsi_host *host,
+ 					struct drm_device *dev);
+ int msm_dsi_host_init(struct msm_dsi *msm_dsi);
++int msm_dsi_host_quiesce_boot_state(struct mipi_dsi_host *host,
++				    struct msm_dsi_phy *phy);
+ int msm_dsi_runtime_suspend(struct device *dev);
+ int msm_dsi_runtime_resume(struct device *dev);
+ int dsi_link_clk_set_rate_6g(struct msm_dsi_host *msm_host);
+@@ -128,7 +131,6 @@ struct drm_dsc_config *msm_dsi_host_get_dsc_config(struct mipi_dsi_host *host);
+ bool msm_dsi_host_is_wide_bus_enabled(struct mipi_dsi_host *host);
+ 
+ /* dsi phy */
+-struct msm_dsi_phy;
+ struct msm_dsi_phy_shared_timings {
+ 	u32 clk_post;
+ 	u32 clk_pre;
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
+index edd8236fcb9474391c92cf3ffa31ad42c73c6314..2373b278e57228a7fbcd700eccf0bd0928665322 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -113,6 +113,7 @@ struct msm_dsi_host {
+ 
+ 	int num_bus_clks;
+ 	struct clk_bulk_data bus_clks[DSI_BUS_CLK_MAX];
++	bool keep_bus_clks_on;
+ 
+ 	struct clk *byte_clk;
+ 	struct clk *esc_clk;
+@@ -364,6 +365,41 @@ static int dsi_clk_init(struct msm_dsi_host *msm_host)
+ 	return ret;
+ }
+ 
++int msm_dsi_host_quiesce_boot_state(struct mipi_dsi_host *host,
++				    struct msm_dsi_phy *phy)
++{
++	struct msm_dsi_host *msm_host = to_msm_dsi_host(host);
++	int ret;
++
++	if (!msm_host->cfg_hnd->cfg->quiesce_msm8x60_boot_state)
++		return 0;
++
++	/*
++	 * S1Boot leaves the MSM8x60 DSI AHB branches enabled without a clock
++	 * framework reference. Take a real reference before accessing the
++	 * controller, then retain it for this early bring-up path. Hardware
++	 * shows that the three halt status bits do not assert during teardown;
++	 * retaining the narrow bus clocks avoids warnings and, more importantly,
++	 * keeps an ordinary runtime suspend from resetting an active panel.
++	 */
++	ret = clk_bulk_prepare_enable(msm_host->num_bus_clks,
++				      msm_host->bus_clks);
++	if (ret)
++		return ret;
++
++	dsi_write(msm_host, REG_DSI_CLK_CTRL, 0);
++	dsi_write(msm_host, REG_DSI_CTRL, 0);
++	msm_dsi_phy_quiesce_boot_state(phy);
++	/* Flush all posted writes while the slave AHB clock is accessible. */
++	dsi_read(msm_host, REG_DSI_CTRL);
++
++	msm_host->keep_bus_clks_on = true;
++	dev_info(&msm_host->pdev->dev,
++		 "quiesced MSM8x60 firmware state; retaining DSI AHB clocks\n");
++
++	return 0;
++}
++
+ int msm_dsi_runtime_suspend(struct device *dev)
+ {
+ 	struct platform_device *pdev = to_platform_device(dev);
+@@ -374,31 +410,8 @@ int msm_dsi_runtime_suspend(struct device *dev)
+ 	if (!msm_host->cfg_hnd)
+ 		return 0;
+ 
+-	/*
+-	 * Match Fuji's no-continuous-splash handoff before gating the AHB
+-	 * branches: stop DSI clocks and controller, then stop the 45nm PLL.
+-	 * The bootloader can leave all three active even though Linux has not
+-	 * enabled the DRM pipeline yet.
+-	 */
+-	if (msm_host->cfg_hnd->cfg->quiesce_msm8x60_boot_state) {
+-		dsi_write(msm_host, REG_DSI_CLK_CTRL, 0);
+-		dsi_write(msm_host, REG_DSI_CTRL, 0);
+-		msm_dsi_phy_quiesce_boot_state(msm_dsi->phy);
+-		/* Flush host writes while the DSI slave AHB clock is still on. */
+-		dsi_read(msm_host, REG_DSI_CTRL);
+-
+-		/*
+-		 * Fuji disables master, slave, then AMP.  The configured array is
+-		 * AMP, master, slave so generic bulk teardown would use the wrong
+-		 * slave, master, AMP order.
+-		 */
+-		if (WARN_ON(msm_host->num_bus_clks != 3))
+-			return 0;
+-		clk_disable_unprepare(msm_host->bus_clks[1].clk);
+-		clk_disable_unprepare(msm_host->bus_clks[2].clk);
+-		clk_disable_unprepare(msm_host->bus_clks[0].clk);
++	if (msm_host->keep_bus_clks_on)
+ 		return 0;
+-	}
+ 
+ 	clk_bulk_disable_unprepare(msm_host->num_bus_clks, msm_host->bus_clks);
+ 
+@@ -415,6 +428,9 @@ int msm_dsi_runtime_resume(struct device *dev)
+ 	if (!msm_host->cfg_hnd)
+ 		return 0;
+ 
++	if (msm_host->keep_bus_clks_on)
++		return 0;
++
+ 	return clk_bulk_prepare_enable(msm_host->num_bus_clks, msm_host->bus_clks);
+ }
+ 
+@@ -2199,6 +2215,12 @@ void msm_dsi_host_destroy(struct mipi_dsi_host *host)
+ 	mutex_destroy(&msm_host->cmd_mutex);
+ 	mutex_destroy(&msm_host->dev_mutex);
+ 
++	if (msm_host->keep_bus_clks_on) {
++		clk_bulk_disable_unprepare(msm_host->num_bus_clks,
++					   msm_host->bus_clks);
++		msm_host->keep_bus_clks_on = false;
++	}
++
+ 	pm_runtime_disable(&msm_host->pdev->dev);
+ }
+ 

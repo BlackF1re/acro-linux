@@ -1,0 +1,85 @@
+From 0ba376017b18a59634c3ac14a264308321fb3f28 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Thu, 3 Sep 2026 00:04:02 +0700
+Subject: [PATCH 10/36] fix: defer MSM8x60 PLL2 configuration to consumers
+
+---
+ drivers/clk/qcom/mmcc-msm8660.c | 63 +++------------------------------
+ 1 file changed, 5 insertions(+), 58 deletions(-)
+
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+index b0de835ec9ab6dc48912c35f7b99ce675663bcfe..533bc1dd575efff9bf4c54e98411add93cde4d6c 100644
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -2715,66 +2715,13 @@ MODULE_DEVICE_TABLE(of, mmcc_msm8660_match_table);
+ 
+ static int mmcc_msm8660_init_hw(struct regmap *regmap)
+ {
+-	u32 val;
+-	int ret;
+-
+ 	/*
+-	 * Configure PLL2 (MM_PLL1) to 800 MHz for VFE and other MM clocks.
+-	 *
+-	 * PLL rate = PXO * (L + M/N) = 27 MHz * (29 + 17/27) = 800 MHz
+-	 *
+-	 * The bootloader (moboot) enables PLL2 but does not configure L/M/N,
+-	 * leaving it at whatever values are in the hardware. We must set it
+-	 * properly for VFE to reach 228 MHz. Without this, VFE gets ~66 MHz.
++	 * Do not program MM_PLL1/PLL2 during controller probe.  Its rate and
++	 * enable sequence are owned by CCF when a consumer actually selects it.
++	 * In particular, the Hikari MDP/DSI bring-up path uses PLL8 and the DSI
++	 * PLL; forcing a speculative 800 MHz PLL2 setup before provider
++	 * registration made the entire MMCC probe fail on physical MSM8260.
+ 	 */
+-	regmap_read(regmap, 0x320, &val);  /* PLL2 L value */
+-	if (val != 29) {
+-		u32 m_val, n_val;
+-		/* PLL2 is not configured for 800 MHz, configure it */
+-		regmap_read(regmap, 0x324, &m_val);
+-		regmap_read(regmap, 0x328, &n_val);
+-		pr_info("mmcc-msm8660: Configuring PLL2 for 800 MHz (was L=%u M=%u N=%u)\n",
+-			val, m_val, n_val);
+-
+-		/* Disable PLL output first */
+-		regmap_update_bits(regmap, 0x31c, BIT(0), 0);
+-		udelay(10);
+-
+-		/* Set L=29, M=17, N=27 for 800 MHz from 27 MHz PXO */
+-		regmap_write(regmap, 0x320, 29);   /* L value */
+-		regmap_write(regmap, 0x324, 17);   /* M value */
+-		regmap_write(regmap, 0x328, 27);   /* N value */
+-
+-		/* Configure PLL: enable main output, set VCO */
+-		regmap_write(regmap, 0x32c, 0x00800000);
+-
+-		/* Enable PLL: bypass off, reset deassert, output enable */
+-		regmap_update_bits(regmap, 0x31c, BIT(1), BIT(1));  /* Bypass off */
+-		udelay(10);
+-		regmap_update_bits(regmap, 0x31c, BIT(2), BIT(2));  /* Reset deassert */
+-		udelay(50);
+-		regmap_update_bits(regmap, 0x31c, BIT(0), BIT(0));  /* Output enable */
+-		udelay(50);
+-
+-		/*
+-		 * Verify PLL2 locked (status register 0x334, bit 16).
+-		 * Poll up to 200 us at 5 us intervals -- lock typically asserts
+-		 * within ~50 us after output enable, but we tolerate longer to
+-		 * cope with slow PVT corners. If lock never asserts the PLL is
+-		 * mis-configured or hardware is faulty; fail probe rather than
+-		 * letting downstream clocks calculate frequencies from a
+-		 * non-locked PLL (VFE would land at the wrong rate, MDP and
+-		 * IJPEG would mis-train, etc.).
+-		 */
+-		ret = regmap_read_poll_timeout(regmap, 0x334, val,
+-					       val & BIT(16), 5, 200);
+-		if (ret) {
+-			pr_err("mmcc-msm8660: PLL2 lock timeout, status=0x%x\n",
+-			       val);
+-			return ret;
+-		}
+-		pr_info("mmcc-msm8660: PLL2 locked at 800 MHz\n");
+-	}
+ 
+ 	/*
+ 	 * MSM8660 MMCC hardware initialization based on legacy vendor kernel.

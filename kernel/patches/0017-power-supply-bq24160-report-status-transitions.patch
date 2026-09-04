@@ -1,0 +1,41 @@
+From 7853251fd2ecc28f817a350e47bb88d59795c360 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Thu, 3 Sep 2026 23:01:57 +0700
+Subject: [PATCH 17/36] power: supply: bq24160: report status transitions
+
+---
+ drivers/power/supply/bq24160_charger.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/drivers/power/supply/bq24160_charger.c b/drivers/power/supply/bq24160_charger.c
+index d58129b4deec09d015c8fead0b50a1b3b69071d2..2ba60ff251ce81baf6410734848a9160d7fdf401 100644
+--- a/drivers/power/supply/bq24160_charger.c
++++ b/drivers/power/supply/bq24160_charger.c
+@@ -65,6 +65,7 @@ struct bq24160 {
+ 	int cold_degc;
+ 	int warm_degc;
+ 	int hot_degc;
++	unsigned int last_status;
+ 	bool rev23_hold;
+ 	bool charging;
+ };
+@@ -193,6 +194,11 @@ static int bq24160_sync_locked(struct bq24160 *bq)
+ 
+ 	stat = FIELD_GET(BQ24160_STATUS_STAT_MASK, status);
+ 	fault = FIELD_GET(BQ24160_STATUS_FAULT_MASK, status);
++	if (status != bq->last_status) {
++		dev_info(bq->dev, "status raw=0x%02x stat=%d fault=%d\n",
++			 status, stat, fault);
++		bq->last_status = status;
++	}
+ 	if (fault || (stat != BQ24160_STAT_USB_READY &&
+ 		      stat != BQ24160_STAT_CHARGING_USB && stat != BQ24160_STAT_DONE))
+ 		return bq24160_disable(bq);
+@@ -355,6 +361,7 @@ static int bq24160_probe(struct i2c_client *client)
+ 	bq->cold_degc = 5;
+ 	bq->warm_degc = 45;
+ 	bq->hot_degc = 55;
++	bq->last_status = UINT_MAX;
+ 	mutex_init(&bq->lock);
+ 	INIT_DELAYED_WORK(&bq->watchdog_work, bq24160_watchdog_work);
+ 	INIT_DELAYED_WORK(&bq->status_work, bq24160_status_work);

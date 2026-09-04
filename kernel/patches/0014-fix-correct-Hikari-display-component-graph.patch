@@ -1,0 +1,393 @@
+From 8e2d5553529190341841a96eff0e76aa82d1ded0 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Thu, 3 Sep 2026 18:38:23 +0700
+Subject: [PATCH 14/36] fix: correct Hikari display component graph
+
+---
+ .../display/msm/dsi-controller-main.yaml      |  1 +
+ .../bindings/mfd/qcom,msm8660-mmss-sfpb.yaml  | 37 +++++++++++
+ .../dts/qcom/qcom-msm8260-sony-hikari.dts     | 24 ++++---
+ drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c    | 65 ++++++++++---------
+ .../panel/panel-renesas-r63306-tmd-mdv22.c    | 13 ++--
+ drivers/video/backlight/as3676-backlight.c    | 46 ++++++++++++-
+ 6 files changed, 139 insertions(+), 47 deletions(-)
+ create mode 100644 Documentation/devicetree/bindings/mfd/qcom,msm8660-mmss-sfpb.yaml
+
+diff --git a/Documentation/devicetree/bindings/display/msm/dsi-controller-main.yaml b/Documentation/devicetree/bindings/display/msm/dsi-controller-main.yaml
+index e4fd1cbbd4e09e5e272a49c1672f611dd5b6078b..c630aa76a9787779aaeef0c16959e9fc7bf9b4db 100644
+--- a/Documentation/devicetree/bindings/display/msm/dsi-controller-main.yaml
++++ b/Documentation/devicetree/bindings/display/msm/dsi-controller-main.yaml
+@@ -18,6 +18,7 @@ properties:
+               - qcom,kaanapali-dsi-ctrl
+               - qcom,milos-dsi-ctrl
+               - qcom,msm8226-dsi-ctrl
++              - qcom,msm8660-dsi-ctrl
+               - qcom,msm8916-dsi-ctrl
+               - qcom,msm8953-dsi-ctrl
+               - qcom,msm8974-dsi-ctrl
+diff --git a/Documentation/devicetree/bindings/mfd/qcom,msm8660-mmss-sfpb.yaml b/Documentation/devicetree/bindings/mfd/qcom,msm8660-mmss-sfpb.yaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..2320f928f538dd5358e199473a6c74be7724a4dc
+--- /dev/null
++++ b/Documentation/devicetree/bindings/mfd/qcom,msm8660-mmss-sfpb.yaml
+@@ -0,0 +1,37 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/mfd/qcom,msm8660-mmss-sfpb.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: Qualcomm MSM8660 Multimedia Subsystem System Fabric Peripheral Bus
++
++maintainers:
++  - BlackF1re <plevickij57@gmail.com>
++
++description:
++  The MMSS SFPB exposes multimedia subsystem fabric configuration registers
++  used by the MSM8x60 display controller and DSI host.
++
++properties:
++  compatible:
++    items:
++      - const: qcom,msm8660-mmss-sfpb
++      - const: syscon
++
++  reg:
++    maxItems: 1
++
++required:
++  - compatible
++  - reg
++
++additionalProperties: false
++
++examples:
++  - |
++    syscon@5700000 {
++        compatible = "qcom,msm8660-mmss-sfpb", "syscon";
++        reg = <0x05700000 0x8000>;
++    };
++...
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+index b306d2bd03ae2ab69373f975cb9754d16bd8f564..54284d0fb21b9e1af07591dde150dc9d111f989b 100644
+--- a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
++++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+@@ -190,17 +190,21 @@ mdp: display-controller@5100000 {
+ 		ports {
+ 			#address-cells = <1>;
+ 			#size-cells = <0>;
+-			port@0 {
+-				reg = <0>;
++			/*
++			 * MDP4 port 0 is the internal LCDC/LVDS path.  The DRM/MSM
++			 * component walker deliberately skips it; DSI1 is port 1.
++			 */
++			port@1 {
++				reg = <1>;
+ 				mdp_out: endpoint { remote-endpoint = <&dsi_in>; };
+ 			};
+ 		};
+ 	};
+ 
+-	/* The MSM8x60 PHY and PLL share the DSI register aperture. */
+-	dsi_phy: dsi-phy {
++	/* The MSM8x60 PHY and PLL live inside the DSI register aperture. */
++	dsi_phy: dsi-phy@47000f0 {
+ 		compatible = "qcom,msm8660-dsi-phy-45nm";
+-		reg = <0x04700000 0x400>, <0x04700000 0x400>;
++		reg = <0x047000f0 0x1e0>, <0x04700200 0xd0>;
+ 		reg-names = "dsi_phy", "dsi_pll";
+ 		vdda-supply = <&pm8058_l0>;
+ 		#clock-cells = <1>;
+@@ -209,8 +213,9 @@ dsi_phy: dsi-phy {
+ 	};
+ 
+ 	dsi: dsi@4700000 {
+-		compatible = "qcom,msm8660-dsi-ctrl";
++		compatible = "qcom,msm8660-dsi-ctrl", "qcom,mdss-dsi-ctrl";
+ 		reg = <0x04700000 0x200>;
++		reg-names = "dsi_ctrl";
+ 		interrupts = <GIC_SPI 82 IRQ_TYPE_LEVEL_HIGH>;
+ 		clocks = <&mmcc DSI_M_AHB_CLK>, <&mmcc DSI_S_AHB_CLK>,
+ 			 <&mmcc AMP_AHB_CLK>, <&mmcc DSI_SRC>,
+@@ -222,8 +227,8 @@ dsi: dsi@4700000 {
+ 		/* DSI_SRC/pixel use the DSI PLL; byte/escape use the byte PLL. */
+ 		assigned-clock-parents = <&dsi_phy 1>, <&dsi_phy 0>, <&dsi_phy 1>, <&dsi_phy 0>;
+ 		phys = <&dsi_phy>;
+-		phy-names = "dsi-phy";
+-		qcom,mmss-sfpb = <&mmss_sfpb>;
++		phy-names = "dsi";
++		syscon-sfpb = <&mmss_sfpb>;
+ 		vdda-supply = <&pm8058_l0>;
+ 		#address-cells = <1>;
+ 		#size-cells = <0>;
+@@ -241,6 +246,7 @@ panel@0 {
+ 			reg = <0>;
+ 			vci-supply = <&pm8901_l2>;
+ 			vddio-supply = <&pm8901_lvs1>;
++			backlight = <&lcd_backlight>;
+ 			power-gpios = <&tlmm 18 GPIO_ACTIVE_HIGH>;
+ 			reset-gpios = <&tlmm 70 GPIO_ACTIVE_HIGH>;
+ 			port { panel_in: endpoint { remote-endpoint = <&dsi_out>; }; };
+@@ -286,7 +292,7 @@ &gsbi8_i2c {
+ 	clock-frequency = <400000>;
+ 	status = "okay";
+ 
+-	backlight@40 {
++	lcd_backlight: backlight@40 {
+ 		compatible = "ams,as3676-backlight";
+ 		reg = <0x40>;
+ 		status = "okay";
+diff --git a/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c b/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
+index 27103de171b5f7c91e706af309a39407664217cb..be3a129d9e9cf83ba1b82de4b392fc419b9956c7 100644
+--- a/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
++++ b/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
+@@ -23,6 +23,9 @@
+  * clock. DSI_PIXEL_PLL_CLK is the historical binding name for that output.
+  */
+ #define HIKARI_DSI_SRC_CLK	(HIKARI_BITCLK / 2)
++#define HIKARI_PHY_RESOURCE_OFFSET	0xf0
++
++#define PHY_REG(_absolute_offset)	((_absolute_offset) - HIKARI_PHY_RESOURCE_OFFSET)
+ 
+ static const u8 hikari_regulator[] = { 0x13, 0x01, 0x01, 0x00 };
+ static const u8 hikari_timing[] = { 0x78, 0x1b, 0x11, 0x00, 0x3e, 0x43,
+@@ -77,21 +80,21 @@ static void dsi_45nm_program_hikari_dividers(void __iomem *base)
+ 	u32 val;
+ 
+ 	/* VCO 836 MHz, ref divider 27, bit divider 2, byte 16, DSI 4. */
+-	writel(417 & 0xff, base + 0x204);
+-	val = readl(base + 0x208);
++	writel(417 & 0xff, base + PHY_REG(0x204));
++	val = readl(base + PHY_REG(0x208));
+ 	val &= ~0x07;
+ 	val |= (417 >> 8) & 0x07;
+-	writel(val, base + 0x208);
+-	val = readl(base + 0x20c);
++	writel(val, base + PHY_REG(0x208));
++	val = readl(base + PHY_REG(0x20c));
+ 	val &= ~0x3f;
+ 	val |= 26;
+-	writel(val, base + 0x20c);
+-	val = readl(base + 0x220);
++	writel(val, base + PHY_REG(0x20c));
++	val = readl(base + PHY_REG(0x220));
+ 	val &= ~0x0f;
+ 	val |= 1;
+-	writel(val, base + 0x220);
+-	writel(15, base + 0x224);
+-	writel(3, base + 0x228);
++	writel(val, base + PHY_REG(0x220));
++	writel(15, base + PHY_REG(0x224));
++	writel(3, base + PHY_REG(0x228));
+ }
+ 
+ static int dsi_45nm_enable(struct msm_dsi_phy *phy,
+@@ -105,21 +108,21 @@ static int dsi_45nm_enable(struct msm_dsi_phy *phy,
+ 		return -EINVAL;
+ 
+ 	/* Same reset/calibration sequencing as the exact MSM8x60 BSP. */
+-	writel(1, base + 0x128);
++	writel(1, base + PHY_REG(0x128));
+ 	wmb();
+ 	usleep_range(1, 2);
+-	writel(0, base + 0x128);
++	writel(0, base + PHY_REG(0x128));
+ 	wmb();
+ 	usleep_range(1, 2);
+-	write_table(base, 0x2cc, hikari_regulator, ARRAY_SIZE(hikari_regulator));
+-	write_table(base, 0x260, hikari_timing, ARRAY_SIZE(hikari_timing));
+-	write_table(base, 0x290, hikari_ctrl, ARRAY_SIZE(hikari_ctrl));
+-	write_table(base, 0x2a0, hikari_strength, ARRAY_SIZE(hikari_strength));
+-	writel(0x0000ff11, base + 0x0f4);
+-	writel(1, base + 0x0f0);
++	write_table(base, PHY_REG(0x2cc), hikari_regulator, ARRAY_SIZE(hikari_regulator));
++	write_table(base, PHY_REG(0x260), hikari_timing, ARRAY_SIZE(hikari_timing));
++	write_table(base, PHY_REG(0x290), hikari_ctrl, ARRAY_SIZE(hikari_ctrl));
++	write_table(base, PHY_REG(0x2a0), hikari_strength, ARRAY_SIZE(hikari_strength));
++	writel(0x0000ff11, base + PHY_REG(0x0f4));
++	writel(1, base + PHY_REG(0x0f0));
+ 	/* The legacy BSP polls until calibration completes; bound it at 20 ms. */
+ 	for (i = 0; i < 2000; i++) {
+-		val = readl(base + 0x0fc);
++		val = readl(base + PHY_REG(0x0fc));
+ 		if (!(val & BIT(28)))
+ 			break;
+ 		udelay(10);
+@@ -127,12 +130,12 @@ static int dsi_45nm_enable(struct msm_dsi_phy *phy,
+ 	if (val & BIT(28))
+ 		return -ETIMEDOUT;
+ 	/* Legacy hardware requires PLL_CTRL_0 to be committed last. */
+-	write_table(base, 0x204, &hikari_pll[1], ARRAY_SIZE(hikari_pll) - 1);
++	write_table(base, PHY_REG(0x204), &hikari_pll[1], ARRAY_SIZE(hikari_pll) - 1);
+ 	dsi_45nm_program_hikari_dividers(base);
+-	writel(hikari_pll[0], base + 0x200);
+-	writel(0x050, base + 0x214);
+-	writel(0x00f, base + 0x258);
+-	writel(0, base + 0x25c);
++	writel(hikari_pll[0], base + PHY_REG(0x200));
++	writel(0x050, base + PHY_REG(0x214));
++	writel(0x00f, base + PHY_REG(0x258));
++	writel(0, base + PHY_REG(0x25c));
+ 	wmb();
+ 	dev_info(&phy->pdev->dev,
+ 		 "Hikari 45nm DSI PHY enabled: bit %lu, byte %lu, source %lu Hz\n",
+@@ -144,13 +147,13 @@ static void dsi_45nm_disable(struct msm_dsi_phy *phy)
+ {
+ 	void __iomem *base = phy->base;
+ 
+-	writel(0x05f, base + 0x214);
+-	writel(0x08f, base + 0x258);
+-	writel(1, base + 0x25c);
+-	writel(2, base + 0x2cc);
+-	writel(0, base + 0x290);
+-	writel(0x7f, base + 0x294);
+-	writel(0, base + 0x118);
++	writel(0x05f, base + PHY_REG(0x214));
++	writel(0x08f, base + PHY_REG(0x258));
++	writel(1, base + PHY_REG(0x25c));
++	writel(2, base + PHY_REG(0x2cc));
++	writel(0, base + PHY_REG(0x290));
++	writel(0x7f, base + PHY_REG(0x294));
++	writel(0, base + PHY_REG(0x118));
+ 	wmb();
+ }
+ 
+@@ -169,6 +172,6 @@ const struct msm_dsi_phy_cfg dsi_phy_45nm_msm8x60_cfgs = {
+ 	.min_pll_rate = HIKARI_BITCLK,
+ 	.max_pll_rate = HIKARI_BITCLK,
+ 	/* The 45nm register map is addressed from the DSI block base. */
+-	.io_start = { 0x04700000 },
++	.io_start = { 0x047000f0 },
+ 	.num_dsi_phy = 1,
+ };
+diff --git a/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c b/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
+index bddd47394a6bc3d2d9450863013bb0ef346c555a..ef7c373c2be73cd093733a6827293ce76dd31213 100644
+--- a/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
++++ b/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
+@@ -46,9 +46,7 @@ static int mdv22_prepare(struct drm_panel *panel)
+ 	ret=mdv22_send(m->dsi,mdv22_init,ARRAY_SIZE(mdv22_init)); if(ret) goto power_off;
+ 	ret=mipi_dsi_dcs_exit_sleep_mode(m->dsi); if(ret) goto power_off; msleep(100);
+ 	ret=mdv22_send(m->dsi,mdv22_post_sleep,ARRAY_SIZE(mdv22_post_sleep)); if(ret) goto power_off; msleep(20);
+-	ret=mipi_dsi_dcs_set_display_on(m->dsi);
+-	if (!ret)
+-		return 0;
++	return 0;
+ power_off:
+ 	gpiod_set_value_cansleep(m->reset,0);
+ 	gpiod_set_value_cansleep(m->power,0);
+@@ -57,9 +55,13 @@ static int mdv22_prepare(struct drm_panel *panel)
+ }
+ static int mdv22_unprepare(struct drm_panel *panel)
+ { struct mdv22 *m=to_mdv22(panel); mipi_dsi_dcs_enter_sleep_mode(m->dsi); msleep(80); gpiod_set_value_cansleep(m->reset,0); gpiod_set_value_cansleep(m->power,0); regulator_bulk_disable(2,m->supplies); return 0; }
++static int mdv22_enable(struct drm_panel *panel)
++{ struct mdv22 *m=to_mdv22(panel); return mipi_dsi_dcs_set_display_on(m->dsi); }
++static int mdv22_disable(struct drm_panel *panel)
++{ struct mdv22 *m=to_mdv22(panel); return mipi_dsi_dcs_set_display_off(m->dsi); }
+ static const struct drm_display_mode mdv22_mode = { .clock=69673,.hdisplay=720,.hsync_start=848,.hsync_end=851,.htotal=896,.vdisplay=1280,.vsync_start=1289,.vsync_end=1293,.vtotal=1296,.width_mm=53,.height_mm=95,.type=DRM_MODE_TYPE_DRIVER|DRM_MODE_TYPE_PREFERRED };
+ static int mdv22_modes(struct drm_panel *panel, struct drm_connector *c) { struct drm_display_mode *m=drm_mode_duplicate(c->dev,&mdv22_mode); if(!m)return -ENOMEM; drm_mode_set_name(m); drm_mode_probed_add(c,m); c->display_info.width_mm=53; c->display_info.height_mm=95; return 1; }
+-static const struct drm_panel_funcs mdv22_funcs = { .prepare=mdv22_prepare,.unprepare=mdv22_unprepare,.get_modes=mdv22_modes };
++static const struct drm_panel_funcs mdv22_funcs = { .prepare=mdv22_prepare,.enable=mdv22_enable,.disable=mdv22_disable,.unprepare=mdv22_unprepare,.get_modes=mdv22_modes };
+ static int mdv22_probe(struct mipi_dsi_device *dsi)
+ {
+ 	struct mdv22 *m;
+@@ -82,6 +84,9 @@ static int mdv22_probe(struct mipi_dsi_device *dsi)
+ 	m->reset = devm_gpiod_get(&dsi->dev, "reset", GPIOD_OUT_LOW);
+ 	if (IS_ERR(m->reset))
+ 		return PTR_ERR(m->reset);
++	ret = drm_panel_of_backlight(&m->panel);
++	if (ret)
++		return dev_err_probe(&dsi->dev, ret, "failed to get backlight\n");
+ 	ret = devm_drm_panel_add(&dsi->dev, &m->panel);
+ 	if (ret)
+ 		return ret;
+diff --git a/drivers/video/backlight/as3676-backlight.c b/drivers/video/backlight/as3676-backlight.c
+index 996eba5f85e13a38f803870f099a818ed67d6afa..e70ad88f861403d39548951d31d23208fb8f382d 100644
+--- a/drivers/video/backlight/as3676-backlight.c
++++ b/drivers/video/backlight/as3676-backlight.c
+@@ -18,7 +18,16 @@
+ #define AS3676_CURR_RGB_CTRL	0x02
+ #define AS3676_CURR1		0x09
+ #define AS3676_CURR2		0x0a
++#define AS3676_DCDC1		0x21
++#define AS3676_DCDC2		0x22
++#define AS3676_CP_CONTROL	0x23
+ #define AS3676_CURR6		0x2f
++#define AS3676_ID1		0x3e
++#define AS3676_ID2		0x3f
++
++#define AS3676_ID1_VALUE	0xae
++#define AS3676_ID2_MASK		0xf0
++#define AS3676_ID2_VALUE	0x50
+ 
+ struct as3676_backlight {
+ 	struct regmap *regmap;
+@@ -29,7 +38,6 @@ static int as3676_backlight_update_status(struct backlight_device *bl)
+ {
+ 	struct as3676_backlight *as = bl_get_data(bl);
+ 	u8 brightness = backlight_get_brightness(bl);
+-	unsigned int mode = brightness ? 0x41 : 0x00; /* curr1, curr2, curr6 */
+ 	int ret;
+ 
+ 	ret = regmap_write(as->regmap, AS3676_CURR1, brightness);
+@@ -45,7 +53,8 @@ static int as3676_backlight_update_status(struct backlight_device *bl)
+ 				 brightness ? 0x05 : 0x00);
+ 	if (ret)
+ 		return ret;
+-	ret = regmap_update_bits(as->regmap, AS3676_CURR_RGB_CTRL, 0xc0, mode);
++	ret = regmap_update_bits(as->regmap, AS3676_CURR_RGB_CTRL, 0xc0,
++				 brightness ? 0x40 : 0x00);
+ 	if (ret)
+ 		return ret;
+ 
+@@ -73,6 +82,8 @@ static int as3676_backlight_probe(struct i2c_client *client)
+ 	struct backlight_properties props = { .type = BACKLIGHT_RAW,
+ 		.max_brightness = 127, .brightness = 32 };
+ 	struct as3676_backlight *as;
++	unsigned int id1, id2;
++	int ret;
+ 
+ 	as = devm_kzalloc(&client->dev, sizeof(*as), GFP_KERNEL);
+ 	if (!as)
+@@ -80,6 +91,36 @@ static int as3676_backlight_probe(struct i2c_client *client)
+ 	as->regmap = devm_regmap_init_i2c(client, &as3676_regmap_config);
+ 	if (IS_ERR(as->regmap))
+ 		return PTR_ERR(as->regmap);
++
++	ret = regmap_read(as->regmap, AS3676_ID1, &id1);
++	if (ret)
++		return dev_err_probe(&client->dev, ret, "failed to read ID1\n");
++	ret = regmap_read(as->regmap, AS3676_ID2, &id2);
++	if (ret)
++		return dev_err_probe(&client->dev, ret, "failed to read ID2\n");
++	if (id1 != AS3676_ID1_VALUE ||
++	    (id2 & AS3676_ID2_MASK) != AS3676_ID2_VALUE)
++		return dev_err_probe(&client->dev, -ENODEV,
++				     "unexpected chip IDs %#x %#x\n", id1, id2);
++
++	/*
++	 * Sony's AS3676 driver selects automatic charge-pump operation and the
++	 * application-note DCDC auto-feedback path before enabling LCD sinks.
++	 */
++	ret = regmap_write(as->regmap, AS3676_CONTROL, 0);
++	if (ret)
++		return ret;
++	ret = regmap_write(as->regmap, AS3676_CP_CONTROL, 0x40);
++	if (ret)
++		return ret;
++	ret = regmap_update_bits(as->regmap, AS3676_DCDC2, BIT(7), BIT(7));
++	if (ret)
++		return ret;
++	ret = regmap_update_bits(as->regmap, AS3676_DCDC1, GENMASK(2, 1), BIT(1));
++	if (ret)
++		return ret;
++
++	dev_info(&client->dev, "AS3676 detected (IDs %#x %#x)\n", id1, id2);
+ 	as->bl = devm_backlight_device_register(&client->dev, "as3676-backlight",
+ 					     &client->dev, as,
+ 					     &as3676_backlight_ops, &props);
+@@ -100,4 +141,3 @@ static struct i2c_driver as3676_backlight_driver = {
+ module_i2c_driver(as3676_backlight_driver);
+ MODULE_DESCRIPTION("AS3676 Hikari LCD backlight");
+ MODULE_LICENSE("GPL");
+-#define AS3676_CONTROL		0x00

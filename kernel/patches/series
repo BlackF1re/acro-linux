@@ -1,4 +1,38 @@
 # Canonical Hikari kernel patch application order.
-# One relative patch path per line; blank lines and # comments are ignored.
-# Populate from the current external worktree with:
-#   ./scripts/export-hikari-kernel-patches.sh /home/paul/xperia/src/linux
+# Generated from the historical external kernel worktree.
+0001-clk-qcom-gdsc-add-LEGACY_FOOTSWITCH-support-for-MSM8.patch
+0002-clk-qcom-gdsc-add-RPM_ALWAYS_ON-flag.patch
+0003-dt-bindings-interconnect-qcom-add-msm8660-NoC.patch
+0004-interconnect-qcom-add-MSM8x60-NoC-driver.patch
+0005-dt-bindings-clock-qcom-add-mmcc-msm8660-clock-IDs.patch
+0006-dt-bindings-reset-qcom-add-mmcc-msm8660-reset-IDs.patch
+0007-clk-qcom-add-MSM8x60-MMCC-driver.patch
+0008-fix-defer-MSM8x60-MMCC-until-RPM-is-ready.patch
+0009-feat-add-Hikari-DRM-display-pipeline.patch
+0010-fix-defer-MSM8x60-PLL2-configuration-to-consumers.patch
+0011-fix-use-MDP4-clock-DT-ABI-names.patch
+0012-fix-correct-Hikari-DSI-clock-and-PHY-setup.patch
+0013-feat-add-Hikari-BQ24160-charging-support.patch
+0014-fix-correct-Hikari-display-component-graph.patch
+0015-fix-preserve-BQ24160-charge-completion-state.patch
+0016-drm-msm-dsi-select-MSM8x60-V2-host-configuration.patch
+0017-power-supply-bq24160-report-status-transitions.patch
+0018-clk-qcom-fix-MSM8x60-DSI-slave-AHB-halt-bit.patch
+0019-drm-panel-send-complete-Hikari-MDV22-commands.patch
+0020-power-supply-bq24160-distinguish-fault-history.patch
+0021-drm-msm-dsi-correct-MSM8x60-link-clock-topology.patch
+0022-drm-msm-mdp4-make-voltage-rail-optional.patch
+0023-drm-msm-dsi-quiesce-MSM8x60-clocks-before-gating.patch
+0024-phy-qcom-usb-hs-avoid-redundant-fixed-rail-voltage-r.patch
+0025-power-supply-bq24160-log-charging-activation.patch
+0026-drm-msm-dsi-complete-MSM8x60-boot-state-quiesce.patch
+0027-drm-msm-dsi-quiesce-MSM8x60-boot-state-once.patch
+0028-dt-bindings-display-msm-allow-MDP4-power-domain.patch
+0029-arm-dts-qcom-power-Hikari-MDP4-before-access.patch
+0030-clk-qcom-reproduce-the-MSM8x60-MDP-footswitch-sequen.patch
+0031-drm-msm-mdp4-fail-safely-on-MSM8x60-clock-errors.patch
+0032-clk-qcom-keep-MSM8x60-MDP-reset-clocks-enabled.patch
+0033-clk-qcom-access-MSM8x60-MMCC-through-secure-IO.patch
+0034-arm-dts-qcom-add-Hikari-SCM-firmware-node.patch
+0035-firmware-qcom-avoid-modern-SCM-probes-on-MSM8x60.patch
+0036-fix-match-MSM8x60-secure-MMCC-access-ABI.patch

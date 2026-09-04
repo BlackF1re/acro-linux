@@ -1,0 +1,76 @@
+From e771804a5afe296366da40366ce47571bd909e95 Mon Sep 17 00:00:00 2001
+From: Herman van Hazendonk <github.com@herrie.org>
+Date: Sat, 6 Jun 2026 14:34:27 +0200
+Subject: [PATCH 02/36] clk: qcom: gdsc: add RPM_ALWAYS_ON flag
+
+Some power domains need to stay powered across runtime PM even though
+their clocks may still gate, and only collapse on full system suspend.
+Add an RPM_ALWAYS_ON flag that maps to the existing
+GENPD_FLAG_RPM_ALWAYS_ON on the underlying generic_pm_domain.
+
+This is distinct from the existing ALWAYS_ON flag (which keeps the
+domain permanently enabled and prevents collapse even during system
+suspend) and from leaving the flag unset (which allows the domain to
+collapse on every runtime-idle transition).
+
+GENPD_FLAG_RPM_ALWAYS_ON, like GENPD_FLAG_ALWAYS_ON, requires the
+underlying genpd to be in the ON state at pm_genpd_init() time --
+the framework rejects registration otherwise. Fold RPM_ALWAYS_ON
+into the gdsc_init() block that already force-enables ALWAYS_ON
+GDSCs found powered down at sync time so the flag combination is
+honoured consistently.
+
+The first user is the upcoming MSM8x60 MMCC driver, which needs
+RPM_ALWAYS_ON on the a2xx (Adreno 220) GFX3D footswitch: cold-cycling
+the GPU rail on every runtime idle forces an a2xx_hw_init microcode
+reload whose MMIO burst can stall the shared MMSS AXI fabric when it
+coincides with an MDP display client-switch underrun, hard-hanging
+the SoC. Letting the rail stay up during runtime PM (clocks still
+gate, idle power is still saved) and only collapsing on system
+suspend avoids the corner case while still allowing full power-down
+during deep sleep.
+
+Assisted-by: Claude:claude-opus-4-7 Sashiko:claude-haiku-4-5
+Signed-off-by: Herman van Hazendonk <github.com@herrie.org>
+---
+ drivers/clk/qcom/gdsc.c | 6 ++++--
+ drivers/clk/qcom/gdsc.h | 2 ++
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/clk/qcom/gdsc.c b/drivers/clk/qcom/gdsc.c
+index 237ab8159529471edcc46f3d6043e00b1bde752b..deff667a98760e2d901c5b8c6de436b85124b410 100644
+--- a/drivers/clk/qcom/gdsc.c
++++ b/drivers/clk/qcom/gdsc.c
+@@ -803,8 +803,8 @@ static int gdsc_init(struct gdsc *sc)
+ 				goto err_disable_supply;
+ 		}
+ 
+-	} else if (sc->flags & ALWAYS_ON) {
+-		/* If ALWAYS_ON GDSCs are not ON, turn them ON */
++	} else if (sc->flags & (ALWAYS_ON | RPM_ALWAYS_ON)) {
++		/* genpd's always-on variants must be registered in the ON state. */
+ 		ret = gdsc_enable(&sc->pd);
+ 		if (ret)
+ 			return ret;
+@@ -818,6 +818,8 @@ static int gdsc_init(struct gdsc *sc)
+ 
+ 	if (sc->flags & ALWAYS_ON)
+ 		sc->pd.flags |= GENPD_FLAG_ALWAYS_ON;
++	if (sc->flags & RPM_ALWAYS_ON)
++		sc->pd.flags |= GENPD_FLAG_RPM_ALWAYS_ON;
+ 	if (!sc->pd.power_off)
+ 		sc->pd.power_off = gdsc_disable;
+ 	if (!sc->pd.power_on)
+diff --git a/drivers/clk/qcom/gdsc.h b/drivers/clk/qcom/gdsc.h
+index 54e581698d577b9aa65d2f4e4eb01d83420c2eab..b02163241212b7a94e81b383f489af7dbffad4cf 100644
+--- a/drivers/clk/qcom/gdsc.h
++++ b/drivers/clk/qcom/gdsc.h
+@@ -76,6 +76,8 @@ struct gdsc {
+  * transition completed after a fixed delay rather than polling status.
+  */
+ #define LEGACY_FOOTSWITCH	BIT(10)
++/* Keep this domain powered across runtime PM, but allow system suspend. */
++#define RPM_ALWAYS_ON	BIT(11)
+ 	struct reset_controller_dev	*rcdev;
+ 	unsigned int			*resets;
+ 	unsigned int			reset_count;

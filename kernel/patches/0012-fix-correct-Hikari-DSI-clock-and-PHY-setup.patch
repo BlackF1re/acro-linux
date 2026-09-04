@@ -1,0 +1,344 @@
+From f009bf5cea6969076389c967949c59ae8083a906 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Thu, 3 Sep 2026 03:07:44 +0700
+Subject: [PATCH 12/36] fix: correct Hikari DSI clock and PHY setup
+
+---
+ ...yaml => sony,hikari-r63306-tmd-mdv22.yaml} |  4 +-
+ ...60.yaml => qcom,msm8660-dsi-phy-45nm.yaml} |  4 +-
+ .../dts/qcom/qcom-msm8260-sony-hikari.dts     | 36 +++++++-------
+ drivers/gpu/drm/msm/dsi/phy/dsi_phy.c         |  2 +-
+ drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c    | 48 +++++++++++++++++--
+ .../panel/panel-renesas-r63306-tmd-mdv22.c    | 37 ++++++++++++--
+ 6 files changed, 102 insertions(+), 29 deletions(-)
+ rename Documentation/devicetree/bindings/display/panel/{renesas,r63306-tmd-mdv22.yaml => sony,hikari-r63306-tmd-mdv22.yaml} (83%)
+ rename Documentation/devicetree/bindings/phy/{qcom,dsi-phy-45nm-msm8x60.yaml => qcom,msm8660-dsi-phy-45nm.yaml} (85%)
+
+diff --git a/Documentation/devicetree/bindings/display/panel/renesas,r63306-tmd-mdv22.yaml b/Documentation/devicetree/bindings/display/panel/sony,hikari-r63306-tmd-mdv22.yaml
+similarity index 83%
+rename from Documentation/devicetree/bindings/display/panel/renesas,r63306-tmd-mdv22.yaml
+rename to Documentation/devicetree/bindings/display/panel/sony,hikari-r63306-tmd-mdv22.yaml
+index f90029498b4c4b9dff3577f4d05b79ceb80981d6..e7ba9a496b0378c41488d84595a72610fa3ca4b4 100644
+--- a/Documentation/devicetree/bindings/display/panel/renesas,r63306-tmd-mdv22.yaml
++++ b/Documentation/devicetree/bindings/display/panel/sony,hikari-r63306-tmd-mdv22.yaml
+@@ -1,7 +1,7 @@
+ # SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+ %YAML 1.2
+ ---
+-$id: http://devicetree.org/schemas/display/panel/renesas,r63306-tmd-mdv22.yaml#
++$id: http://devicetree.org/schemas/display/panel/sony,hikari-r63306-tmd-mdv22.yaml#
+ $schema: http://devicetree.org/meta-schemas/core.yaml#
+ 
+ title: Renesas R63306 TMD MDV22 DSI panel used by Sony Hikari
+@@ -14,7 +14,7 @@ allOf:
+ 
+ properties:
+   compatible:
+-    const: renesas,r63306-tmd-mdv22
++    const: sony,hikari-r63306-tmd-mdv22
+   reg:
+     maxItems: 1
+   vci-supply: true
+diff --git a/Documentation/devicetree/bindings/phy/qcom,dsi-phy-45nm-msm8x60.yaml b/Documentation/devicetree/bindings/phy/qcom,msm8660-dsi-phy-45nm.yaml
+similarity index 85%
+rename from Documentation/devicetree/bindings/phy/qcom,dsi-phy-45nm-msm8x60.yaml
+rename to Documentation/devicetree/bindings/phy/qcom,msm8660-dsi-phy-45nm.yaml
+index 7e68f781a1c384d4cf00533d19dd2605c408d978..96c8f861cd6681413ccc18965ba92633ad0ae1c1 100644
+--- a/Documentation/devicetree/bindings/phy/qcom,dsi-phy-45nm-msm8x60.yaml
++++ b/Documentation/devicetree/bindings/phy/qcom,msm8660-dsi-phy-45nm.yaml
+@@ -1,7 +1,7 @@
+ # SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+ %YAML 1.2
+ ---
+-$id: http://devicetree.org/schemas/phy/qcom,dsi-phy-45nm-msm8x60.yaml#
++$id: http://devicetree.org/schemas/phy/qcom,msm8660-dsi-phy-45nm.yaml#
+ $schema: http://devicetree.org/meta-schemas/core.yaml#
+ 
+ title: Qualcomm MSM8x60 45nm DSI PHY
+@@ -11,7 +11,7 @@ maintainers:
+ 
+ properties:
+   compatible:
+-    const: qcom,dsi-phy-45nm-msm8x60
++    const: qcom,msm8660-dsi-phy-45nm
+   reg:
+     minItems: 2
+     maxItems: 2
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+index daa78f6a74a0587dbb5bd20df8b1c9971752af56..d0f331e365126b968e34dc7b6c50d90c0553f039 100644
+--- a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
++++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+@@ -115,9 +115,8 @@ mmcc: clock-controller@4000000 {
+ 		status = "okay";
+ 	};
+ 
+-	afab: interconnect@1000000 {
++	afab: interconnect-afab {
+ 		compatible = "qcom,msm8660-apps-fabric";
+-		reg = <0x01000000 0x1000>;
+ 		#interconnect-cells = <1>;
+ 		clocks = <&rpmcc RPM_APPS_FABRIC_CLK>, <&rpmcc RPM_APPS_FABRIC_A_CLK>,
+ 			 <&rpmcc RPM_EBI1_CLK>, <&rpmcc RPM_EBI1_A_CLK>;
+@@ -126,9 +125,8 @@ afab: interconnect@1000000 {
+ 		status = "okay";
+ 	};
+ 
+-	sfab: interconnect@4000000 {
++	sfab: interconnect-sfab {
+ 		compatible = "qcom,msm8660-system-fabric";
+-		reg = <0x04000000 0x1000>;
+ 		#interconnect-cells = <1>;
+ 		clocks = <&rpmcc RPM_SYS_FABRIC_CLK>, <&rpmcc RPM_SYS_FABRIC_A_CLK>;
+ 		clock-names = "bus", "bus_a";
+@@ -136,9 +134,8 @@ sfab: interconnect@4000000 {
+ 		status = "okay";
+ 	};
+ 
+-	mmfab: interconnect@5700000 {
++	mmfab: interconnect-mmfab {
+ 		compatible = "qcom,msm8660-mmss-fabric";
+-		reg = <0x05700000 0x1000>;
+ 		#interconnect-cells = <1>;
+ 		clocks = <&rpmcc RPM_MM_FABRIC_CLK>, <&rpmcc RPM_MM_FABRIC_A_CLK>,
+ 			 <&rpmcc RPM_SMI_CLK>, <&rpmcc RPM_SMI_A_CLK>;
+@@ -147,9 +144,8 @@ mmfab: interconnect@5700000 {
+ 		status = "okay";
+ 	};
+ 
+-	dfab: interconnect@6000000 {
++	dfab: interconnect-dfab {
+ 		compatible = "qcom,msm8660-daytona-fabric";
+-		reg = <0x06000000 0x1000>;
+ 		#interconnect-cells = <1>;
+ 		clocks = <&rpmcc RPM_DAYTONA_FABRIC_CLK>, <&rpmcc RPM_DAYTONA_FABRIC_A_CLK>;
+ 		clock-names = "bus", "bus_a";
+@@ -167,12 +163,16 @@ mdp: display-controller@5100000 {
+ 		reg = <0x05100000 0x000f0000>;
+ 		interrupts = <GIC_SPI 75 IRQ_TYPE_LEVEL_HIGH>;
+ 		clocks = <&mmcc MDP_CLK>, <&mmcc MDP_AHB_CLK>,
+-			 <&mmcc MDP_AXI_CLK>, <&mmcc MDP_LUT_CLK>;
++			 <&mmcc MDP_AXI_CLK>, <&mmcc MDP_LUT_CLK>,
++			 <&mmcc HDMI_APP_CLK>, <&mmcc MDP_TV_CLK>;
+ 		/* Names are the MDP4 DRM driver's DT ABI, not descriptive labels. */
+-		clock-names = "core_clk", "iface_clk", "bus_clk", "lut_clk";
+-		power-domains = <&mmcc MDP_GDSC>;
+-		interconnects = <&mmfab MMFAB_MAS_MDP_PORT0 &mmfab MMFAB_SLV_SMI>;
+-		interconnect-names = "mdp-mem";
++		clock-names = "core_clk", "iface_clk", "bus_clk", "lut_clk",
++			      "hdmi_clk", "tv_clk";
++		/*
++		 * MDP4 DRM neither attaches a genpd nor votes an interconnect path;
++		 * do not describe unused properties outside the current MDP4 binding.
++		 * MMCC performs the required MMSS fabric unhalt before MDP clocks run.
++		 */
+ 		status = "okay";
+ 
+ 		ports {
+@@ -187,7 +187,7 @@ port@0 {
+ 
+ 	/* The MSM8x60 PHY and PLL share the DSI register aperture. */
+ 	dsi_phy: dsi-phy {
+-		compatible = "qcom,dsi-phy-45nm-msm8x60";
++		compatible = "qcom,msm8660-dsi-phy-45nm";
+ 		reg = <0x04700000 0x400>, <0x04700000 0x400>;
+ 		reg-names = "dsi_phy", "dsi_pll";
+ 		vdda-supply = <&pm8058_l0>;
+@@ -207,7 +207,8 @@ dsi: dsi@4700000 {
+ 		clock-names = "iface", "bus", "core_mmss", "src", "byte", "pixel", "core";
+ 		assigned-clocks = <&mmcc DSI_SRC>, <&mmcc DSI1_BYTE_CLK>,
+ 			 <&mmcc DSI_PIXEL_CLK>, <&mmcc DSI1_ESC_CLK>;
+-		assigned-clock-parents = <&dsi_phy 0>, <&dsi_phy 0>, <&dsi_phy 1>, <&dsi_phy 1>;
++		/* DSI_SRC/pixel use the DSI PLL; byte/escape use the byte PLL. */
++		assigned-clock-parents = <&dsi_phy 1>, <&dsi_phy 0>, <&dsi_phy 1>, <&dsi_phy 0>;
+ 		phys = <&dsi_phy>;
+ 		phy-names = "dsi-phy";
+ 		qcom,mmss-sfpb = <&mmss_sfpb>;
+@@ -224,13 +225,13 @@ ports {
+ 		};
+ 
+ 		panel@0 {
+-			compatible = "renesas,r63306-tmd-mdv22";
++			compatible = "sony,hikari-r63306-tmd-mdv22";
+ 			reg = <0>;
+ 			vci-supply = <&pm8901_l2>;
+ 			vddio-supply = <&pm8901_lvs1>;
+ 			power-gpios = <&tlmm 18 GPIO_ACTIVE_HIGH>;
+ 			reset-gpios = <&tlmm 70 GPIO_ACTIVE_HIGH>;
+-			ports { #address-cells = <1>; #size-cells = <0>; port { panel_in: endpoint { remote-endpoint = <&dsi_out>; }; }; };
++			port { panel_in: endpoint { remote-endpoint = <&dsi_out>; }; };
+ 		};
+ 	};
+ };
+@@ -276,7 +277,6 @@ &gsbi8_i2c {
+ 	backlight@40 {
+ 		compatible = "ams,as3676-backlight";
+ 		reg = <0x40>;
+-		default-brightness = <32>;
+ 		status = "okay";
+ 	};
+ };
+diff --git a/drivers/gpu/drm/msm/dsi/phy/dsi_phy.c b/drivers/gpu/drm/msm/dsi/phy/dsi_phy.c
+index 30bc2162d66acc85978a455f9d71c7ac8b9c459e..5ad2465689773b6fb39d368176fd2d8bc66fd85e 100644
+--- a/drivers/gpu/drm/msm/dsi/phy/dsi_phy.c
++++ b/drivers/gpu/drm/msm/dsi/phy/dsi_phy.c
+@@ -515,7 +515,7 @@ int msm_dsi_cphy_timing_calc_v4(struct msm_dsi_dphy_timing *timing,
+ 
+ static const struct of_device_id dsi_phy_dt_match[] = {
+ #ifdef CONFIG_DRM_MSM_DSI_45NM_PHY
+-	{ .compatible = "qcom,dsi-phy-45nm-msm8x60",
++	{ .compatible = "qcom,msm8660-dsi-phy-45nm",
+ 	  .data = &dsi_phy_45nm_msm8x60_cfgs },
+ #endif
+ #ifdef CONFIG_DRM_MSM_DSI_28NM_PHY
+diff --git a/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c b/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
+index f5bc9f1c9783fa1c2147db9282a0eca7f232d818..27103de171b5f7c91e706af309a39407664217cb 100644
+--- a/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
++++ b/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
+@@ -16,7 +16,13 @@
+ #define HIKARI_BITCLK	418037760UL
+ #define HIKARI_LEGACY_BITCLK	418000000UL
+ #define HIKARI_BYTECLK	(HIKARI_BITCLK / 8)
+-#define HIKARI_PIXELCLK	69672960UL
++/*
++ * The PHY's non-byte output feeds DSI_SRC, not the final pixel clock.
++ * Fuji's 418 MHz profile uses an 836 MHz VCO / 4 DSI divider, hence the
++ * 209.018880 MHz source from which MMCC derives the 69.672960 MHz pixel
++ * clock. DSI_PIXEL_PLL_CLK is the historical binding name for that output.
++ */
++#define HIKARI_DSI_SRC_CLK	(HIKARI_BITCLK / 2)
+ 
+ static const u8 hikari_regulator[] = { 0x13, 0x01, 0x01, 0x00 };
+ static const u8 hikari_timing[] = { 0x78, 0x1b, 0x11, 0x00, 0x3e, 0x43,
+@@ -54,13 +60,40 @@ static int dsi_45nm_pll_init(struct msm_dsi_phy *phy)
+ 		return PTR_ERR(hw);
+ 	phy->provided_clocks->hws[DSI_BYTE_PLL_CLK] = hw;
+ 	hw = devm_clk_hw_register_fixed_rate(dev, "dsi1pll", NULL, 0,
+-					    HIKARI_PIXELCLK);
++					    HIKARI_DSI_SRC_CLK);
+ 	if (IS_ERR(hw))
+ 		return PTR_ERR(hw);
+ 	phy->provided_clocks->hws[DSI_PIXEL_PLL_CLK] = hw;
+ 	return 0;
+ }
+ 
++/*
++ * The raw MDV22 PHY table provides PLL defaults, then the Sony 8x60 BSP
++ * overrides these divider fields for the selected link rate. Keep that
++ * ordering: omitting these writes leaves the PLL off the Hikari profile.
++ */
++static void dsi_45nm_program_hikari_dividers(void __iomem *base)
++{
++	u32 val;
++
++	/* VCO 836 MHz, ref divider 27, bit divider 2, byte 16, DSI 4. */
++	writel(417 & 0xff, base + 0x204);
++	val = readl(base + 0x208);
++	val &= ~0x07;
++	val |= (417 >> 8) & 0x07;
++	writel(val, base + 0x208);
++	val = readl(base + 0x20c);
++	val &= ~0x3f;
++	val |= 26;
++	writel(val, base + 0x20c);
++	val = readl(base + 0x220);
++	val &= ~0x0f;
++	val |= 1;
++	writel(val, base + 0x220);
++	writel(15, base + 0x224);
++	writel(3, base + 0x228);
++}
++
+ static int dsi_45nm_enable(struct msm_dsi_phy *phy,
+ 			   struct msm_dsi_phy_clk_request *clk_req)
+ {
+@@ -73,14 +106,19 @@ static int dsi_45nm_enable(struct msm_dsi_phy *phy,
+ 
+ 	/* Same reset/calibration sequencing as the exact MSM8x60 BSP. */
+ 	writel(1, base + 0x128);
++	wmb();
++	usleep_range(1, 2);
+ 	writel(0, base + 0x128);
++	wmb();
++	usleep_range(1, 2);
+ 	write_table(base, 0x2cc, hikari_regulator, ARRAY_SIZE(hikari_regulator));
+ 	write_table(base, 0x260, hikari_timing, ARRAY_SIZE(hikari_timing));
+ 	write_table(base, 0x290, hikari_ctrl, ARRAY_SIZE(hikari_ctrl));
+ 	write_table(base, 0x2a0, hikari_strength, ARRAY_SIZE(hikari_strength));
+ 	writel(0x0000ff11, base + 0x0f4);
+ 	writel(1, base + 0x0f0);
+-	for (i = 0; i < 100; i++) {
++	/* The legacy BSP polls until calibration completes; bound it at 20 ms. */
++	for (i = 0; i < 2000; i++) {
+ 		val = readl(base + 0x0fc);
+ 		if (!(val & BIT(28)))
+ 			break;
+@@ -90,11 +128,15 @@ static int dsi_45nm_enable(struct msm_dsi_phy *phy,
+ 		return -ETIMEDOUT;
+ 	/* Legacy hardware requires PLL_CTRL_0 to be committed last. */
+ 	write_table(base, 0x204, &hikari_pll[1], ARRAY_SIZE(hikari_pll) - 1);
++	dsi_45nm_program_hikari_dividers(base);
+ 	writel(hikari_pll[0], base + 0x200);
+ 	writel(0x050, base + 0x214);
+ 	writel(0x00f, base + 0x258);
+ 	writel(0, base + 0x25c);
+ 	wmb();
++	dev_info(&phy->pdev->dev,
++		 "Hikari 45nm DSI PHY enabled: bit %lu, byte %lu, source %lu Hz\n",
++		 HIKARI_BITCLK, HIKARI_BYTECLK, HIKARI_DSI_SRC_CLK);
+ 	return 0;
+ }
+ 
+diff --git a/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c b/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
+index 63caebb7c5a9365f37554ee2d192dec315c8b2e7..bddd47394a6bc3d2d9450863013bb0ef346c555a 100644
+--- a/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
++++ b/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
+@@ -60,15 +60,46 @@ static int mdv22_unprepare(struct drm_panel *panel)
+ static const struct drm_display_mode mdv22_mode = { .clock=69673,.hdisplay=720,.hsync_start=848,.hsync_end=851,.htotal=896,.vdisplay=1280,.vsync_start=1289,.vsync_end=1293,.vtotal=1296,.width_mm=53,.height_mm=95,.type=DRM_MODE_TYPE_DRIVER|DRM_MODE_TYPE_PREFERRED };
+ static int mdv22_modes(struct drm_panel *panel, struct drm_connector *c) { struct drm_display_mode *m=drm_mode_duplicate(c->dev,&mdv22_mode); if(!m)return -ENOMEM; drm_mode_set_name(m); drm_mode_probed_add(c,m); c->display_info.width_mm=53; c->display_info.height_mm=95; return 1; }
+ static const struct drm_panel_funcs mdv22_funcs = { .prepare=mdv22_prepare,.unprepare=mdv22_unprepare,.get_modes=mdv22_modes };
+-static int mdv22_probe(struct mipi_dsi_device *dsi) { struct mdv22 *m; int ret;
++static int mdv22_probe(struct mipi_dsi_device *dsi)
++{
++	struct mdv22 *m;
++	int ret;
++
+ 	m = devm_drm_panel_alloc(&dsi->dev, struct mdv22, panel,
+ 				 &mdv22_funcs, DRM_MODE_CONNECTOR_DSI);
+ 	if (IS_ERR(m))
+ 		return PTR_ERR(m);
+-	m->dsi=dsi;m->supplies[0].supply="vci";m->supplies[1].supply="vddio";ret=devm_regulator_bulk_get(&dsi->dev,2,m->supplies);if(ret)return ret;m->power=devm_gpiod_get(&dsi->dev,"power",GPIOD_OUT_LOW);if(IS_ERR(m->power))return PTR_ERR(m->power);m->reset=devm_gpiod_get(&dsi->dev,"reset",GPIOD_OUT_LOW);if(IS_ERR(m->reset))return PTR_ERR(m->reset);ret=devm_drm_panel_add(&dsi->dev,&m->panel);if(ret)return ret;mipi_dsi_set_drvdata(dsi,m);dsi->lanes=4;dsi->format=MIPI_DSI_FMT_RGB888;dsi->mode_flags=MIPI_DSI_MODE_VIDEO|MIPI_DSI_MODE_VIDEO_SYNC_PULSE;ret=mipi_dsi_attach(dsi);if(ret)return dev_err_probe(&dsi->dev,ret,"failed to attach DSI host\n");return 0; }
++
++	m->dsi = dsi;
++	m->supplies[0].supply = "vci";
++	m->supplies[1].supply = "vddio";
++	ret = devm_regulator_bulk_get(&dsi->dev, 2, m->supplies);
++	if (ret)
++		return ret;
++	m->power = devm_gpiod_get(&dsi->dev, "power", GPIOD_OUT_LOW);
++	if (IS_ERR(m->power))
++		return PTR_ERR(m->power);
++	m->reset = devm_gpiod_get(&dsi->dev, "reset", GPIOD_OUT_LOW);
++	if (IS_ERR(m->reset))
++		return PTR_ERR(m->reset);
++	ret = devm_drm_panel_add(&dsi->dev, &m->panel);
++	if (ret)
++		return ret;
++
++	mipi_dsi_set_drvdata(dsi, m);
++	dsi->lanes = 4;
++	dsi->format = MIPI_DSI_FMT_RGB888;
++	/* Fuji MDV22 specifies non-burst synchronous-event, with HSA/HE pulses. */
++	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_HSE;
++	ret = mipi_dsi_attach(dsi);
++	if (ret)
++		return dev_err_probe(&dsi->dev, ret, "failed to attach DSI host\n");
++
++	return 0;
++}
+ static void mdv22_remove(struct mipi_dsi_device *dsi)
+ {
+ 	mipi_dsi_detach(dsi);
+ }
+-static const struct of_device_id mdv22_of[]={ { .compatible="renesas,r63306-tmd-mdv22" },{} };MODULE_DEVICE_TABLE(of,mdv22_of);
++static const struct of_device_id mdv22_of[]={ { .compatible="sony,hikari-r63306-tmd-mdv22" },{} };MODULE_DEVICE_TABLE(of,mdv22_of);
+ static struct mipi_dsi_driver mdv22_driver={.probe=mdv22_probe,.remove=mdv22_remove,.driver={.name="panel-renesas-r63306-tmd-mdv22",.of_match_table=mdv22_of}};module_mipi_dsi_driver(mdv22_driver);MODULE_LICENSE("GPL");

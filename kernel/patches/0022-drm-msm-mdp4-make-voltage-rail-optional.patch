@@ -1,0 +1,38 @@
+From 73e2681756489af870c8f65ecaaa0fbaa84fe651 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Fri, 4 Sep 2026 00:11:02 +0700
+Subject: [PATCH 22/36] drm/msm/mdp4: make voltage rail optional
+
+---
+ drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c | 17 +++++++++++------
+ 1 file changed, 11 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
+index 9b1d1982e683f357e917e94957f005ff97038867..fd005b77261256643e3aa5f9ee4cda4fa10c7342 100644
+--- a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
++++ b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
+@@ -511,13 +511,18 @@ static int mdp4_probe(struct platform_device *pdev)
+ 
+ 	mdp4_kms->base.base.irq = irq;
+ 
+-	/* NOTE: driver for this regulator still missing upstream.. use
+-	 * _get_exclusive() and ignore the error if it does not exist
+-	 * (and hope that the bootloader left it on for us)
++	/*
++	 * Some MDP4 implementations have a separate voltage rail.  MSM8x60
++	 * instead powers MDP through its MMCC GDSC, so absence is legitimate.
+ 	 */
+-	mdp4_kms->vdd = devm_regulator_get_exclusive(&pdev->dev, "vdd");
+-	if (IS_ERR(mdp4_kms->vdd))
+-		mdp4_kms->vdd = NULL;
++	mdp4_kms->vdd = devm_regulator_get_optional(&pdev->dev, "vdd");
++	if (IS_ERR(mdp4_kms->vdd)) {
++		if (PTR_ERR(mdp4_kms->vdd) == -ENODEV)
++			mdp4_kms->vdd = NULL;
++		else
++			return dev_err_probe(dev, PTR_ERR(mdp4_kms->vdd),
++					     "failed to get vdd regulator\n");
++	}
+ 
+ 	mdp4_kms->clk = devm_clk_get(&pdev->dev, "core_clk");
+ 	if (IS_ERR(mdp4_kms->clk))

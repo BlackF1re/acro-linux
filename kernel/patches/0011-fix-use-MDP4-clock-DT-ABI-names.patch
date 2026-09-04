@@ -1,0 +1,23 @@
+From 95a90f998fb097ae5ce340a443b3fb095279028f Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Thu, 3 Sep 2026 00:17:43 +0700
+Subject: [PATCH 11/36] fix: use MDP4 clock DT ABI names
+
+---
+ arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+index 5fc78c78fc78293cd3062e1565c1fddf5361da74..daa78f6a74a0587dbb5bd20df8b1c9971752af56 100644
+--- a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
++++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+@@ -168,7 +168,8 @@ mdp: display-controller@5100000 {
+ 		interrupts = <GIC_SPI 75 IRQ_TYPE_LEVEL_HIGH>;
+ 		clocks = <&mmcc MDP_CLK>, <&mmcc MDP_AHB_CLK>,
+ 			 <&mmcc MDP_AXI_CLK>, <&mmcc MDP_LUT_CLK>;
+-		clock-names = "core", "iface", "bus", "lut";
++		/* Names are the MDP4 DRM driver's DT ABI, not descriptive labels. */
++		clock-names = "core_clk", "iface_clk", "bus_clk", "lut_clk";
+ 		power-domains = <&mmcc MDP_GDSC>;
+ 		interconnects = <&mmfab MMFAB_MAS_MDP_PORT0 &mmfab MMFAB_SLV_SMI>;
+ 		interconnect-names = "mdp-mem";

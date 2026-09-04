@@ -1,0 +1,84 @@
+From 13b0ed27e3d38268935ce95f6c689355fe668614 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Wed, 2 Sep 2026 22:55:20 +0700
+Subject: [PATCH 08/36] fix: defer MSM8x60 MMCC until RPM is ready
+
+---
+ drivers/clk/qcom/mmcc-msm8660.c | 25 +++++++++++++------------
+ 1 file changed, 13 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+index 50781a63e65fe529535fdc6415f92dcd1fe62062..b0de835ec9ab6dc48912c35f7b99ce675663bcfe 100644
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -2904,7 +2904,7 @@ static int mmcc_msm8660_init_hw(struct regmap *regmap)
+  * Doing the same in gcc probe (core_initcall) is too early -- RPM is
+  * not yet bound and qcom_rpm_write() has no target.
+  */
+-static void mmcc_msm8660_unhalt_fabric_ports(struct device *dev)
++static int mmcc_msm8660_unhalt_fabric_ports(struct device *dev)
+ {
+ 	struct device_node *rpm_node;
+ 	struct platform_device *rpm_pdev;
+@@ -2916,12 +2916,12 @@ static void mmcc_msm8660_unhalt_fabric_ports(struct device *dev)
+ 
+ 	rpm_node = of_find_compatible_node(NULL, NULL, "qcom,rpm-msm8660");
+ 	if (!rpm_node)
+-		return;
++		return -EPROBE_DEFER;
+ 
+ 	rpm_pdev = of_find_device_by_node(rpm_node);
+ 	of_node_put(rpm_node);
+ 	if (!rpm_pdev)
+-		return;
++		return -EPROBE_DEFER;
+ 
+ 	/*
+ 	 * Pin the RPM supplier to this consumer device so that the
+@@ -2933,28 +2933,26 @@ static void mmcc_msm8660_unhalt_fabric_ports(struct device *dev)
+ 			       DL_FLAG_AUTOREMOVE_CONSUMER);
+ 	if (!link) {
+ 		put_device(&rpm_pdev->dev);
+-		return;
++		return -EPROBE_DEFER;
+ 	}
+ 
+ 	rpm = dev_get_drvdata(&rpm_pdev->dev);
+ 	if (!rpm) {
+-		/*
+-		 * Supplier exists but has not bound yet -- skip the
+-		 * unhalt rather than blocking mmcc probe; downstream
+-		 * MMSS clients will be enabled on demand.
+-		 */
++		/* The fabric must be unhalted before any MMSS DMA client probes. */
+ 		put_device(&rpm_pdev->dev);
+-		return;
++		return -EPROBE_DEFER;
+ 	}
+ 
+ 	rc = qcom_rpm_write(rpm, QCOM_RPM_ACTIVE_STATE,
+ 			    QCOM_RPM_MM_FABRIC_HALT, mmss_halt, 2);
+ 	if (rc)
+-		dev_warn(dev, "MMSS fabric unhalt failed: %d\n", rc);
++		dev_err(dev, "MMSS fabric unhalt failed: %d\n", rc);
+ 	else
+ 		dev_info(dev, "MMSS fabric: unhalted all master ports (0-13)\n");
+ 
+ 	put_device(&rpm_pdev->dev);
++
++	return rc;
+ }
+ 
+ static int mmcc_msm8660_probe(struct platform_device *pdev)
+@@ -2980,7 +2978,10 @@ static int mmcc_msm8660_probe(struct platform_device *pdev)
+ 	 * early). APPS and SYSTEM fabrics belong to other subsystems and
+ 	 * are not touched here.
+ 	 */
+-	mmcc_msm8660_unhalt_fabric_ports(&pdev->dev);
++	ret = mmcc_msm8660_unhalt_fabric_ports(&pdev->dev);
++	if (ret)
++		return dev_err_probe(&pdev->dev, ret,
++				     "MMSS fabric unhalt failed\n");
+ 
+ 	return qcom_cc_really_probe(&pdev->dev, &mmcc_msm8660_desc, regmap);
+ }

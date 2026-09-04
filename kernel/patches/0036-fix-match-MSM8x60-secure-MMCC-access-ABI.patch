@@ -1,0 +1,119 @@
+From 9d823ead2c7bedb424dff16f547c2c1cdce910d7 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Fri, 4 Sep 2026 18:46:40 +0700
+Subject: [PATCH 36/36] fix: match MSM8x60 secure MMCC access ABI
+
+---
+ drivers/clk/qcom/mmcc-msm8660.c  | 37 +++++++++++++++++++++++---------
+ drivers/firmware/qcom/qcom_scm.c | 14 ++++++++++++
+ 2 files changed, 41 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+index 33fde698c080cfcaf5b4d9e60c84d201b4417d74..0e2a2a02844b8f425b8c5f6ecf93457e8e9a3300 100644
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -2722,8 +2722,9 @@ MODULE_DEVICE_TABLE(of, mmcc_msm8660_match_table);
+ 
+ /* AXI enable registers - control AXI bus paths for memory access */
+ #define MAXI_EN_REG		0x0018
++#define MAXI_EN2_REG		0x0020
+ #define MAXI_EN3_REG		0x002c
+-#define SAXI_EN_REG		0x01d8
++#define SAXI_EN_REG		0x0030
+ 
+ /* Misc CC registers */
+ #define CSI_CC_REG		0x0040
+@@ -2767,8 +2768,9 @@ MODULE_DEVICE_TABLE(of, mmcc_msm8660_match_table);
+ #define MDP_FS_AHB_RESET_MASK	BIT(3)
+ #define MDP_FS_CORE_RESET_MASK	(BIT(21) | BIT(5) | BIT(4) | BIT(3))
+ 
+-static int mmcc_msm8660_init_hw(struct regmap *regmap)
++static int mmcc_msm8660_init_hw(struct device *dev, struct regmap *regmap)
+ {
++	int ret;
+ 	/*
+ 	 * Do not program MM_PLL1/PLL2 during controller probe.  Its rate and
+ 	 * enable sequence are owned by CCF when a consumer actually selects it.
+@@ -2795,26 +2797,41 @@ static int mmcc_msm8660_init_hw(struct regmap *regmap)
+ 	 * BIT(1) = Disable HW gating for all AHB clocks
+ 	 * These are required for CSI register writes to work.
+ 	 */
+-	regmap_update_bits(regmap, AHB_EN_REG, 0x3, 0x3);
++	ret = regmap_update_bits(regmap, AHB_EN_REG, 0x6c040203, 0x00000003);
++	if (ret)
++		return ret;
++	dev_info(dev, "secure MMCC AHB control initialized\n");
+ 
+ 	/*
+ 	 * AHB_EN2_REG contains additional control bits including
+ 	 * VFE_AHB FORCE_CORE_ON to prevent memory collapse.
+ 	 * legacy vendor kernel: rmwreg(0x000007F9, AHB_EN2_REG, 0x7FFFBFFF);
+ 	 */
+-	regmap_update_bits(regmap, AHB_EN2_REG, 0x7fffbfff, 0x000007f9);
++	ret = regmap_write(regmap, AHB_EN2_REG, 0x000007f9);
++	if (ret)
++		return ret;
+ 
+ 	/*
+ 	 * Initialize AXI bus registers for memory access paths.
+ 	 * These enable HW gating and set FORCE_CORE_ON bits for AXI clocks.
+-	 * legacy vendor kernel: rmwreg(0x000307F9, MAXI_EN_REG, 0x0FFFFFFF);
++	 * legacy vendor kernel: rmwreg(0x100207F9, MAXI_EN_REG, 0x1803FFFF);
++	 *        rmwreg(0x7027FCFF, MAXI_EN2_REG, 0x7A3FFFFF);
+ 	 *        writel(0x3FE7FCFF, MAXI_EN3_REG);
+ 	 *        writel(0x000001D8, SAXI_EN_REG);
+-	 * Note: MAXI_EN2_REG is owned by RPM, don't touch it.
+ 	 */
+-	regmap_update_bits(regmap, MAXI_EN_REG, 0x0fffffff, 0x000307f9);
+-	regmap_write(regmap, MAXI_EN3_REG, 0x3fe7fcff);
+-	regmap_write(regmap, SAXI_EN_REG, 0x000001d8);
++	ret = regmap_update_bits(regmap, MAXI_EN_REG, 0x1803ffff, 0x100207f9);
++	if (ret)
++		return ret;
++	ret = regmap_update_bits(regmap, MAXI_EN2_REG, 0x7a3fffff, 0x7027fcff);
++	if (ret)
++		return ret;
++	ret = regmap_write(regmap, MAXI_EN3_REG, 0x3fe7fcff);
++	if (ret)
++		return ret;
++	ret = regmap_write(regmap, SAXI_EN_REG, 0x000001d8);
++	if (ret)
++		return ret;
++	dev_info(dev, "secure MMCC AXI control initialized\n");
+ 
+ 	/* Deassert all MM resets */
+ 	regmap_write(regmap, SW_RESET_ALL_REG, 0);
+@@ -3138,7 +3155,7 @@ static int mmcc_msm8660_probe(struct platform_device *pdev)
+ 	dev_info(&pdev->dev, "secure MMCC initialization begin\n");
+ 
+ 	/* Initialize MMCC hardware before registering clocks */
+-	ret = mmcc_msm8660_init_hw(regmap);
++	ret = mmcc_msm8660_init_hw(&pdev->dev, regmap);
+ 	if (ret)
+ 		return dev_err_probe(&pdev->dev, ret,
+ 				     "MMCC hardware init failed\n");
+diff --git a/drivers/firmware/qcom/qcom_scm.c b/drivers/firmware/qcom/qcom_scm.c
+index 8329104509f8a264b1103ae411d67255d8808788..24a0f17c138ff819a4b765361304cd20c5356a35 100644
+--- a/drivers/firmware/qcom/qcom_scm.c
++++ b/drivers/firmware/qcom/qcom_scm.c
+@@ -1137,6 +1137,20 @@ int qcom_scm_io_readl(phys_addr_t addr, unsigned int *val)
+ 	struct qcom_scm_res res;
+ 	int ret;
+ 
++	/*
++	 * The original 32-bit Qualcomm atomic ABI used by MSM8x60 returns an
++	 * SCM_IO_READ value directly in r0.  Unlike SMCCC, r0 is not a status
++	 * with the payload in r1.  Sony's downstream scm-io.c consequently
++	 * treats scm_call_atomic1() itself as the read value.  Preserve the
++	 * generic SMCCC result handling, but decode the legacy ABI exactly;
++	 * otherwise MMCC regmap reads consume r1 (the context register) and
++	 * discard the real register value.
++	 */
++	if (__get_convention() == SMC_CONVENTION_LEGACY) {
++		ret = qcom_scm_call_atomic(__scm->dev, &desc, NULL);
++		*val = (u32)ret;
++		return 0;
++	}
+ 
+ 	ret = qcom_scm_call_atomic(__scm->dev, &desc, &res);
+ 	if (ret >= 0)

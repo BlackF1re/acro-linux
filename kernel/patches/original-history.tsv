@@ -1,0 +1,37 @@
+original_sha	author_name	author_email	author_date	subject
+d0b41b36b483bad6ad907df9d0ad59050df55342	Herman van Hazendonk	github.com@herrie.org	2026-06-06T14:34:26+02:00	clk: qcom: gdsc: add LEGACY_FOOTSWITCH support for MSM8x60
+e771804a5afe296366da40366ce47571bd909e95	Herman van Hazendonk	github.com@herrie.org	2026-06-06T14:34:27+02:00	clk: qcom: gdsc: add RPM_ALWAYS_ON flag
+96cfe69bebbe6c79dac578c89f61a975130f3e5b	Herman van Hazendonk	github.com@herrie.org	2026-06-06T15:00:46+02:00	dt-bindings: interconnect: qcom: add msm8660 NoC
+e61fd6a49002a29ac5ad7d068026ec096dbb82c1	Herman van Hazendonk	github.com@herrie.org	2026-06-06T15:00:47+02:00	interconnect: qcom: add MSM8x60 NoC driver
+c8f45eddaf8e1f2f4d7ac44181b4b8f6668d421b	Herman van Hazendonk	github.com@herrie.org	2026-06-02T06:36:17+02:00	dt-bindings: clock: qcom: add mmcc-msm8660 clock IDs
+a659291f37ff794da863be158210e58158460b1b	Herman van Hazendonk	github.com@herrie.org	2026-06-02T06:36:18+02:00	dt-bindings: reset: qcom: add mmcc-msm8660 reset IDs
+99781428ed30f15024b6f9a7e529ba1cbe26d4e4	Herman van Hazendonk	github.com@herrie.org	2026-06-02T06:36:19+02:00	clk: qcom: add MSM8x60 MMCC driver
+13b0ed27e3d38268935ce95f6c689355fe668614	BlackF1re	plevickij57@gmail.com	2026-09-02T22:55:20+07:00	fix: defer MSM8x60 MMCC until RPM is ready
+33f0511f58910e9721a7ca393f4f083bc63de2be	BlackF1re	plevickij57@gmail.com	2026-09-02T22:55:30+07:00	feat: add Hikari DRM display pipeline
+0ba376017b18a59634c3ac14a264308321fb3f28	BlackF1re	plevickij57@gmail.com	2026-09-03T00:04:02+07:00	fix: defer MSM8x60 PLL2 configuration to consumers
+95a90f998fb097ae5ce340a443b3fb095279028f	BlackF1re	plevickij57@gmail.com	2026-09-03T00:17:43+07:00	fix: use MDP4 clock DT ABI names
+f009bf5cea6969076389c967949c59ae8083a906	BlackF1re	plevickij57@gmail.com	2026-09-03T03:07:44+07:00	fix: correct Hikari DSI clock and PHY setup
+09303e3b2ba0e9e8478640d73aa58deb8c3628b5	BlackF1re	plevickij57@gmail.com	2026-09-03T16:56:18+07:00	feat: add Hikari BQ24160 charging support
+8e2d5553529190341841a96eff0e76aa82d1ded0	BlackF1re	plevickij57@gmail.com	2026-09-03T18:38:23+07:00	fix: correct Hikari display component graph
+6bb585bb5738e0f8074aad46c8719bd37c8eb3af	BlackF1re	plevickij57@gmail.com	2026-09-03T18:38:29+07:00	fix: preserve BQ24160 charge completion state
+58f0d70472a16a8cf10f8d0ecad3f8e25bda3280	BlackF1re	plevickij57@gmail.com	2026-09-03T23:01:57+07:00	drm/msm/dsi: select MSM8x60 V2 host configuration
+7853251fd2ecc28f817a350e47bb88d59795c360	BlackF1re	plevickij57@gmail.com	2026-09-03T23:01:57+07:00	power: supply: bq24160: report status transitions
+200115087c009d422331fe37d86264605fb27163	BlackF1re	plevickij57@gmail.com	2026-09-03T23:34:12+07:00	clk: qcom: fix MSM8x60 DSI slave AHB halt bit
+6b09d9bff5cf57475ddb3c6d79292bf6f2c2874d	BlackF1re	plevickij57@gmail.com	2026-09-03T23:34:12+07:00	drm/panel: send complete Hikari MDV22 commands
+d9c2a7315504d8c968cd928e1de89dc0c50051ab	BlackF1re	plevickij57@gmail.com	2026-09-03T23:34:12+07:00	power: supply: bq24160: distinguish fault history
+a9c320a7dbec7c8342b6311c4b75e6fa843b085e	BlackF1re	plevickij57@gmail.com	2026-09-04T00:10:57+07:00	drm/msm/dsi: correct MSM8x60 link clock topology
+73e2681756489af870c8f65ecaaa0fbaa84fe651	BlackF1re	plevickij57@gmail.com	2026-09-04T00:11:02+07:00	drm/msm/mdp4: make voltage rail optional
+f88018605bf74ac3e9a02c1ea3a0d8d61838a948	BlackF1re	plevickij57@gmail.com	2026-09-04T00:33:31+07:00	drm/msm/dsi: quiesce MSM8x60 clocks before gating
+4405df9c09d490ca2ce984f870db20ecfffa0ee8	BlackF1re	plevickij57@gmail.com	2026-09-04T00:33:32+07:00	phy: qcom-usb-hs: avoid redundant fixed-rail voltage request
+07ed25b29aebeec40be0c90895da788eeaec98e4	BlackF1re	plevickij57@gmail.com	2026-09-04T00:33:32+07:00	power: supply: bq24160: log charging activation
+b44a7cd030f7a5e57ce2f3b3a0190776c3a6548b	BlackF1re	plevickij57@gmail.com	2026-09-04T05:49:09+07:00	drm/msm/dsi: complete MSM8x60 boot-state quiesce
+3c1ddf679af0bfc5ac1af2c9f39afa5fbdf16035	BlackF1re	plevickij57@gmail.com	2026-09-04T11:57:47+07:00	drm/msm/dsi: quiesce MSM8x60 boot state once
+0e2be89e0b0ce554b5ca98c9032b3a728384d5b3	BlackF1re	plevickij57@gmail.com	2026-09-04T12:19:48+07:00	dt-bindings: display: msm: allow MDP4 power domain
+2b964964f5fd3258df2a8782830adf0365b1645c	BlackF1re	plevickij57@gmail.com	2026-09-04T12:19:49+07:00	arm: dts: qcom: power Hikari MDP4 before access
+678b7e106c208fe41223929ffe89b94599437a50	BlackF1re	plevickij57@gmail.com	2026-09-04T12:56:15+07:00	clk: qcom: reproduce the MSM8x60 MDP footswitch sequence
+18f656abb9fb47f1deaeda3bbf78e2a1c0ff28dd	BlackF1re	plevickij57@gmail.com	2026-09-04T12:56:20+07:00	drm/msm/mdp4: fail safely on MSM8x60 clock errors
+054686144ee3469b34cb3a72991ae0f5964f20a7	BlackF1re	plevickij57@gmail.com	2026-09-04T13:14:29+07:00	clk: qcom: keep MSM8x60 MDP reset clocks enabled
+067c4e54fde9b7d909b5f2220e5d9b3df8a2f75e	BlackF1re	plevickij57@gmail.com	2026-09-04T13:28:16+07:00	clk: qcom: access MSM8x60 MMCC through secure IO
+073f7ab967d08d6c60f9c491e7ac2fa81fb1600f	BlackF1re	plevickij57@gmail.com	2026-09-04T18:09:34+07:00	arm: dts: qcom: add Hikari SCM firmware node
+90755ba8b809fc05ad03fb381df28f6810ab278e	BlackF1re	plevickij57@gmail.com	2026-09-04T18:32:17+07:00	firmware: qcom: avoid modern SCM probes on MSM8x60
+9d823ead2c7bedb424dff16f547c2c1cdce910d7	BlackF1re	plevickij57@gmail.com	2026-09-04T18:46:40+07:00	fix: match MSM8x60 secure MMCC access ABI

@@ -1,0 +1,38 @@
+From 07ed25b29aebeec40be0c90895da788eeaec98e4 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Fri, 4 Sep 2026 00:33:32 +0700
+Subject: [PATCH 25/36] power: supply: bq24160: log charging activation
+
+---
+ drivers/power/supply/bq24160_charger.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/power/supply/bq24160_charger.c b/drivers/power/supply/bq24160_charger.c
+index ec4d834890aa06d7bd94ecacf31e4ef0344a12e9..23c376095858dee406823d20b6bc77c6588ed9d1 100644
+--- a/drivers/power/supply/bq24160_charger.c
++++ b/drivers/power/supply/bq24160_charger.c
+@@ -183,6 +183,7 @@ static int bq24160_sync_locked(struct bq24160 *bq)
+ {
+ 	unsigned int status, vendor;
+ 	int temp, voltage, charge_ua, stat, fault, ret;
++	bool was_charging = bq->charging;
+ 
+ 	ret = bq24160_read(bq, BQ24160_REG_STATUS, &status);
+ 	if (ret)
+@@ -251,8 +252,15 @@ static int bq24160_sync_locked(struct bq24160 *bq)
+ 	msleep(220);
+ 	ret = regmap_update_bits(bq->regmap, BQ24160_REG_CONTROL,
+ 				 BQ24160_CTRL_HZ | BQ24160_CTRL_CE, 0);
+-	if (!ret)
++	if (!ret) {
+ 		bq->charging = true;
++		if (!was_charging)
++			dev_info(bq->dev,
++				 "charging enabled: input=%uuA charge=%duA voltage=%uuV temp=%d.%dC battery=%duV\n",
++				 bq->usb_limit_ua, charge_ua,
++				 bq->charge_voltage_uv, temp / 10,
++				 abs(temp % 10), voltage);
++	}
+ 	return ret;
+ }
+ 

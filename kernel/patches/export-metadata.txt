@@ -1,0 +1,5 @@
+source_worktree=/home/paul/xperia/src/linux
+linux_base=786262be6048deab760f68c8acc2c85607165894
+original_head=9d823ead2c7bedb424dff16f547c2c1cdce910d7
+commit_count=36
+exported_utc=2026-09-04T13:00:42Z
