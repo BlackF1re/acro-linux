@@ -153,6 +153,16 @@ current g32 local kernel keeps the eight reset-clock references prepared for
 the temporary always-on domain and releases them only through device-managed
 probe/unbind cleanup. See [the sanitized g31 post-mortem](../research/device/current/boot/g31-display-mmcc-cleanup-oops.md).
 
+The g32 physical run removed that cleanup Oops but again stopped at the first
+MDP4 register read. Its decisive clue is the preceding footswitch readback
+`GFS=0x0`: the enable operation never latched. Exact Sony/C.A.F. MSM8x60 code
+selects secure IO and routes the complete multimedia clock-controller access
+path through SCM. The current local kernel therefore uses SCM-backed MMCC
+regmap accesses, restores the legacy footswitch delay/retention setup, and
+rejects an invalid final enable/clamp readback before MDP MMIO. The corrected
+artifact is locally validated but has not been deployed; display/fbcon remain
+`NOT_VERIFIED`. See [the sanitized g32 post-mortem](../research/device/current/boot/g32-display-secure-mmcc.md).
+
 ## Status domains
 
 status/hardware.yaml deliberately separates physical hardware evidence, the
