@@ -77,6 +77,12 @@ CONFIG_QCOM_PM8XXX_XOADC=y
 CONFIG_HWMON=y
 CONFIG_SENSORS_IIO_HWMON=y
 
+# Native PN544 HCI stack on GSBI8; no Android misc-device compatibility layer.
+CONFIG_NFC=y
+CONFIG_NFC_HCI=y
+CONFIG_NFC_SHDLC=y
+CONFIG_NFC_PN544_I2C=y
+
 # Synaptics ClearPad TM1964 path.  The exact Hikari controller uses RMI F11;
 # the legacy virtual-key strip is intentionally not misrepresented as F1A.
 CONFIG_RMI4_CORE=y
