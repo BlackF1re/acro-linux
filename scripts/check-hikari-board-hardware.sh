@@ -22,6 +22,8 @@ for option in \
 	CONFIG_PINCTRL_QCOM_SSBI_PMIC=y \
 	CONFIG_INPUT_PMIC8XXX_PWRKEY=y \
 	CONFIG_INPUT_PM8XXX_VIBRATOR=y \
+	CONFIG_KEYBOARD_PMIC8XXX=y \
+	CONFIG_KEYBOARD_GPIO=y \
 	CONFIG_RTC_DRV_PM8XXX=y \
 	CONFIG_QCOM_PM8XXX_XOADC=y \
 	CONFIG_RMI4_CORE=y \
@@ -39,6 +41,8 @@ rpm=/soc/rpm@104000
 touch=/soc/gsbi@16200000/i2c@16280000/touchscreen@2c
 gyro=/soc/gsbi@19c00000/i2c@19c80000/gyroscope@68
 accel="$gyro/i2c-gate/accelerometer@18"
+keypad="$pmic/keypad@148"
+gpio_keys=/gpio-keys
 
 [[ $(fdtget -ts "$dtb" "$emmc" status) == okay ]]
 [[ $(fdtget -ts "$dtb" "$sd" status) == okay ]]
@@ -59,6 +63,25 @@ read -r _provider cd_index cd_flags <<<"$(fdtget -tu "$dtb" "$sd" cd-gpios)"
 [[ $(fdtget -ts "$dtb" "$pmic/pwrkey@1c" compatible) == qcom,pm8058-pwrkey ]]
 [[ $(fdtget -ts "$dtb" "$pmic/vibrator@4a" compatible) == qcom,pm8058-vib ]]
 [[ $(fdtget -ts "$dtb" "$pmic/rtc@1e8" compatible) == qcom,pm8058-rtc ]]
+
+# Exact Hikari key topology: two-stage camera matrix plus discrete volume keys.
+[[ $(fdtget -tu "$dtb" "$keypad" keypad,num-rows) -eq 5 ]]
+[[ $(fdtget -tu "$dtb" "$keypad" keypad,num-columns) -eq 5 ]]
+[[ $(fdtget -tu "$dtb" "$keypad" debounce) -eq 15 ]]
+[[ $(fdtget -tu "$dtb" "$keypad" scan-delay) -eq 2 ]]
+[[ $(fdtget -tu "$dtb" "$keypad" row-hold) -eq 122000 ]]
+fdtget -p "$dtb" "$keypad" | grep -qx wakeup-source
+[[ $(fdtget -ts "$dtb" "$gpio_keys" compatible) == gpio-keys ]]
+read -r _provider vu_index vu_flags <<<"$(fdtget -tu "$dtb" "$gpio_keys/volume-up-key" gpios)"
+read -r _provider vd_index vd_flags <<<"$(fdtget -tu "$dtb" "$gpio_keys/volume-down-key" gpios)"
+read -r _provider sim_index sim_flags <<<"$(fdtget -tu "$dtb" "$gpio_keys/sim-detect-switch" gpios)"
+[[ $vu_index -eq 25 && $vu_flags -eq 1 ]]
+[[ $vd_index -eq 73 && $vd_flags -eq 0 ]]
+[[ $sim_index -eq 94 && $sim_flags -eq 0 ]]
+[[ $(fdtget -tu "$dtb" "$gpio_keys/volume-up-key" linux,code) -eq 115 ]]
+[[ $(fdtget -tu "$dtb" "$gpio_keys/volume-down-key" linux,code) -eq 114 ]]
+[[ $(fdtget -tu "$dtb" "$gpio_keys/sim-detect-switch" linux,input-type) -eq 5 ]]
+[[ $(fdtget -tu "$dtb" "$gpio_keys/sim-detect-switch" linux,code) -eq 7 ]]
 
 [[ $(fdtget -ts "$dtb" "$touch" compatible) == syna,rmi4-i2c ]]
 [[ $(fdtget -tu "$dtb" "$touch" reg) -eq 44 ]]

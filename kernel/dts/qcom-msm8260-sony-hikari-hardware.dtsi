@@ -5,6 +5,7 @@
  * existing mainline driver.  Keep speculative peripherals out of this file.
  */
 
+#include <dt-bindings/input/input.h>
 #include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
 #include "pm8058.dtsi"
 
@@ -81,6 +82,20 @@
 		drive-strength = <16>;
 		bias-disable;
 	};
+
+	hikari_volume_down: volume-down-state {
+		pins = "gpio73";
+		function = "gpio";
+		input-enable;
+		bias-disable;
+	};
+
+	hikari_sim_detect: sim-detect-state {
+		pins = "gpio94";
+		function = "gpio";
+		input-enable;
+		bias-disable;
+	};
 };
 
 /* PM8058 GPIO22 is the Hikari microSD card-detect input, active low. */
@@ -92,6 +107,70 @@
 			input-enable;
 			bias-pull-up;
 			qcom,pull-up-strength = <PMIC_GPIO_PULL_UP_30>;
+		};
+	};
+
+	/* Sony configures PM8058 GPIO26 as the wake-capable volume-up input. */
+	hikari_volume_up: volume-up-state {
+		pinconf {
+			pins = "gpio26";
+			function = "normal";
+			input-enable;
+			bias-disable;
+			power-source = <PM8058_GPIO_S3>;
+		};
+	};
+};
+
+/*
+ * Exact Hikari physical keys from keypad-fuji_hikari.c.  Camera focus and
+ * shutter use the PM8058 5x5 matrix at row 1, columns 0/1.  The old board
+ * data used 15 ms debounce, 2 ms scan delay and 122 us row hold and allowed
+ * the matrix to wake the phone.
+ */
+&pm8058_keypad {
+	linux,keymap = <
+		MATRIX_KEY(1, 0, KEY_CAMERA_FOCUS)
+		MATRIX_KEY(1, 1, KEY_CAMERA)
+	>;
+	keypad,num-rows = <5>;
+	keypad,num-columns = <5>;
+	debounce = <15>;
+	scan-delay = <2>;
+	row-hold = <122000>;
+	wakeup-source;
+};
+
+/ {
+	hikari_gpio_keys: gpio-keys {
+		compatible = "gpio-keys";
+		pinctrl-names = "default";
+		pinctrl-0 = <&hikari_volume_up &hikari_volume_down &hikari_sim_detect>;
+
+		volume-up-key {
+			label = "Volume Up";
+			linux,code = <KEY_VOLUMEUP>;
+			/* Sony reads the PMIC real-time bit inverted: asserted is low. */
+			gpios = <&pm8058_gpio 25 GPIO_ACTIVE_LOW>;
+			debounce-interval = <10>;
+			wakeup-source;
+		};
+
+		volume-down-key {
+			label = "Volume Down";
+			linux,code = <KEY_VOLUMEDOWN>;
+			gpios = <&tlmm 73 GPIO_ACTIVE_HIGH>;
+			debounce-interval = <10>;
+			wakeup-source;
+		};
+
+		sim-detect-switch {
+			label = "SIM detection";
+			linux,input-type = <EV_SW>;
+			linux,code = <SW_JACK_PHYSICAL_INSERT>;
+			gpios = <&tlmm 94 GPIO_ACTIVE_HIGH>;
+			debounce-interval = <100>;
+			wakeup-source;
 		};
 	};
 };
