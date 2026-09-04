@@ -1,5 +1,7 @@
-# Canonical Hikari kernel patch application order.
-# Generated from the historical external kernel worktree.
+# Canonical imported Hikari kernel patch application order.
+# These are the 36 historical commits exported from the former external
+# worktree. Project-owned corrections are applied strictly and committed by
+# scripts/materialize-hikari-kernel.sh after this imported history.
 0001-clk-qcom-gdsc-add-LEGACY_FOOTSWITCH-support-for-MSM8.patch
 0002-clk-qcom-gdsc-add-RPM_ALWAYS_ON-flag.patch
 0003-dt-bindings-interconnect-qcom-add-msm8660-NoC.patch
