@@ -16,8 +16,8 @@ override = repo / "kernel/overrides/as3676-backlight.c"
 
 text = driver.read_text()
 markers = (
-    "#define AS3676_CURR6\\t\\t0x2f",
-    "#define AS3676_ID1_VALUE\\t0xae",
+    "#define AS3676_CURR6\t\t0x2f",
+    "#define AS3676_ID1_VALUE\t0xae",
     "devm_backlight_device_register",
     'MODULE_DESCRIPTION("AS3676 Hikari LCD backlight")',
 )
