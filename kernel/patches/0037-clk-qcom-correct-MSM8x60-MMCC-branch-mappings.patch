@@ -26,14 +26,13 @@ MSM8660 vendor tree.
 
 Signed-off-by: BlackF1re <plevickij57@gmail.com>
 ---
- drivers/clk/qcom/mmcc-msm8660.c | 12 +++++-------
- 1 file changed, 5 insertions(+), 7 deletions(-)
+ drivers/clk/qcom/mmcc-msm8660.c | 10 ++++------
+ 1 file changed, 4 insertions(+), 6 deletions(-)
 
 diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
 --- a/drivers/clk/qcom/mmcc-msm8660.c
 +++ b/drivers/clk/qcom/mmcc-msm8660.c
-@@ -1989,14 +1989,13 @@ static struct clk_branch vpe_axi_clk = {
- 	.halt_reg = 0x01d8,
+@@ -1990,11 +1990,10 @@ static struct clk_branch vpe_axi_clk = {
  	.halt_bit = 1,
  	.clkr = {
 -		.enable_reg = 0x0018,
@@ -46,33 +45,23 @@ diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
  		},
  	},
  };
-@@ -2020,7 +2019,7 @@ static struct clk_branch rot_axi_clk = {
- 	.halt_check = BRANCH_HALT_SKIP,
- 	.clkr = {
+@@ -2021,3 +2020,3 @@ static struct clk_branch rot_axi_clk = {
  		.enable_reg = 0x0020,
 -		.enable_mask = BIT(22),
 +		.enable_mask = BIT(24),
  		.hw.init = &(struct clk_init_data){
- 			.name = "rot_axi_clk",
- 			.ops = &clk_branch_ops,
-@@ -2222,14 +2221,13 @@ static struct clk_branch mdp_ahb_clk = {
- 
- static struct clk_branch mmss_imem_ahb_clk = {
+@@ -2223,3 +2222,3 @@ static struct clk_branch mmss_imem_ahb_clk = {
  	.halt_reg = 0x01dc,
 -	.halt_bit = 12,
 +	.halt_bit = 10,
  	.clkr = {
- 		.enable_reg = 0x0008,
- 		.enable_mask = BIT(6),
- 		.hw.init = &(struct clk_init_data){
+@@ -2230,5 +2229,4 @@ static struct clk_branch mmss_imem_ahb_clk = {
  			.name = "mmss_imem_ahb_clk",
  			.ops = &clk_branch_ops,
 -			.flags = CLK_IS_CRITICAL,
  		},
  	},
- };
-@@ -2273,9 +2271,9 @@ static struct clk_branch tv_enc_ahb_clk = {
- 
+@@ -2273,7 +2271,7 @@ static struct clk_branch vcodec_ahb_clk = {
  static struct clk_branch vcodec_ahb_clk = {
  	.halt_reg = 0x01dc,
 -	.halt_bit = 10,
@@ -81,6 +70,5 @@ diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
 -	 * The halt bit at 0x01dc[10] does not settle within the standard
 +	 * The halt bit at 0x01dc[12] does not settle within the standard
  	 * 200 µs poll window when this branch is disabled (e.g. on VIDC
- 	 * runtime suspend), producing "vcodec_ahb_clk status stuck at 'on'"
 -- 
 2.51.0
