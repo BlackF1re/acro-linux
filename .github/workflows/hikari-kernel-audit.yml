@@ -21,7 +21,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            git make gcc-arm-linux-gnueabihf bc bison flex \
+            git make gcc-arm-linux-gnueabihf bc bison flex ripgrep \
             libssl-dev libelf-dev device-tree-compiler python3-venv
           python3 -m venv "$RUNNER_TEMP/dtschema-venv"
           "$RUNNER_TEMP/dtschema-venv/bin/pip" install --disable-pip-version-check dtschema

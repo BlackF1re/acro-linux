@@ -18,6 +18,11 @@ grep -q '"red"' "$driver"
 grep -q '"green"' "$driver"
 grep -q '"blue"' "$driver"
 grep -q 'HIKARI_LED_MAX_UA.*20000' "$driver"
+grep -q 'u8 current_code = as3676_led_current(brightness);' "$driver"
+if grep -q 'u8 current = as3676_led_current(brightness);' "$driver"; then
+	echo 'AS3676 source reintroduced collision with the kernel current macro' >&2
+	exit 1
+fi
 grep -A2 '^config BACKLIGHT_AS3676$' "$kconfig" | grep -q 'depends on I2C && LEDS_CLASS'
 
 echo HIKARI_AS3676_SOURCE_GATE=PASS
