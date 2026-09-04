@@ -3,11 +3,12 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+hikari_build_root=${HIKARI_BUILD_ROOT:-/home/paul/xperia/build}
 kernel_src=${KERNEL_SRC:-/home/paul/xperia/src/linux}
-build_dir=${BUILD_DIR:-/home/paul/xperia/build/linux-hikari-current}
+build_dir=${BUILD_DIR:-"$hikari_build_root/linux-hikari-current"}
 cross_compile=${CROSS_COMPILE:-arm-linux-gnueabihf-}
 jobs=${JOBS:-"$(nproc)"}
-targets=${TARGETS:-"zImage qcom/qcom-msm8260-sony-hikari.dtb"}
+targets=${TARGETS:-"zImage qcom/qcom-msm8260-sony-hikari.dtb qcom/qcom-msm8260-sony-hikari-safe.dtb"}
 initramfs_source=${INITRAMFS_SOURCE:-}
 kernel_fragment=${KERNEL_FRAGMENT:-"$repo_root/kernel/configs/hikari-boot6-display.fragment"}
 require_usb_debug=${REQUIRE_USB_DEBUG:-0}
@@ -27,7 +28,10 @@ git -C "$kernel_src" rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
   exit 1
 }
 test -f "$kernel_fragment" || { echo "KERNEL_FRAGMENT must name a project config fragment" >&2; exit 1; }
-case "$build_dir" in /home/paul/xperia/build/*) ;; *) echo "BUILD_DIR must be below /home/paul/xperia/build" >&2; exit 1;; esac
+mkdir -p "$hikari_build_root"
+hikari_build_root=$(realpath -m -- "$hikari_build_root")
+build_dir=$(realpath -m -- "$build_dir")
+case "$build_dir" in "$hikari_build_root"/*) ;; *) echo "BUILD_DIR must be below HIKARI_BUILD_ROOT=$hikari_build_root" >&2; exit 1;; esac
 "$repo_root/scripts/prepare-hikari-kernel-tree.sh" "$kernel_src"
 make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" qcom_defconfig
 "$kernel_src/scripts/kconfig/merge_config.sh" -m -O "$build_dir" "$build_dir/.config" "$kernel_fragment"
@@ -153,6 +157,8 @@ make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" \
 if [[ " $targets " == *" zImage "* ]]; then
   echo "zImage: $build_dir/arch/arm/boot/zImage"
 fi
-if [[ " $targets " == *" qcom/qcom-msm8260-sony-hikari.dtb "* ]]; then
-  echo "DTB:    $build_dir/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb"
-fi
+for dtb_name in qcom-msm8260-sony-hikari.dtb qcom-msm8260-sony-hikari-safe.dtb; do
+  if [[ " $targets " == *" qcom/$dtb_name "* ]]; then
+    echo "DTB:    $build_dir/arch/arm/boot/dts/qcom/$dtb_name"
+  fi
+done

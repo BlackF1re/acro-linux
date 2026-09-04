@@ -1,0 +1,3 @@
+# Reproducible BusyBox input for the Hikari diagnostic initramfs.
+BUSYBOX_REMOTE=https://git.busybox.net/busybox
+BUSYBOX_BASE=74ac096e895acd6b02976bb010e9b3511234e899

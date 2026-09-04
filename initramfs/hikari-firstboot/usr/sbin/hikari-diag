@@ -1,7 +1,8 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Compact, read-only Hikari bring-up snapshot.  It deliberately omits the
-# bootloader command line and device-unique identifiers.
+# Compact, read-only Hikari bring-up snapshot. It deliberately omits the
+# bootloader command line, MAC addresses, serial numbers and other
+# device-unique identifiers.
 
 section()
 {
@@ -15,6 +16,15 @@ show_file()
 		cat "$1"
 	else
 		echo unavailable
+	fi
+}
+
+driver_name()
+{
+	if [ -L "$1/driver" ]; then
+		readlink "$1/driver" | sed 's#.*/##'
+	else
+		printf 'unbound\n'
 	fi
 }
 
@@ -46,8 +56,82 @@ for path in /sys/bus/platform/devices /sys/bus/i2c/devices \
 	fi
 done
 
+section i2c-bindings
+if [ -d /sys/bus/i2c/devices ]; then
+	for node in /sys/bus/i2c/devices/*-*; do
+		[ -e "$node" ] || continue
+		name=unknown
+		[ -r "$node/name" ] && name=$(cat "$node/name")
+		printf '%s name=%s driver=%s\n' "${node##*/}" "$name" "$(driver_name "$node")"
+	done | sort
+else
+	echo unavailable
+fi
+
+section mmc-inventory
+if [ -d /sys/bus/mmc/devices ]; then
+	for node in /sys/bus/mmc/devices/*; do
+		[ -e "$node" ] || continue
+		type=unknown
+		name=unknown
+		[ -r "$node/type" ] && type=$(cat "$node/type")
+		[ -r "$node/name" ] && name=$(cat "$node/name")
+		printf '%s type=%s name=%s driver=%s\n' "${node##*/}" "$type" "$name" "$(driver_name "$node")"
+	done | sort
+else
+	echo unavailable
+fi
+
+section net-inventory
+if [ -d /sys/class/net ]; then
+	for node in /sys/class/net/*; do
+		[ -e "$node" ] || continue
+		state=unknown
+		carrier=unknown
+		[ -r "$node/operstate" ] && state=$(cat "$node/operstate")
+		[ -r "$node/carrier" ] && carrier=$(cat "$node/carrier" 2>/dev/null || echo unknown)
+		wireless=no
+		[ -d "$node/wireless" ] && wireless=yes
+		printf '%s state=%s carrier=%s wireless=%s driver=%s\n' \
+			"${node##*/}" "$state" "$carrier" "$wireless" "$(driver_name "$node/device")"
+	done | sort
+else
+	echo unavailable
+fi
+
+section input-inventory
+if [ -d /sys/class/input ]; then
+	for node in /sys/class/input/event*; do
+		[ -e "$node" ] || continue
+		name=unknown
+		[ -r "$node/device/name" ] && name=$(cat "$node/device/name")
+		printf '%s name=%s\n' "${node##*/}" "$name"
+	done | sort
+else
+	echo unavailable
+fi
+
+section rfkill-inventory
+if [ -d /sys/class/rfkill ]; then
+	for node in /sys/class/rfkill/rfkill*; do
+		[ -e "$node" ] || continue
+		name=unknown
+		type=unknown
+		soft=unknown
+		hard=unknown
+		[ -r "$node/name" ] && name=$(cat "$node/name")
+		[ -r "$node/type" ] && type=$(cat "$node/type")
+		[ -r "$node/soft" ] && soft=$(cat "$node/soft")
+		[ -r "$node/hard" ] && hard=$(cat "$node/hard")
+		printf '%s name=%s type=%s soft=%s hard=%s\n' "${node##*/}" "$name" "$type" "$soft" "$hard"
+	done | sort
+else
+	echo unavailable
+fi
+
 section classes
-for class in udc tty net input drm backlight leds power_supply thermal rtc; do
+for class in udc tty net input rfkill bluetooth nfc drm backlight leds \
+	power_supply thermal rtc watchdog; do
 	printf '\n-- /sys/class/%s --\n' "$class"
 	if [ -d "/sys/class/$class" ]; then
 		for node in "/sys/class/$class"/*; do
@@ -63,4 +147,4 @@ section deferred-probes
 show_file /sys/kernel/debug/devices_deferred
 
 section relevant-kernel-log
-dmesg | grep -Ei 'hikari|qcom|rpm|scm|mmcc|mdp|dsi|drm|panel|backlight|as3676|usb|ulpi|ci_hdrc|g_serial|ttyGS|bq24|bq27|charger|battery|regulator|defer|fail|error|oops|panic'
+dmesg | grep -Ei 'hikari|qcom|rpm|scm|mmcc|mdp|dsi|drm|panel|backlight|as3676|usb|ulpi|ci_hdrc|g_serial|ttyGS|bq24|bq27|charger|battery|regulator|mmc|mmci|sdio|brcm|wifi|wlan|bluetooth|hci|rmi|synaptics|pn544|nfc|mpu3050|bma|accelerometer|gyro|rtc|vib|keypad|gpio-keys|input|thermal|watchdog|defer|fail|error|oops|panic'
