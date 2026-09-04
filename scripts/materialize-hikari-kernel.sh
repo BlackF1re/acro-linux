@@ -45,6 +45,12 @@ git -C "$out" fetch --no-tags --depth=1 upstream "$LINUX_BASE"
 git -C "$out" checkout --detach FETCH_HEAD >/dev/null
 git -C "$out" switch -c hikari >/dev/null
 
+# git-am needs a committer identity even though every mail patch carries its
+# own author. Keep the identity and committer date deterministic so repeated
+# materializations produce the same reconstructed commit IDs.
+git -C "$out" config user.name "Hikari Patch Materializer"
+git -C "$out" config user.email "hikari-materializer@localhost"
+
 for rel in "${patches[@]}"; do
   patch="$repo_root/kernel/patches/$rel"
   [[ -r $patch ]] || {
@@ -53,7 +59,7 @@ for rel in "${patches[@]}"; do
     exit 1
   }
   echo "Applying $rel"
-  if ! git -C "$out" am --3way --keep-cr "$patch"; then
+  if ! git -C "$out" am --3way --keep-cr --committer-date-is-author-date "$patch"; then
     echo "failed while applying $rel" >&2
     echo "inspect $out, then run: git -C '$out' am --abort" >&2
     exit 4
@@ -61,7 +67,7 @@ for rel in "${patches[@]}"; do
 done
 
 # Fail closed on known MSM8x60 MMCC transcription regressions before board DT
-# preparation or any expensive build.  The rules are exact Sony/CAF hardware
+# preparation or any expensive build. The rules are exact Sony/CAF hardware
 # mappings, not Hikari-specific guesses.
 "$repo_root/scripts/check-msm8660-mmcc-source.sh" "$out"
 
