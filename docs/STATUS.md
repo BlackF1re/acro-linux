@@ -143,6 +143,16 @@ MSM8260 MDP at 200 MHz, and rejects clock failures before MMIO. Display probing
 remains asynchronous as a USB-console fail-safe. This is an evidence-backed
 boot-blocker fix, not a claim that scanout or fbcon is working.
 
+The g31 physical log then proved that the source-derived MDP footswitch
+sequence itself completed. Its cleanup immediately reported the LCDC, pixel
+and TV branches stuck on, then dereferenced a null clock parent while restoring
+a bootloader rate through `clk_rcg_bypass_determine_rate()`. This kernel Oops
+occurred during MMCC probe, before DRM and `/init`; it explains the stable USB
+electrical connection without terminal bytes and gives no panel verdict. The
+current g32 local kernel keeps the eight reset-clock references prepared for
+the temporary always-on domain and releases them only through device-managed
+probe/unbind cleanup. See [the sanitized g31 post-mortem](../research/device/current/boot/g31-display-mmcc-cleanup-oops.md).
+
 ## Status domains
 
 status/hardware.yaml deliberately separates physical hardware evidence, the
