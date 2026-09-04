@@ -1,0 +1,42 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Read-only display clock/power/component report for the live USB shell.
+
+for path in /sys/class/drm /sys/class/backlight /sys/class/leds; do
+	echo "== $path =="
+	if [ -d "$path" ]; then
+		find "$path" -maxdepth 2 -type f -o -type l 2>/dev/null | sort
+	else
+		echo unavailable
+	fi
+done
+
+echo '== deferred probes =='
+if [ -r /sys/kernel/debug/devices_deferred ]; then
+	cat /sys/kernel/debug/devices_deferred
+else
+	echo 'mount debugfs to expose devices_deferred'
+fi
+
+echo '== display platform binding =='
+for dev in 4000000.clock-controller 4700000.dsi 5100000.display-controller; do
+	printf '%s: ' "$dev"
+	if [ -L "/sys/bus/platform/devices/$dev/driver" ]; then
+		readlink "/sys/bus/platform/devices/$dev/driver"
+	elif [ -e "/sys/bus/platform/devices/$dev" ]; then
+		echo unbound
+	else
+		echo absent
+	fi
+done
+
+echo '== backlight state =='
+for value in /sys/class/backlight/*/{brightness,actual_brightness,max_brightness,bl_power,type}; do
+	[ -r "$value" ] || continue
+	printf '%s=' "$value"
+	cat "$value"
+done
+
+echo '== display kernel log =='
+dmesg | grep -Ei 'scm|mmcc|gdsc|mmfab|mdp|dsi|drm|panel|as3676|backlight|framebuffer|fbcon|defer|fail|error|oops|panic'
+

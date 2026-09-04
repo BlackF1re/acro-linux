@@ -9,9 +9,20 @@ test -f "$archive"
 listing=$(gzip -cd -- "$archive" | cpio -itv 2>/dev/null)
 for path in init bin/sh bin/mount bin/sleep bin/cttyhack bin/mkdir bin/cat bin/echo \
             bin/ls bin/uname bin/dmesg bin/ps usr/bin/setsid usr/bin/top sbin/getty \
+            sbin/devmem sbin/ip sbin/ifconfig sbin/hwclock \
+            usr/bin/free usr/bin/hexdump usr/bin/lsblk usr/bin/lsusb usr/bin/microcom \
+            usr/sbin/i2cdetect usr/sbin/i2cdump usr/sbin/i2cget usr/sbin/i2ctransfer \
+            usr/sbin/powertop \
+            usr/sbin/hikari-diag usr/sbin/hikari-display-diag usr/sbin/hikari-power-diag \
             dev proc sys; do
   printf '%s\n' "$listing" | grep -Eq "[[:space:]]${path}( |$| ->)" || {
     echo "Hikari initramfs missing $path" >&2
+    exit 1
+  }
+done
+for helper in hikari-diag hikari-display-diag hikari-power-diag; do
+  printf '%s\n' "$listing" | grep -Eq "^-rwxr-xr-x.* usr/sbin/${helper}$" || {
+    echo "Hikari initramfs missing executable diagnostic helper $helper" >&2
     exit 1
   }
 done

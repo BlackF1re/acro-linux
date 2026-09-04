@@ -1,0 +1,66 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Compact, read-only Hikari bring-up snapshot.  It deliberately omits the
+# bootloader command line and device-unique identifiers.
+
+section()
+{
+	printf '\n== %s ==\n' "$1"
+}
+
+show_file()
+{
+	printf '\n-- %s --\n' "$1"
+	if [ -r "$1" ]; then
+		cat "$1"
+	else
+		echo unavailable
+	fi
+}
+
+section system
+uname -a
+show_file /proc/uptime
+show_file /proc/loadavg
+show_file /proc/meminfo
+show_file /proc/cpuinfo
+
+section kernel-resources
+show_file /proc/iomem
+show_file /proc/interrupts
+show_file /proc/devices
+show_file /proc/partitions
+show_file /proc/mounts
+
+section buses
+for path in /sys/bus/platform/devices /sys/bus/i2c/devices \
+	/sys/bus/spi/devices /sys/bus/mmc/devices; do
+	printf '\n-- %s --\n' "$path"
+	if [ -d "$path" ]; then
+		for node in "$path"/*; do
+			[ -e "$node" ] || continue
+			echo "${node##*/}"
+		done | sort
+	else
+		echo unavailable
+	fi
+done
+
+section classes
+for class in udc tty net input drm backlight leds power_supply thermal rtc; do
+	printf '\n-- /sys/class/%s --\n' "$class"
+	if [ -d "/sys/class/$class" ]; then
+		for node in "/sys/class/$class"/*; do
+			[ -e "$node" ] || continue
+			echo "${node##*/}"
+		done | sort
+	else
+		echo unavailable
+	fi
+done
+
+section deferred-probes
+show_file /sys/kernel/debug/devices_deferred
+
+section relevant-kernel-log
+dmesg | grep -Ei 'hikari|qcom|rpm|scm|mmcc|mdp|dsi|drm|panel|backlight|as3676|usb|ulpi|ci_hdrc|g_serial|ttyGS|bq24|bq27|charger|battery|regulator|defer|fail|error|oops|panic'

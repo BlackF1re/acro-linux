@@ -1,0 +1,34 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Read-only power/charging snapshot; never writes charger or gauge registers.
+
+for supply in /sys/class/power_supply/*; do
+	[ -d "$supply" ] || continue
+	echo "== ${supply##*/} =="
+	for property in type present online status health capacity capacity_level \
+		voltage_now current_now charge_now charge_full charge_full_design \
+		temp technology usb_type; do
+		[ -r "$supply/$property" ] || continue
+		printf '%s=' "$property"
+		cat "$supply/$property"
+	done
+done
+
+echo '== thermal zones =='
+for zone in /sys/class/thermal/thermal_zone*; do
+	[ -d "$zone" ] || continue
+	printf '%s ' "${zone##*/}"
+	[ -r "$zone/type" ] && tr '\n' ' ' <"$zone/type"
+	[ -r "$zone/temp" ] && cat "$zone/temp"
+done
+
+echo '== regulator summary =='
+if [ -r /sys/kernel/debug/regulator/regulator_summary ]; then
+	cat /sys/kernel/debug/regulator/regulator_summary
+else
+	echo 'mount debugfs to expose regulator_summary'
+fi
+
+echo '== power kernel log =='
+dmesg | grep -Ei 'rpm|pm8058|pm8901|regulator|bq24|bq27|charger|battery|power.supply|thermal|voltage|current|fail|error'
+
