@@ -8,6 +8,10 @@
  * the full display bring-up and remains the development target.
  */
 
+/ {
+	model = "Sony Xperia acro S (Hikari, USB-safe diagnostics)";
+};
+
 &mmcc {
 	status = "disabled";
 };
