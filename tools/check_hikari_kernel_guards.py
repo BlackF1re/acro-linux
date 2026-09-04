@@ -14,6 +14,12 @@ def fail(message: str) -> None:
 
 def check_mmcc(kernel: Path) -> None:
     source = (kernel / "drivers/clk/qcom/mmcc-msm8660.c").read_text()
+    kconfig = (kernel / "drivers/clk/qcom/Kconfig").read_text()
+    mmcc_kconfig = re.search(
+        r"config MSM_MMCC_8660(?P<body>.*?)(?=\nconfig |\Z)", kconfig, re.S
+    )
+    if not mmcc_kconfig or "select QCOM_SCM" not in mmcc_kconfig.group("body"):
+        fail("MSM8x60 secure MMCC access requires QCOM_SCM")
     match = re.search(
         r"static struct clk_branch dsi_s_ahb_clk = \{(?P<body>.*?)\n\};",
         source,
@@ -33,12 +39,17 @@ def check_mmcc(kernel: Path) -> None:
     if not mdp_gdsc or "RPM_ALWAYS_ON" not in mdp_gdsc.group("body"):
         fail("MSM8x60 MDP legacy footswitch must remain powered after init")
     for fragment in (
+        "msm8660_mmcc_scm_map",
+        "qcom_scm_io_readl",
+        "qcom_scm_io_writel",
         "mmcc_msm8660_init_mdp_footswitch",
         "MDP_FS_AXI_RESET_MASK",
         "MDP_FS_AHB_RESET_MASK",
         "MDP_FS_CORE_RESET_MASK",
+        "LEGACY_FS_DELAY_COUNT",
         "LEGACY_FS_ENABLE_BIT",
         "LEGACY_FS_CLAMP_BIT",
+        "MDP footswitch did not latch safely",
         "MDP footswitch: clock-assisted AXI/AHB/core reset completed",
     ):
         if fragment not in source:
