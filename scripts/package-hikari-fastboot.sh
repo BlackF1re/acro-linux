@@ -86,17 +86,22 @@ python3 "$repo_root/tools/sony_elf.py" build \
   --rpm-addr "$rpm_addr" \
   --limit "$limit"
 
-# Verify that segment zero is byte-for-byte zImage+DTB, rather than trusting
-# only the builder invocation. Also verify all three load addresses so a raw
-# RPM input can never silently land in the wrong Sony ELF segment.
-python3 - "$output" "$appended" "$ramdisk" "$rpm" <<'PY'
+# Verify all three packaged payloads and their configured physical load
+# addresses rather than trusting only the builder invocation.
+python3 - "$output" "$appended" "$ramdisk" "$rpm" \
+  "$kernel_addr" "$ramdisk_addr" "$rpm_addr" <<'PY'
 from pathlib import Path
 import struct
 import sys
+
 elf = Path(sys.argv[1]).read_bytes()
 expected_kernel = Path(sys.argv[2]).read_bytes()
 expected_ramdisk = Path(sys.argv[3]).read_bytes()
 expected_rpm = Path(sys.argv[4]).read_bytes()
+kernel_addr = int(sys.argv[5], 0)
+ramdisk_addr = int(sys.argv[6], 0)
+rpm_addr = int(sys.argv[7], 0)
+
 header = struct.Struct('<16sHHIIIIIHHHHHH')
 ph = struct.Struct('<IIIIIIII')
 fields = header.unpack_from(elf)
@@ -108,18 +113,28 @@ for i in range(phnum):
         loads.append(ent)
 if len(loads) != 3:
     raise SystemExit(f'expected exactly 3 PT_LOAD segments, got {len(loads)}')
+
 expected = {
-    0x40208000: expected_kernel,
-    0x42c10000: expected_ramdisk,
-    0x00020000: expected_rpm,
+    kernel_addr: expected_kernel,
+    ramdisk_addr: expected_ramdisk,
+    rpm_addr: expected_rpm,
 }
+if len(expected) != 3:
+    raise SystemExit('Sony ELF load addresses must be distinct')
+
+seen = set()
 for ent in loads:
     _, off, _, paddr, filesz, _, _, _ = ent
     payload = elf[off:off + filesz]
     if paddr not in expected:
         raise SystemExit(f'unexpected PT_LOAD physical address 0x{paddr:08x}')
+    if paddr in seen:
+        raise SystemExit(f'duplicate PT_LOAD physical address 0x{paddr:08x}')
     if payload != expected[paddr]:
         raise SystemExit(f'PT_LOAD payload mismatch at 0x{paddr:08x}')
+    seen.add(paddr)
+if seen != set(expected):
+    raise SystemExit('one or more expected Sony ELF PT_LOAD segments are missing')
 PY
 
 sha256sum "$output"
