@@ -26,6 +26,10 @@ for option in \
 	CONFIG_KEYBOARD_GPIO=y \
 	CONFIG_RTC_DRV_PM8XXX=y \
 	CONFIG_QCOM_PM8XXX_XOADC=y \
+	CONFIG_NFC=y \
+	CONFIG_NFC_HCI=y \
+	CONFIG_NFC_SHDLC=y \
+	CONFIG_NFC_PN544_I2C=y \
 	CONFIG_RMI4_CORE=y \
 	CONFIG_RMI4_I2C=y \
 	CONFIG_RMI4_F11=y \
@@ -39,6 +43,7 @@ sd=/soc/amba-bus/mmc@12180000
 pmic=/soc/ssbi@500000/pmic
 rpm=/soc/rpm@104000
 touch=/soc/gsbi@16200000/i2c@16280000/touchscreen@2c
+nfc=/soc/gsbi@19800000/i2c@19880000/nfc@28
 gyro=/soc/gsbi@19c00000/i2c@19c80000/gyroscope@68
 accel="$gyro/i2c-gate/accelerometer@18"
 keypad="$pmic/keypad@148"
@@ -82,6 +87,16 @@ read -r _provider sim_index sim_flags <<<"$(fdtget -tu "$dtb" "$gpio_keys/sim-de
 [[ $(fdtget -tu "$dtb" "$gpio_keys/volume-down-key" linux,code) -eq 114 ]]
 [[ $(fdtget -tu "$dtb" "$gpio_keys/sim-detect-switch" linux,input-type) -eq 5 ]]
 [[ $(fdtget -tu "$dtb" "$gpio_keys/sim-detect-switch" linux,code) -eq 7 ]]
+
+# Exact Hikari PN544: GSBI8/0x28, PM8058 GPIO28 IRQ, GPIO17 VEN, GPIO27 FWDL.
+[[ $(fdtget -ts "$dtb" "$nfc" compatible) == nxp,pn544-i2c ]]
+[[ $(fdtget -tu "$dtb" "$nfc" reg) -eq 40 ]]
+read -r _provider irq_index irq_flags <<<"$(fdtget -tu "$dtb" "$nfc" interrupts-extended)"
+read -r _provider en_index en_flags <<<"$(fdtget -tu "$dtb" "$nfc" enable-gpios)"
+read -r _provider fw_index fw_flags <<<"$(fdtget -tu "$dtb" "$nfc" firmware-gpios)"
+[[ $irq_index -eq 27 && $irq_flags -eq 1 ]]
+[[ $en_index -eq 16 && $en_flags -eq 0 ]]
+[[ $fw_index -eq 26 && $fw_flags -eq 0 ]]
 
 [[ $(fdtget -ts "$dtb" "$touch" compatible) == syna,rmi4-i2c ]]
 [[ $(fdtget -tu "$dtb" "$touch" reg) -eq 44 ]]

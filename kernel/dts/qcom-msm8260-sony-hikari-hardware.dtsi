@@ -120,6 +120,42 @@
 			power-source = <PM8058_GPIO_S3>;
 		};
 	};
+
+	/* PN544 VEN is PM8058 GPIO17, open drain from VPH on Hikari ROW. */
+	hikari_nfc_enable: nfc-enable-state {
+		pinconf {
+			pins = "gpio17";
+			function = "normal";
+			output-low;
+			bias-disable;
+			drive-open-drain;
+			power-source = <PM8058_GPIO_VPH>;
+			qcom,drive-strength = <PMIC_GPIO_STRENGTH_MED>;
+		};
+	};
+
+	/* PN544 firmware-download select is PM8058 GPIO27 from S3. */
+	hikari_nfc_firmware: nfc-firmware-state {
+		pinconf {
+			pins = "gpio27";
+			function = "normal";
+			output-low;
+			bias-disable;
+			power-source = <PM8058_GPIO_S3>;
+			qcom,drive-strength = <PMIC_GPIO_STRENGTH_LOW>;
+		};
+	};
+
+	/* PN544 IRQ is PM8058 GPIO28, pulled down and sampled on a rising edge. */
+	hikari_nfc_irq: nfc-irq-state {
+		pinconf {
+			pins = "gpio28";
+			function = "normal";
+			input-enable;
+			bias-pull-down;
+			power-source = <PM8058_GPIO_S3>;
+		};
+	};
 };
 
 /*
@@ -224,6 +260,23 @@
 			syna,clip-x-high = <719>;
 			syna,clip-y-high = <1279>;
 		};
+	};
+};
+
+/*
+ * GSBI8 also carries the PN544 NFC controller.  Sony registers it at 0x28,
+ * with rising-edge IRQ on PM8058 GPIO28, VEN on GPIO17 and FWDL on GPIO27.
+ * The mainline PN544 HCI driver owns the exact OFF/ON/FWDL toggle sequence.
+ */
+&gsbi8_i2c {
+	nfc@28 {
+		compatible = "nxp,pn544-i2c";
+		reg = <0x28>;
+		interrupts-extended = <&pm8058_gpio 27 IRQ_TYPE_EDGE_RISING>;
+		enable-gpios = <&pm8058_gpio 16 GPIO_ACTIVE_HIGH>;
+		firmware-gpios = <&pm8058_gpio 26 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&hikari_nfc_enable &hikari_nfc_firmware &hikari_nfc_irq>;
 	};
 };
 
