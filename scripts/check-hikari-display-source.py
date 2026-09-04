@@ -3,6 +3,7 @@
 """Fail if the materialized Hikari display path loses exact Sony details."""
 
 from pathlib import Path
+import re
 import sys
 
 
@@ -58,14 +59,10 @@ def main() -> int:
     )
     require(panel, off_sequence, "Sony MDV22 power-off order")
 
-    # The DT backlight phandle must be resolved by the panel driver.  The DRM
-    # panel core then calls backlight_enable()/disable() in the correct KMS
-    # lifecycle; a probed standalone AS3676 is not sufficient.
-    require(
-        panel,
-        "ret=drm_panel_of_backlight(&m->panel);",
-        "MDV22 DRM backlight lookup",
-    )
+    # Patch 0014 resolves the DT backlight phandle.  Match C whitespace rather
+    # than depending on the historical patch's formatting style.
+    if not re.search(r"\bret\s*=\s*drm_panel_of_backlight\s*\(\s*&m->panel\s*\)\s*;", panel):
+        raise SystemExit("missing MDV22 DRM backlight lookup")
     require(
         panel,
         '"failed to get backlight\\n"',
