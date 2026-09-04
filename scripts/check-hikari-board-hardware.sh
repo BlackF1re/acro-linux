@@ -18,6 +18,7 @@ for option in \
 	CONFIG_MMC=y \
 	CONFIG_MMC_BLOCK=y \
 	CONFIG_MMC_ARMMMCI=y \
+	CONFIG_MMC_PWRSEQ_SIMPLE=y \
 	CONFIG_MFD_PM8XXX=y \
 	CONFIG_PINCTRL_QCOM_SSBI_PMIC=y \
 	CONFIG_INPUT_PMIC8XXX_PWRKEY=y \
@@ -30,6 +31,14 @@ for option in \
 	CONFIG_NFC_HCI=y \
 	CONFIG_NFC_SHDLC=y \
 	CONFIG_NFC_PN544_I2C=y \
+	CONFIG_CFG80211=y \
+	CONFIG_BRCMFMAC=y \
+	CONFIG_BRCMFMAC_SDIO=y \
+	CONFIG_BT=y \
+	CONFIG_BT_HCIUART=y \
+	CONFIG_BT_HCIUART_SERDEV=y \
+	CONFIG_BT_HCIUART_BCM=y \
+	CONFIG_BT_HCIUART_H4=y \
 	CONFIG_RMI4_CORE=y \
 	CONFIG_RMI4_I2C=y \
 	CONFIG_RMI4_F11=y \
@@ -40,6 +49,12 @@ done
 
 emmc=/soc/amba-bus/mmc@12400000
 sd=/soc/amba-bus/mmc@12180000
+wifi_host=/soc/amba-bus/mmc@121c0000
+wifi="$wifi_host/wifi@1"
+wifi_pwrseq=/wifi-pwrseq
+bt_gsbi=/soc/gsbi@16500000
+bt_uart="$bt_gsbi/serial@16540000"
+bt="$bt_uart/bluetooth"
 pmic=/soc/ssbi@500000/pmic
 rpm=/soc/rpm@104000
 touch=/soc/gsbi@16200000/i2c@16280000/touchscreen@2c
@@ -97,6 +112,41 @@ read -r _provider fw_index fw_flags <<<"$(fdtget -tu "$dtb" "$nfc" firmware-gpio
 [[ $irq_index -eq 27 && $irq_flags -eq 1 ]]
 [[ $en_index -eq 16 && $en_flags -eq 0 ]]
 [[ $fw_index -eq 26 && $fw_flags -eq 0 ]]
+
+# BCM4330 WLAN: SDCC4 four-bit/48 MHz, PM8058 S3 1.8 V, reset 130, host-wake 128.
+[[ $(fdtget -ts "$dtb" "$wifi_host" status) == okay ]]
+[[ $(fdtget -tu "$dtb" "$wifi_host" bus-width) -eq 4 ]]
+[[ $(fdtget -tu "$dtb" "$wifi_host" max-frequency) -eq 48000000 ]]
+fdtget -p "$dtb" "$wifi_host" | grep -qx non-removable
+fdtget -p "$dtb" "$wifi_host" | grep -qx cap-sdio-irq
+[[ $(fdtget -tu "$dtb" "$rpm/regulators-1/s3" regulator-min-microvolt) -eq 1800000 ]]
+[[ $(fdtget -tu "$dtb" "$rpm/regulators-1/s3" regulator-max-microvolt) -eq 1800000 ]]
+[[ $(fdtget -ts "$dtb" "$wifi_pwrseq" compatible) == mmc-pwrseq-simple ]]
+read -r _provider wifi_reset_index wifi_reset_flags <<<"$(fdtget -tu "$dtb" "$wifi_pwrseq" reset-gpios)"
+[[ $wifi_reset_index -eq 130 && $wifi_reset_flags -eq 1 ]]
+[[ $(fdtget -ts "$dtb" "$wifi" compatible) == 'brcm,bcm4330-fmac brcm,bcm4329-fmac' ]]
+[[ $(fdtget -tu "$dtb" "$wifi" reg) -eq 1 ]]
+[[ $(fdtget -ts "$dtb" "$wifi" interrupt-names) == host-wake ]]
+read -r wifi_irq_parent wifi_irq_index wifi_irq_flags <<<"$(fdtget -tu "$dtb" "$wifi" interrupts-extended 2>/dev/null || true)"
+if [[ -n ${wifi_irq_index:-} ]]; then
+	[[ $wifi_irq_index -eq 128 && $wifi_irq_flags -eq 4 ]]
+else
+	read -r wifi_irq_index wifi_irq_flags <<<"$(fdtget -tu "$dtb" "$wifi" interrupts)"
+	[[ $wifi_irq_index -eq 128 && $wifi_irq_flags -eq 4 ]]
+fi
+
+# BCM4330 Bluetooth: GSBI6 UARTDM + hci_bcm serdev and exact Sony control GPIOs.
+[[ $(fdtget -tu "$dtb" "$bt_gsbi" qcom,mode) -eq 4 ]]
+[[ $(fdtget -ts "$dtb" "$bt_gsbi" status) == okay ]]
+[[ $(fdtget -ts "$dtb" "$bt_uart" status) == okay ]]
+fdtget -p "$dtb" "$bt_uart" | grep -qx uart-has-rtscts
+[[ $(fdtget -ts "$dtb" "$bt" compatible) == brcm,bcm4330-bt ]]
+read -r _provider bt_reset_index bt_reset_flags <<<"$(fdtget -tu "$dtb" "$bt" shutdown-gpios)"
+read -r _provider bt_wake_index bt_wake_flags <<<"$(fdtget -tu "$dtb" "$bt" device-wakeup-gpios)"
+read -r _provider bt_host_index bt_host_flags <<<"$(fdtget -tu "$dtb" "$bt" host-wakeup-gpios)"
+[[ $bt_reset_index -eq 23 && $bt_reset_flags -eq 0 ]]
+[[ $bt_wake_index -eq 137 && $bt_wake_flags -eq 0 ]]
+[[ $bt_host_index -eq 63 && $bt_host_flags -eq 0 ]]
 
 [[ $(fdtget -ts "$dtb" "$touch" compatible) == syna,rmi4-i2c ]]
 [[ $(fdtget -tu "$dtb" "$touch" reg) -eq 44 ]]

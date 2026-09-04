@@ -102,8 +102,26 @@ GIT_COMMITTER_EMAIL=hikari-materializer@localhost \
 GIT_COMMITTER_DATE=2026-09-04T17:30:00+03:00 \
 git -C "$out" commit -q -m $'drm: msm: finalize Hikari MDV22 signalling\n\nMatch the Sony Hikari MDV22 BGR channel order and reproduce the exact reset/LCD power sequencing around panel initialization and shutdown.\n\nSigned-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>'
 
+# Project correction #39 expands the already Hikari-specific AS3676 driver
+# from LCD-only support to every source-backed LED output used on this board.
+# The precondition checker refuses to replace an unexpected historical driver.
+python3 "$repo_root/scripts/apply-hikari-as3676-leds.py" "$out"
+git -C "$out" add drivers/video/backlight/as3676-backlight.c drivers/video/backlight/Kconfig
+if git -C "$out" diff --cached --quiet; then
+  echo 'Hikari AS3676 LED correction produced no diff; refusing ambiguous materialization' >&2
+  exit 7
+fi
+GIT_AUTHOR_NAME=BlackF1re \
+GIT_AUTHOR_EMAIL=55582873+BlackF1re@users.noreply.github.com \
+GIT_AUTHOR_DATE=2026-09-04T18:20:00+03:00 \
+GIT_COMMITTER_NAME="Hikari Patch Materializer" \
+GIT_COMMITTER_EMAIL=hikari-materializer@localhost \
+GIT_COMMITTER_DATE=2026-09-04T18:20:00+03:00 \
+git -C "$out" commit -q -m $'leds: as3676: expose Hikari button and RGB outputs\n\nKeep LCD sinks 1/2/6 and add the exact Sony Hikari button RGB1/2/3 group plus notification sinks 41/42/43 through the Linux LED class.\n\nSigned-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>'
+
 "$repo_root/scripts/check-msm8660-mmcc-source.sh" "$out"
 python3 "$repo_root/scripts/check-hikari-display-source.py" "$out"
+"$repo_root/scripts/check-hikari-as3676-source.sh" "$out"
 "$repo_root/scripts/prepare-hikari-kernel-tree.sh" "$out"
 
 printf 'Hikari kernel materialized successfully.\n'
