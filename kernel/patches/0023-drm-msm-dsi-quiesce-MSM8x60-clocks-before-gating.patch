@@ -1,0 +1,64 @@
+From f88018605bf74ac3e9a02c1ea3a0d8d61838a948 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Fri, 4 Sep 2026 00:33:31 +0700
+Subject: [PATCH 23/36] drm/msm/dsi: quiesce MSM8x60 clocks before gating
+
+---
+ drivers/gpu/drm/msm/dsi/dsi_cfg.c  |  1 +
+ drivers/gpu/drm/msm/dsi/dsi_cfg.h  |  2 +-
+ drivers/gpu/drm/msm/dsi/dsi_host.c | 13 +++++++++++++
+ 3 files changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_cfg.c b/drivers/gpu/drm/msm/dsi/dsi_cfg.c
+index 04c1dba7699e67ac0adb64f0fe117291181f17f3..031d056ba235b3199df0fccc8ddef5c87594c7e9 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_cfg.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_cfg.c
+@@ -21,6 +21,7 @@ static const struct regulator_bulk_data msm8x60_dsi_regulators[] = {
+  */
+ static const struct msm_dsi_config msm8x60_dsi_cfg = {
+ 	.io_offset = 0,
++	.clear_clk_ctrl_on_suspend = true,
+ 	.regulator_data = msm8x60_dsi_regulators,
+ 	.num_regulators = ARRAY_SIZE(msm8x60_dsi_regulators),
+ 	.bus_clk_names = dsi_v2_bus_clk_names,
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_cfg.h b/drivers/gpu/drm/msm/dsi/dsi_cfg.h
+index ccf06679608e0387471cbbcc0e061da5ce9e6159..ce07183218f5c74c9358d2e4cb3b5e3174b9b9a1 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_cfg.h
++++ b/drivers/gpu/drm/msm/dsi/dsi_cfg.h
+@@ -43,6 +43,7 @@
+ 
+ struct msm_dsi_config {
+ 	u32 io_offset;
++	bool clear_clk_ctrl_on_suspend;
+ 	const struct regulator_bulk_data *regulator_data;
+ 	int num_regulators;
+ 	const char * const *bus_clk_names;
+@@ -72,4 +73,3 @@ struct msm_dsi_cfg_handler {
+ const struct msm_dsi_cfg_handler *msm_dsi_cfg_get(u32 major, u32 minor);
+ 
+ #endif /* __MSM_DSI_CFG_H__ */
+-
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
+index bef189a84f2feb79c6077503d858cb10c1b31d73..9ee7bc47d6fb6db7afd3dd38b000a2906d874c7c 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -374,6 +374,19 @@ int msm_dsi_runtime_suspend(struct device *dev)
+ 	if (!msm_host->cfg_hnd)
+ 		return 0;
+ 
++	/*
++	 * MSM8x60's DSI_CLK_CTRL contains force-on bits for the three AHB
++	 * branches.  The downstream MSM8x60 DSI shutdown sequence clears this
++	 * register while the bus is still accessible, before asking the clock
++	 * controller to gate those branches.  Leaving the bootloader value in
++	 * place makes the clock framework wait forever for the halt bits.
++	 */
++	if (msm_host->cfg_hnd->cfg->clear_clk_ctrl_on_suspend) {
++		dsi_write(msm_host, REG_DSI_CLK_CTRL, 0);
++		/* Complete the MMIO write before gating its bus clocks. */
++		wmb();
++	}
++
+ 	clk_bulk_disable_unprepare(msm_host->num_bus_clks, msm_host->bus_clks);
+ 
+ 	return 0;

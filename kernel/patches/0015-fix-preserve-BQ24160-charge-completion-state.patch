@@ -1,0 +1,47 @@
+From 6bb585bb5738e0f8074aad46c8719bd37c8eb3af Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Thu, 3 Sep 2026 18:38:29 +0700
+Subject: [PATCH 15/36] fix: preserve BQ24160 charge completion state
+
+---
+ drivers/power/supply/bq24160_charger.c | 18 ++++++++++++++++--
+ 1 file changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/power/supply/bq24160_charger.c b/drivers/power/supply/bq24160_charger.c
+index 51fe41368fdbdd832236e79b93354cdb538d0474..d58129b4deec09d015c8fead0b50a1b3b69071d2 100644
+--- a/drivers/power/supply/bq24160_charger.c
++++ b/drivers/power/supply/bq24160_charger.c
+@@ -196,6 +196,15 @@ static int bq24160_sync_locked(struct bq24160 *bq)
+ 	if (fault || (stat != BQ24160_STAT_USB_READY &&
+ 		      stat != BQ24160_STAT_CHARGING_USB && stat != BQ24160_STAT_DONE))
+ 		return bq24160_disable(bq);
++	/*
++	 * Hardware termination already stopped the charge cycle.  Do not toggle
++	 * CE here: doing so changes STAT away from DONE and the next watchdog pass
++	 * would immediately program and start a new cycle.
++	 */
++	if (stat == BQ24160_STAT_DONE) {
++		bq->charging = false;
++		return 0;
++	}
+ 
+ 	ret = bq24160_gauge_property(bq, POWER_SUPPLY_PROP_TEMP, &temp);
+ 	if (ret)
+@@ -285,10 +294,15 @@ static int bq24160_get_property(struct power_supply *psy,
+ 	switch (prop) {
+ 	case POWER_SUPPLY_PROP_ONLINE:
+ 		val->intval = FIELD_GET(BQ24160_STATUS_STAT_MASK, status) == BQ24160_STAT_USB_READY ||
+-			      FIELD_GET(BQ24160_STATUS_STAT_MASK, status) == BQ24160_STAT_CHARGING_USB;
++			      FIELD_GET(BQ24160_STATUS_STAT_MASK, status) == BQ24160_STAT_CHARGING_USB ||
++			      FIELD_GET(BQ24160_STATUS_STAT_MASK, status) == BQ24160_STAT_DONE;
+ 		return 0;
+ 	case POWER_SUPPLY_PROP_STATUS:
+-		val->intval = bq->charging ? POWER_SUPPLY_STATUS_CHARGING : POWER_SUPPLY_STATUS_NOT_CHARGING;
++		if (FIELD_GET(BQ24160_STATUS_STAT_MASK, status) == BQ24160_STAT_DONE)
++			val->intval = POWER_SUPPLY_STATUS_FULL;
++		else
++			val->intval = bq->charging ? POWER_SUPPLY_STATUS_CHARGING :
++				POWER_SUPPLY_STATUS_NOT_CHARGING;
+ 		return 0;
+ 	case POWER_SUPPLY_PROP_HEALTH:
+ 		val->intval = FIELD_GET(BQ24160_STATUS_FAULT_MASK, status) ?

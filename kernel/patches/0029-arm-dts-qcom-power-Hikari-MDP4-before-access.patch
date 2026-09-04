@@ -1,0 +1,42 @@
+From 2b964964f5fd3258df2a8782830adf0365b1645c Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Fri, 4 Sep 2026 12:19:49 +0700
+Subject: [PATCH 29/36] arm: dts: qcom: power Hikari MDP4 before access
+
+---
+ arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts | 7 ++++---
+ drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c            | 2 ++
+ 2 files changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+index 1e45f8b7bdcf0ef1aaa5020958afd97fdc214cc2..50998b74d20709c6958bdb3146c1d121695a0078 100644
+--- a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
++++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+@@ -180,10 +180,11 @@ mdp: display-controller@5100000 {
+ 		/* Names are the MDP4 DRM driver's DT ABI, not descriptive labels. */
+ 		clock-names = "core_clk", "iface_clk", "bus_clk", "lut_clk",
+ 			      "hdmi_clk", "tv_clk";
++		power-domains = <&mmcc MDP_GDSC>;
+ 		/*
+-		 * MDP4 DRM neither attaches a genpd nor votes an interconnect path;
+-		 * do not describe unused properties outside the current MDP4 binding.
+-		 * MMCC performs the required MMSS fabric unhalt before MDP clocks run.
++		 * The Sony MSM8x60 BSP powers mdp.0 through footswitch FS_MDP (4).
++		 * MMCC's MDP_GDSC is its genpd representation; the platform core
++		 * attaches and powers it before MDP4 may access 0x05100000.
+ 		 */
+ 		status = "okay";
+ 
+diff --git a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
+index fd005b77261256643e3aa5f9ee4cda4fa10c7342..c78a1d08591df2ba24f558f71e98def050ec68bb 100644
+--- a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
++++ b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
+@@ -415,6 +415,8 @@ static int mdp4_kms_init(struct drm_device *dev)
+ 
+ 	clk_set_rate(mdp4_kms->clk, max_clk);
+ 
++	DRM_DEV_INFO(dev->dev,
++		     "reading MDP4 revision with display power domain enabled\n");
+ 	read_mdp_hw_revision(mdp4_kms, &major, &minor);
+ 
+ 	if (major != 4) {

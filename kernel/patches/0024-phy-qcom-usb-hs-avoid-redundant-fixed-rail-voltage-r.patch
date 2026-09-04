@@ -1,0 +1,41 @@
+From 4405df9c09d490ca2ce984f870db20ecfffa0ee8 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Fri, 4 Sep 2026 00:33:32 +0700
+Subject: [PATCH 24/36] phy: qcom-usb-hs: avoid redundant fixed-rail voltage
+ request
+
+---
+ drivers/phy/qualcomm/phy-qcom-usb-hs.c | 19 ++++++++++++++++---
+ 1 file changed, 16 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/phy/qualcomm/phy-qcom-usb-hs.c b/drivers/phy/qualcomm/phy-qcom-usb-hs.c
+index 928a982a8a76c50ee98b425422de5b53fb23c8ec..c66dd87957d8e3f5a4f6e435a360f44c6f2f5592 100644
+--- a/drivers/phy/qualcomm/phy-qcom-usb-hs.c
++++ b/drivers/phy/qualcomm/phy-qcom-usb-hs.c
+@@ -128,10 +128,23 @@ static int qcom_usb_hs_phy_power_on(struct phy *phy)
+ 	if (ret)
+ 		goto err_1p8;
+ 
+-	ret = regulator_set_voltage_triplet(uphy->v3p3, 3050000, 3300000,
+-					    3300000);
+-	if (ret)
++	/*
++	 * Some MSM8x60 boards constrain this rail to the already-correct
++	 * downstream voltage (Hikari uses PM8058 L6 at 3.05 V).  Do not ask the
++	 * regulator core for a forbidden voltage change when the boot constraint
++	 * has already placed the rail inside the PHY's supported range.
++	 */
++	state = regulator_get_voltage(uphy->v3p3);
++	if (state < 0) {
++		ret = state;
+ 		goto err_3p3;
++	}
++	if (state < 3050000 || state > 3300000) {
++		ret = regulator_set_voltage_triplet(uphy->v3p3, 3050000,
++						    3300000, 3300000);
++		if (ret)
++			goto err_3p3;
++	}
+ 
+ 	ret = regulator_set_load(uphy->v3p3, 50000);
+ 	if (ret < 0)

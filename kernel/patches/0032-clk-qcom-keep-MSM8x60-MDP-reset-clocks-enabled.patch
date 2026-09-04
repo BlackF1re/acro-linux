@@ -1,0 +1,96 @@
+From 054686144ee3469b34cb3a72991ae0f5964f20a7 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Fri, 4 Sep 2026 13:14:29 +0700
+Subject: [PATCH 32/36] clk: qcom: keep MSM8x60 MDP reset clocks enabled
+
+---
+ drivers/clk/qcom/mmcc-msm8660.c | 38 ++++++++++++++++-----------------
+ 1 file changed, 19 insertions(+), 19 deletions(-)
+
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+index 824e8d6f0550583f17d328d0cfeccd59af22e94f..4b7a347ba1a163fb4843f728360499245b388adb 100644
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -2893,10 +2893,13 @@ struct msm8660_mdp_fs_clk {
+ 	struct clk_hw *hw;
+ 	const char *name;
+ 	struct clk *clk;
+-	unsigned long old_rate;
+-	bool enabled;
+ };
+ 
++static void mmcc_msm8660_disable_unprepare_clk(void *data)
++{
++	clk_disable_unprepare(data);
++}
++
+ /*
+  * Reproduce the clock-assisted MDP footswitch initialization used by the
+  * MSM8x60 Sony/C.A.F. BSP.  A legacy footswitch may look ON from ENABLE and
+@@ -2905,9 +2908,12 @@ struct msm8660_mdp_fs_clk {
+  *
+  * This runs after CCF registration but before the MMCC provider probe returns,
+  * so no MDP consumer can touch 0x05100000 in the partially initialized state.
+- * The clocks are temporary reset clocks and are restored afterwards.  The MDP
+- * GDSC is deliberately RPM_ALWAYS_ON because the generic power-off/on path
+- * cannot yet repeat this legacy eight-clock sequence.
++ * Keep the reset clocks prepared while this temporary bring-up path keeps the
++ * MDP GDSC RPM_ALWAYS_ON.  Disabling the pixel branches immediately after the
++ * sequence leaves their halt status asserted, and restoring the bootloader
++ * rate of a bypass RCG is unsafe until all of its possible parents are
++ * represented in CCF.  Device-managed actions release the references if the
++ * probe fails or the driver is unbound.
+  */
+ static int mmcc_msm8660_init_mdp_footswitch(struct device *dev,
+ 					    struct regmap *regmap)
+@@ -2942,8 +2948,7 @@ static int mmcc_msm8660_init_mdp_footswitch(struct device *dev,
+ 			goto err_disable;
+ 		}
+ 
+-		clocks[i].old_rate = clk_get_rate(clocks[i].clk);
+-		if (!clocks[i].old_rate) {
++		if (!clk_get_rate(clocks[i].clk)) {
+ 			ret = clk_set_rate(clocks[i].clk, 27000000);
+ 			if (ret) {
+ 				dev_err(dev, "MDP footswitch %s clock rate failed: %d\n",
+@@ -2958,9 +2963,13 @@ static int mmcc_msm8660_init_mdp_footswitch(struct device *dev,
+ 				"MDP footswitch %s clock enable failed: %d\n",
+ 				clocks[i].name, ret);
+ 			goto err_disable;
+-		} else {
+-			clocks[i].enabled = true;
+ 		}
++
++		ret = devm_add_action_or_reset(dev,
++					       mmcc_msm8660_disable_unprepare_clk,
++					       clocks[i].clk);
++		if (ret)
++			return ret;
+ 	}
+ 
+ 	/* Both MDP AXI ports were unhalted by the preceding RPM transaction. */
+@@ -3018,8 +3027,7 @@ static int mmcc_msm8660_init_mdp_footswitch(struct device *dev,
+ 	dev_info(dev,
+ 		 "MDP footswitch: clock-assisted AXI/AHB/core reset completed (GFS=%#x)\n",
+ 		 val);
+-	ret = 0;
+-	goto err_disable;
++	return 0;
+ 
+ err_clear_resets:
+ 	/* Never leave a failed probe holding the shared MMSS reset lines. */
+@@ -3031,14 +3039,6 @@ static int mmcc_msm8660_init_mdp_footswitch(struct device *dev,
+ 			   MDP_FS_AXI_RESET_MASK, 0);
+ 
+ err_disable:
+-	for (i = ARRAY_SIZE(clocks) - 1; i >= 0; i--) {
+-		if (clocks[i].enabled)
+-			clk_disable_unprepare(clocks[i].clk);
+-		if (clocks[i].clk && !IS_ERR(clocks[i].clk) &&
+-		    clocks[i].old_rate)
+-			clk_set_rate(clocks[i].clk, clocks[i].old_rate);
+-	}
+-
+ 	return ret;
+ }
+ 

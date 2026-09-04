@@ -1,0 +1,160 @@
+From 067c4e54fde9b7d909b5f2220e5d9b3df8a2f75e Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Fri, 4 Sep 2026 13:28:16 +0700
+Subject: [PATCH 33/36] clk: qcom: access MSM8x60 MMCC through secure IO
+
+---
+ drivers/clk/qcom/Kconfig        |  1 +
+ drivers/clk/qcom/mmcc-msm8660.c | 88 ++++++++++++++++++++++++++++++++-
+ 2 files changed, 87 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/clk/qcom/Kconfig b/drivers/clk/qcom/Kconfig
+index c2adcb57fac87ffd06183bdb734997b4068015dd..f7534580747b55af848e14e9fc649eb1063ea474 100644
+--- a/drivers/clk/qcom/Kconfig
++++ b/drivers/clk/qcom/Kconfig
+@@ -745,6 +745,7 @@ config MSM_MMCC_8660
+ 	select MSM_GCC_8660
+ 	select QCOM_COMMON_CLK
+ 	select QCOM_GDSC
++	select QCOM_SCM
+ 	help
+ 	  Support for the multimedia clock controller on the MSM8x60 family
+ 	  (MSM8260/MSM8660/APQ8060). Say Y if you want to support multimedia
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+index 4b7a347ba1a163fb4843f728360499245b388adb..613f663bdbb5b09b21bcbb2eeb5ab431f5f8a035 100644
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -13,6 +13,8 @@
+ #include <linux/bitops.h>
+ #include <linux/err.h>
+ #include <linux/delay.h>
++#include <linux/firmware/qcom/qcom_scm.h>
++#include <linux/ioport.h>
+ #include <linux/platform_device.h>
+ #include <linux/mod_devicetable.h>
+ #include <linux/module.h>
+@@ -2619,9 +2621,71 @@ static const struct regmap_config mmcc_msm8660_regmap_config = {
+ 	.reg_stride	= 4,
+ 	.val_bits	= 32,
+ 	.max_register	= 0x334,
+-	.fast_io	= true,
+ };
+ 
++/*
++ * MSM8x60 protects the complete MMSS clock-controller aperture behind the
++ * TrustZone SCM_IO service.  The downstream ARCH_MSM8X60 Kconfig selects
++ * MSM_SECURE_IO unconditionally and scm-io.c translates every MMSS clock
++ * read/write to physical-address SCM_IO_READ/SCM_IO_WRITE calls.  Plain MMIO
++ * appears to succeed but writes do not latch on production Hikari firmware;
++ * in particular MDP_GFS_CTL remained zero and the first MDP register read
++ * stalled the interconnect indefinitely.
++ */
++struct msm8660_mmcc_scm {
++	phys_addr_t base;
++};
++
++static int msm8660_mmcc_scm_reg_read(void *context, unsigned int reg,
++				     unsigned int *val)
++{
++	struct msm8660_mmcc_scm *scm = context;
++
++	return qcom_scm_io_readl(scm->base + reg, val);
++}
++
++static int msm8660_mmcc_scm_reg_write(void *context, unsigned int reg,
++				      unsigned int val)
++{
++	struct msm8660_mmcc_scm *scm = context;
++
++	return qcom_scm_io_writel(scm->base + reg, val);
++}
++
++static const struct regmap_bus msm8660_mmcc_scm_regmap_bus = {
++	.reg_read = msm8660_mmcc_scm_reg_read,
++	.reg_write = msm8660_mmcc_scm_reg_write,
++};
++
++static struct regmap *msm8660_mmcc_scm_map(struct platform_device *pdev)
++{
++	struct msm8660_mmcc_scm *scm;
++	struct resource *res;
++
++	if (!qcom_scm_is_available())
++		return ERR_PTR(-EPROBE_DEFER);
++
++	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	if (!res)
++		return ERR_PTR(-EINVAL);
++
++	if (resource_size(res) <= mmcc_msm8660_regmap_config.max_register)
++		return ERR_PTR(-EINVAL);
++
++	if (!devm_request_mem_region(&pdev->dev, res->start,
++				     resource_size(res), dev_name(&pdev->dev)))
++		return ERR_PTR(-EBUSY);
++
++	scm = devm_kzalloc(&pdev->dev, sizeof(*scm), GFP_KERNEL);
++	if (!scm)
++		return ERR_PTR(-ENOMEM);
++
++	scm->base = res->start;
++
++	return devm_regmap_init(&pdev->dev, &msm8660_mmcc_scm_regmap_bus,
++				scm, &mmcc_msm8660_regmap_config);
++}
++
+ static const struct qcom_cc_desc mmcc_msm8660_desc = {
+ 	.config = &mmcc_msm8660_regmap_config,
+ 	.clks = mmcc_msm8660_clks,
+@@ -2692,8 +2756,11 @@ MODULE_DEVICE_TABLE(of, mmcc_msm8660_match_table);
+ #define VCODEC_FORCE_CORE_ON	0xc0ff0000  /* VCODEC uses different bits */
+ 
+ #define MDP_GFS_CTL_REG		0x0190
++#define LEGACY_FS_DELAY_MASK	GENMASK(4, 0)
++#define LEGACY_FS_DELAY_COUNT	31
+ #define LEGACY_FS_CLAMP_BIT	BIT(5)
+ #define LEGACY_FS_ENABLE_BIT	BIT(8)
++#define LEGACY_FS_RETENTION_BIT	BIT(9)
+ 
+ /* Exact MSM8x60 MDP footswitch reset set from Sony/C.A.F. clock-8x60.c. */
+ #define MDP_FS_AXI_RESET_MASK	BIT(13)
+@@ -2939,6 +3006,16 @@ static int mmcc_msm8660_init_mdp_footswitch(struct device *dev,
+ 	}
+ 	of_node_put(mdp_np);
+ 
++	/*
++	 * Match footswitch_probe() in the Sony/C.A.F. MSM8x60 BSP: program
++	 * the maximum AHB-cycle rail delay and start with retention disabled.
++	 */
++	ret = regmap_update_bits(regmap, MDP_GFS_CTL_REG,
++				 LEGACY_FS_DELAY_MASK | LEGACY_FS_RETENTION_BIT,
++				 LEGACY_FS_DELAY_COUNT);
++	if (ret)
++		return ret;
++
+ 	for (i = 0; i < ARRAY_SIZE(clocks); i++) {
+ 		struct clk_hw *hw = clocks[i].hw;
+ 
+@@ -3023,6 +3100,13 @@ static int mmcc_msm8660_init_mdp_footswitch(struct device *dev,
+ 	ret = regmap_read(regmap, MDP_GFS_CTL_REG, &val);
+ 	if (ret)
+ 		goto err_disable;
++	if ((val & (LEGACY_FS_ENABLE_BIT | LEGACY_FS_CLAMP_BIT)) !=
++	    LEGACY_FS_ENABLE_BIT) {
++		dev_err(dev,
++			"MDP footswitch did not latch safely (GFS=%#x)\n", val);
++		ret = -EIO;
++		goto err_disable;
++	}
+ 
+ 	dev_info(dev,
+ 		 "MDP footswitch: clock-assisted AXI/AHB/core reset completed (GFS=%#x)\n",
+@@ -3047,7 +3131,7 @@ static int mmcc_msm8660_probe(struct platform_device *pdev)
+ 	struct regmap *regmap;
+ 	int ret;
+ 
+-	regmap = qcom_cc_map(pdev, &mmcc_msm8660_desc);
++	regmap = msm8660_mmcc_scm_map(pdev);
+ 	if (IS_ERR(regmap))
+ 		return PTR_ERR(regmap);
+ 

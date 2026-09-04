@@ -1,0 +1,35 @@
+From 073f7ab967d08d6c60f9c491e7ac2fa81fb1600f Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Fri, 4 Sep 2026 18:09:34 +0700
+Subject: [PATCH 34/36] arm: dts: qcom: add Hikari SCM firmware node
+
+---
+ .../boot/dts/qcom/qcom-msm8260-sony-hikari.dts    | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+index 50998b74d20709c6958bdb3146c1d121695a0078..b8393861149cb632cae65f1d18be7bde1b60a051 100644
+--- a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
++++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+@@ -14,6 +14,21 @@ / {
+ 	model = "Sony Xperia acro S (Hikari)";
+ 	compatible = "sony,hikari", "qcom,msm8660";
+ 
++	/*
++	 * The MSM8x60 multimedia clock controller is secure-only on Sony's
++	 * production firmware.  The qcom_scm convention probe alone does not
++	 * instantiate the SCM platform driver: it needs this firmware node before
++	 * MMCC can use qcom_scm_io_readl()/writel().  MSM8660's binding requires
++	 * the RPM Daytona fabric clock as its single core clock.
++	 */
++	firmware {
++		scm {
++			compatible = "qcom,scm-msm8660", "qcom,scm";
++			clocks = <&rpmcc RPM_DAYTONA_FABRIC_CLK>;
++			clock-names = "core";
++		};
++	};
++
+ 	/*
+ 	 * The legacy Fuji/TWRP kernel and a physical TWRP /proc/iomem capture
+ 	 * both identify this as the 128 KiB persistent ram_console region.

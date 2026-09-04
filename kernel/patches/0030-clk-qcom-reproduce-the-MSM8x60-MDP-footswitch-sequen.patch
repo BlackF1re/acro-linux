@@ -1,0 +1,225 @@
+From 678b7e106c208fe41223929ffe89b94599437a50 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Fri, 4 Sep 2026 12:56:15 +0700
+Subject: [PATCH 30/36] clk: qcom: reproduce the MSM8x60 MDP footswitch
+ sequence
+
+---
+ drivers/clk/qcom/mmcc-msm8660.c | 183 +++++++++++++++++++++++++++++++-
+ 1 file changed, 181 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+index 1671eee49f77d921c3b1e70a21d7034b2ba295cc..824e8d6f0550583f17d328d0cfeccd59af22e94f 100644
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -2517,7 +2517,15 @@ static struct gdsc mdp_gdsc = {
+ 		.name = "mdp",
+ 	},
+ 	.pwrsts = PWRSTS_OFF_ON,
+-	.flags = LEGACY_FOOTSWITCH | SW_RESET,
++	/*
++	 * The downstream MSM8x60 MDP footswitch driver keeps this domain on
++	 * while display clients are active and performs a much wider reset
++	 * sequence than a modern GDSC.  Keep it powered after the one-shot
++	 * vendor sequence in mmcc_msm8660_init_mdp_footswitch(); a generic
++	 * runtime collapse would omit the clock-assisted AXI/core/pixel reset
++	 * choreography and can leave the MDP register bus inaccessible.
++	 */
++	.flags = LEGACY_FOOTSWITCH | SW_RESET | RPM_ALWAYS_ON,
+ };
+ 
+ static struct gdsc rot_gdsc = {
+@@ -2683,6 +2691,15 @@ MODULE_DEVICE_TABLE(of, mmcc_msm8660_match_table);
+ #define CC_FORCE_CORE_ON_VAL	0x80ff0000  /* FORCE_CORE_ON + 0xFF delays */
+ #define VCODEC_FORCE_CORE_ON	0xc0ff0000  /* VCODEC uses different bits */
+ 
++#define MDP_GFS_CTL_REG		0x0190
++#define LEGACY_FS_CLAMP_BIT	BIT(5)
++#define LEGACY_FS_ENABLE_BIT	BIT(8)
++
++/* Exact MSM8x60 MDP footswitch reset set from Sony/C.A.F. clock-8x60.c. */
++#define MDP_FS_AXI_RESET_MASK	BIT(13)
++#define MDP_FS_AHB_RESET_MASK	BIT(3)
++#define MDP_FS_CORE_RESET_MASK	(BIT(21) | BIT(5) | BIT(4) | BIT(3))
++
+ static int mmcc_msm8660_init_hw(struct regmap *regmap)
+ {
+ 	/*
+@@ -2872,6 +2889,159 @@ static int mmcc_msm8660_unhalt_fabric_ports(struct device *dev)
+ 	return rc;
+ }
+ 
++struct msm8660_mdp_fs_clk {
++	struct clk_hw *hw;
++	const char *name;
++	struct clk *clk;
++	unsigned long old_rate;
++	bool enabled;
++};
++
++/*
++ * Reproduce the clock-assisted MDP footswitch initialization used by the
++ * MSM8x60 Sony/C.A.F. BSP.  A legacy footswitch may look ON from ENABLE and
++ * CLAMP while its synchronous clock-domain resets have never been completed;
++ * trusting those two bits made the first MDP4 register read lock the MMSS bus.
++ *
++ * This runs after CCF registration but before the MMCC provider probe returns,
++ * so no MDP consumer can touch 0x05100000 in the partially initialized state.
++ * The clocks are temporary reset clocks and are restored afterwards.  The MDP
++ * GDSC is deliberately RPM_ALWAYS_ON because the generic power-off/on path
++ * cannot yet repeat this legacy eight-clock sequence.
++ */
++static int mmcc_msm8660_init_mdp_footswitch(struct device *dev,
++					    struct regmap *regmap)
++{
++	struct msm8660_mdp_fs_clk clocks[] = {
++		{ &mdp_clk.clkr.hw,       "core" },
++		{ &mdp_ahb_clk.clkr.hw,   "iface" },
++		{ &mdp_axi_clk.clkr.hw,   "bus" },
++		{ &mdp_vsync_clk.clkr.hw, "vsync" },
++		{ &tv_src.clkr.hw,        "tv_src" },
++		{ &mdp_tv_clk.clkr.hw,    "tv" },
++		{ &mdp_pixel_clk.clkr.hw, "pixel_mdp" },
++		{ &mdp_lcdc_clk.clkr.hw,  "pixel_lcdc" },
++	};
++	struct device_node *mdp_np;
++	unsigned int val;
++	int i, ret;
++
++	mdp_np = of_find_compatible_node(NULL, NULL, "qcom,mdp4");
++	if (!mdp_np || !of_device_is_available(mdp_np)) {
++		of_node_put(mdp_np);
++		return 0;
++	}
++	of_node_put(mdp_np);
++
++	for (i = 0; i < ARRAY_SIZE(clocks); i++) {
++		struct clk_hw *hw = clocks[i].hw;
++
++		clocks[i].clk = devm_clk_hw_get_clk(dev, hw, clocks[i].name);
++		if (IS_ERR(clocks[i].clk)) {
++			ret = PTR_ERR(clocks[i].clk);
++			goto err_disable;
++		}
++
++		clocks[i].old_rate = clk_get_rate(clocks[i].clk);
++		if (!clocks[i].old_rate) {
++			ret = clk_set_rate(clocks[i].clk, 27000000);
++			if (ret) {
++				dev_err(dev, "MDP footswitch %s clock rate failed: %d\n",
++					clocks[i].name, ret);
++				goto err_disable;
++			}
++		}
++
++		ret = clk_prepare_enable(clocks[i].clk);
++		if (ret) {
++			dev_err(dev,
++				"MDP footswitch %s clock enable failed: %d\n",
++				clocks[i].name, ret);
++			goto err_disable;
++		} else {
++			clocks[i].enabled = true;
++		}
++	}
++
++	/* Both MDP AXI ports were unhalted by the preceding RPM transaction. */
++	ret = regmap_update_bits(regmap, SW_RESET_AXI_REG,
++				 MDP_FS_AXI_RESET_MASK, MDP_FS_AXI_RESET_MASK);
++	if (ret)
++		goto err_disable;
++	ret = regmap_update_bits(regmap, SW_RESET_AHB_REG,
++				 MDP_FS_AHB_RESET_MASK, MDP_FS_AHB_RESET_MASK);
++	if (ret)
++		goto err_clear_resets;
++	ret = regmap_update_bits(regmap, SW_RESET_CORE_REG,
++				 MDP_FS_CORE_RESET_MASK, MDP_FS_CORE_RESET_MASK);
++	if (ret)
++		goto err_clear_resets;
++	udelay(1);
++
++	ret = regmap_update_bits(regmap, MDP_GFS_CTL_REG,
++				 LEGACY_FS_ENABLE_BIT, LEGACY_FS_ENABLE_BIT);
++	if (ret)
++		goto err_clear_resets;
++	/* Readback flushes the posted rail-enable write before the charge delay. */
++	ret = regmap_read(regmap, MDP_GFS_CTL_REG, &val);
++	if (ret)
++		goto err_clear_resets;
++	udelay(1);
++
++	ret = regmap_update_bits(regmap, MDP_GFS_CTL_REG,
++				 LEGACY_FS_CLAMP_BIT, 0);
++	if (ret)
++		goto err_clear_resets;
++	ret = regmap_update_bits(regmap, SW_RESET_CORE_REG,
++				 MDP_FS_CORE_RESET_MASK, 0);
++	if (ret)
++		goto err_clear_resets;
++	ret = regmap_update_bits(regmap, SW_RESET_AHB_REG,
++				 MDP_FS_AHB_RESET_MASK, 0);
++	if (ret)
++		goto err_clear_resets;
++	ret = regmap_update_bits(regmap, SW_RESET_AXI_REG,
++				 MDP_FS_AXI_RESET_MASK, 0);
++	if (ret)
++		goto err_clear_resets;
++	/* Match downstream CLKFLAG_RETAIN for the MDP and pixel core memories. */
++	ret = regmap_update_bits(regmap, MDP_CC_REG, BIT(31), BIT(31));
++	if (ret)
++		goto err_disable;
++	ret = regmap_update_bits(regmap, PIXEL_CC_REG, BIT(31), BIT(31));
++	if (ret)
++		goto err_disable;
++	ret = regmap_read(regmap, MDP_GFS_CTL_REG, &val);
++	if (ret)
++		goto err_disable;
++
++	dev_info(dev,
++		 "MDP footswitch: clock-assisted AXI/AHB/core reset completed (GFS=%#x)\n",
++		 val);
++	ret = 0;
++	goto err_disable;
++
++err_clear_resets:
++	/* Never leave a failed probe holding the shared MMSS reset lines. */
++	regmap_update_bits(regmap, SW_RESET_CORE_REG,
++			   MDP_FS_CORE_RESET_MASK, 0);
++	regmap_update_bits(regmap, SW_RESET_AHB_REG,
++			   MDP_FS_AHB_RESET_MASK, 0);
++	regmap_update_bits(regmap, SW_RESET_AXI_REG,
++			   MDP_FS_AXI_RESET_MASK, 0);
++
++err_disable:
++	for (i = ARRAY_SIZE(clocks) - 1; i >= 0; i--) {
++		if (clocks[i].enabled)
++			clk_disable_unprepare(clocks[i].clk);
++		if (clocks[i].clk && !IS_ERR(clocks[i].clk) &&
++		    clocks[i].old_rate)
++			clk_set_rate(clocks[i].clk, clocks[i].old_rate);
++	}
++
++	return ret;
++}
++
+ static int mmcc_msm8660_probe(struct platform_device *pdev)
+ {
+ 	struct regmap *regmap;
+@@ -2900,7 +3070,16 @@ static int mmcc_msm8660_probe(struct platform_device *pdev)
+ 		return dev_err_probe(&pdev->dev, ret,
+ 				     "MMSS fabric unhalt failed\n");
+ 
+-	return qcom_cc_really_probe(&pdev->dev, &mmcc_msm8660_desc, regmap);
++	ret = qcom_cc_really_probe(&pdev->dev, &mmcc_msm8660_desc, regmap);
++	if (ret)
++		return ret;
++
++	ret = mmcc_msm8660_init_mdp_footswitch(&pdev->dev, regmap);
++	if (ret)
++		return dev_err_probe(&pdev->dev, ret,
++				     "MDP footswitch initialization failed\n");
++
++	return 0;
+ }
+ 
+ static struct platform_driver mmcc_msm8660_driver = {

@@ -1,0 +1,125 @@
+From 90755ba8b809fc05ad03fb381df28f6810ab278e Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Fri, 4 Sep 2026 18:32:17 +0700
+Subject: [PATCH 35/36] firmware: qcom: avoid modern SCM probes on MSM8x60
+
+---
+ drivers/clk/qcom/mmcc-msm8660.c  |  2 +
+ drivers/firmware/qcom/qcom_scm.c | 70 +++++++++++++++++++++-----------
+ 2 files changed, 49 insertions(+), 23 deletions(-)
+
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+index 613f663bdbb5b09b21bcbb2eeb5ab431f5f8a035..33fde698c080cfcaf5b4d9e60c84d201b4417d74 100644
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -3135,6 +3135,8 @@ static int mmcc_msm8660_probe(struct platform_device *pdev)
+ 	if (IS_ERR(regmap))
+ 		return PTR_ERR(regmap);
+ 
++	dev_info(&pdev->dev, "secure MMCC initialization begin\n");
++
+ 	/* Initialize MMCC hardware before registering clocks */
+ 	ret = mmcc_msm8660_init_hw(regmap);
+ 	if (ret)
+diff --git a/drivers/firmware/qcom/qcom_scm.c b/drivers/firmware/qcom/qcom_scm.c
+index 3eaa4c9ccf3cc7db30257a41a4c2df027349ed52..8329104509f8a264b1103ae411d67255d8808788 100644
+--- a/drivers/firmware/qcom/qcom_scm.c
++++ b/drivers/firmware/qcom/qcom_scm.c
+@@ -2793,6 +2793,7 @@ MODULE_PARM_DESC(minidump_dest, "Minidump SRAM destination: usb (default) or sto
+ static int qcom_scm_probe(struct platform_device *pdev)
+ {
+ 	struct qcom_tzmem_pool_config pool_config;
++	bool legacy_minimal;
+ 	struct qcom_scm *scm;
+ 	int irq, ret;
+ 	int i;
+@@ -2803,6 +2804,10 @@ static int qcom_scm_probe(struct platform_device *pdev)
+ 
+ 	scm->dev = &pdev->dev;
+ 	platform_set_drvdata(pdev, scm);
++	legacy_minimal = of_device_is_compatible(pdev->dev.of_node,
++						 "qcom,scm-msm8660");
++	if (legacy_minimal)
++		dev_info(&pdev->dev, "MSM8x60 legacy SCM provider probe begin\n");
+ 	ret = qcom_scm_find_dload_address(&pdev->dev, &scm->dload_mode_addr);
+ 	if (ret < 0)
+ 		return dev_err_probe(&pdev->dev, ret,
+@@ -2868,29 +2873,43 @@ static int qcom_scm_probe(struct platform_device *pdev)
+ 		goto err_rmem;
+ 	}
+ 
+-	ret = qcom_scm_query_waitq_count(scm);
+-	scm->wq_cnt = ret < 0 ? QCOM_SCM_DEFAULT_WAITQ_COUNT : ret;
+-	scm->waitq_comps = devm_kcalloc(&pdev->dev, scm->wq_cnt, sizeof(*scm->waitq_comps),
+-					GFP_KERNEL);
+-	if (!scm->waitq_comps)
+-		return -ENOMEM;
+-
+-	for (i = 0; i < scm->wq_cnt; i++)
+-		init_completion(&scm->waitq_comps[i]);
+-
+-	irq = qcom_scm_get_waitq_irq(scm);
+-	if (irq < 0)
+-		irq = platform_get_irq_optional(pdev, 0);
+-
+-	if (irq < 0) {
+-		if (irq != -ENXIO)
+-			return irq;
+-	} else {
+-		ret = devm_request_threaded_irq(scm->dev, irq, NULL, qcom_scm_irq_handler,
+-						IRQF_ONESHOT, "qcom-scm", scm);
+-		if (ret < 0)
+-			return dev_err_probe(scm->dev, ret,
+-					     "Failed to request qcom-scm irq\n");
++	/*
++	 * Sony's MSM8x60 TrustZone implements the legacy SCM convention and the
++	 * atomic SCM_IO service used by the downstream secure MMSS accessor.  It
++	 * predates the sleeping-call waitqueue protocol, however.  Issuing the
++	 * modern WAITQ_GET_INFO command through scm_legacy_call() can leave the
++	 * caller polling a response which this firmware never completes.
++	 *
++	 * Do not probe optional modern SCM facilities on this compatible.  The
++	 * provider is published below so qcom_scm_io_readl()/writel() remain
++	 * available to the MSM8x60 MMCC driver.
++	 */
++	if (!legacy_minimal) {
++		ret = qcom_scm_query_waitq_count(scm);
++		scm->wq_cnt = ret < 0 ? QCOM_SCM_DEFAULT_WAITQ_COUNT : ret;
++		scm->waitq_comps = devm_kcalloc(&pdev->dev, scm->wq_cnt,
++						sizeof(*scm->waitq_comps), GFP_KERNEL);
++		if (!scm->waitq_comps)
++			return -ENOMEM;
++
++		for (i = 0; i < scm->wq_cnt; i++)
++			init_completion(&scm->waitq_comps[i]);
++
++		irq = qcom_scm_get_waitq_irq(scm);
++		if (irq < 0)
++			irq = platform_get_irq_optional(pdev, 0);
++
++		if (irq < 0) {
++			if (irq != -ENXIO)
++				return irq;
++		} else {
++			ret = devm_request_threaded_irq(scm->dev, irq, NULL,
++							qcom_scm_irq_handler,
++							IRQF_ONESHOT, "qcom-scm", scm);
++			if (ret < 0)
++				return dev_err_probe(scm->dev, ret,
++						     "Failed to request qcom-scm irq\n");
++		}
+ 	}
+ 
+ 	/*
+@@ -2903,6 +2922,11 @@ static int qcom_scm_probe(struct platform_device *pdev)
+ 	smp_store_release(&__scm, scm);
+ 
+ 	__get_convention();
++	if (legacy_minimal) {
++		dev_info(&pdev->dev,
++			 "MSM8x60 legacy SCM provider ready for atomic SCM_IO\n");
++		return 0;
++	}
+ 
+ 	if (qcom_scm_is_pas_available()) {
+ 		qcom_pas_ops_scm.dev = scm->dev;

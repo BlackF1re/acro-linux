@@ -1,0 +1,29 @@
+From 200115087c009d422331fe37d86264605fb27163 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Thu, 3 Sep 2026 23:34:12 +0700
+Subject: [PATCH 18/36] clk: qcom: fix MSM8x60 DSI slave AHB halt bit
+
+---
+ drivers/clk/qcom/mmcc-msm8660.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+index 533bc1dd575efff9bf4c54e98411add93cde4d6c..a5daad10634be0aa2e1d44711c8ae051137dafc6 100644
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -2054,14 +2054,13 @@ static struct clk_branch dsi_m_ahb_clk = {
+ 
+ static struct clk_branch dsi_s_ahb_clk = {
+ 	.halt_reg = 0x01dc,
+-	.halt_bit = 21,
++	.halt_bit = 20,
+ 	.clkr = {
+ 		.enable_reg = 0x0008,
+ 		.enable_mask = BIT(18),
+ 		.hw.init = &(struct clk_init_data){
+ 			.name = "dsi_s_ahb_clk",
+ 			.ops = &clk_branch_ops,
+-			.flags = CLK_IS_CRITICAL,
+ 		},
+ 	},
+ };

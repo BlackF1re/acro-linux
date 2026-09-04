@@ -1,0 +1,151 @@
+From 18f656abb9fb47f1deaeda3bbf78e2a1c0ff28dd Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Fri, 4 Sep 2026 12:56:20 +0700
+Subject: [PATCH 31/36] drm/msm/mdp4: fail safely on MSM8x60 clock errors
+
+---
+ drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c | 71 ++++++++++++++++++------
+ 1 file changed, 55 insertions(+), 16 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
+index c78a1d08591df2ba24f558f71e98def050ec68bb..c08288a37b1b23ea51adc10e0fded4659eeb9c68 100644
+--- a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
++++ b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
+@@ -164,24 +164,45 @@ int mdp4_disable(struct mdp4_kms *mdp4_kms)
+ {
+ 	DBG("");
+ 
+-	clk_disable_unprepare(mdp4_kms->clk);
+-	clk_disable_unprepare(mdp4_kms->pclk);
+-	clk_disable_unprepare(mdp4_kms->lut_clk);
+ 	clk_disable_unprepare(mdp4_kms->axi_clk);
++	clk_disable_unprepare(mdp4_kms->lut_clk);
++	clk_disable_unprepare(mdp4_kms->pclk);
++	clk_disable_unprepare(mdp4_kms->clk);
+ 
+ 	return 0;
+ }
+ 
+ int mdp4_enable(struct mdp4_kms *mdp4_kms)
+ {
++	int ret;
++
+ 	DBG("");
+ 
+-	clk_prepare_enable(mdp4_kms->clk);
+-	clk_prepare_enable(mdp4_kms->pclk);
+-	clk_prepare_enable(mdp4_kms->lut_clk);
+-	clk_prepare_enable(mdp4_kms->axi_clk);
++	ret = clk_prepare_enable(mdp4_kms->clk);
++	if (ret)
++		return ret;
++
++	ret = clk_prepare_enable(mdp4_kms->pclk);
++	if (ret)
++		goto err_disable_core;
++
++	ret = clk_prepare_enable(mdp4_kms->lut_clk);
++	if (ret)
++		goto err_disable_iface;
++
++	ret = clk_prepare_enable(mdp4_kms->axi_clk);
++	if (ret)
++		goto err_disable_lut;
+ 
+ 	return 0;
++
++err_disable_lut:
++	clk_disable_unprepare(mdp4_kms->lut_clk);
++err_disable_iface:
++	clk_disable_unprepare(mdp4_kms->pclk);
++err_disable_core:
++	clk_disable_unprepare(mdp4_kms->clk);
++	return ret;
+ }
+ 
+ 
+@@ -366,13 +387,17 @@ static int modeset_init(struct mdp4_kms *mdp4_kms)
+ 	return ret;
+ }
+ 
+-static void read_mdp_hw_revision(struct mdp4_kms *mdp4_kms,
+-				 u32 *major, u32 *minor)
++static int read_mdp_hw_revision(struct mdp4_kms *mdp4_kms,
++				u32 *major, u32 *minor)
+ {
+ 	struct drm_device *dev = mdp4_kms->dev;
+ 	u32 version;
++	int ret;
+ 
+-	mdp4_enable(mdp4_kms);
++	ret = mdp4_enable(mdp4_kms);
++	if (ret)
++		return dev_err_probe(dev->dev, ret,
++				     "failed to enable MDP clocks for revision read\n");
+ 	version = mdp4_read(mdp4_kms, REG_MDP4_VERSION);
+ 	mdp4_disable(mdp4_kms);
+ 
+@@ -380,6 +405,8 @@ static void read_mdp_hw_revision(struct mdp4_kms *mdp4_kms,
+ 	*minor = FIELD(version, MDP4_VERSION_MINOR);
+ 
+ 	DRM_DEV_INFO(dev->dev, "MDP4 version v%d.%d", *major, *minor);
++
++	return 0;
+ }
+ 
+ static int mdp4_kms_init(struct drm_device *dev)
+@@ -392,8 +419,9 @@ static int mdp4_kms_init(struct drm_device *dev)
+ 	u32 major, minor;
+ 	unsigned long max_clk;
+ 
+-	/* TODO: Chips that aren't apq8064 have a 200 Mhz max_clk */
+-	max_clk = 266667000;
++	/* MSM8x60 MDP4 is limited to 200 MHz; APQ8064 supports 266.667 MHz. */
++	max_clk = of_machine_is_compatible("qcom,msm8260") ?
++		  200000000 : 266667000;
+ 
+ 	ret = mdp_kms_init(&mdp4_kms->base, &kms_funcs);
+ 	if (ret) {
+@@ -413,11 +441,16 @@ static int mdp4_kms_init(struct drm_device *dev)
+ 		}
+ 	}
+ 
+-	clk_set_rate(mdp4_kms->clk, max_clk);
++	ret = clk_set_rate(mdp4_kms->clk, max_clk);
++	if (ret)
++		return dev_err_probe(dev->dev, ret,
++				     "failed to set MDP core clock rate\n");
+ 
+ 	DRM_DEV_INFO(dev->dev,
+ 		     "reading MDP4 revision with display power domain enabled\n");
+-	read_mdp_hw_revision(mdp4_kms, &major, &minor);
++	ret = read_mdp_hw_revision(mdp4_kms, &major, &minor);
++	if (ret)
++		return ret;
+ 
+ 	if (major != 4) {
+ 		DRM_DEV_ERROR(dev->dev, "unexpected MDP version: v%d.%d\n",
+@@ -434,7 +467,10 @@ static int mdp4_kms_init(struct drm_device *dev)
+ 			ret = -ENODEV;
+ 			return ret;
+ 		}
+-		clk_set_rate(mdp4_kms->lut_clk, max_clk);
++		ret = clk_set_rate(mdp4_kms->lut_clk, max_clk);
++		if (ret)
++			return dev_err_probe(dev->dev, ret,
++					     "failed to set MDP LUT clock rate\n");
+ 	}
+ 
+ 	pm_runtime_enable(dev->dev);
+@@ -444,7 +480,10 @@ static int mdp4_kms_init(struct drm_device *dev)
+ 	 * have left things on, in which case we'll start getting faults if
+ 	 * we don't disable):
+ 	 */
+-	mdp4_enable(mdp4_kms);
++	ret = mdp4_enable(mdp4_kms);
++	if (ret)
++		return dev_err_probe(dev->dev, ret,
++				     "failed to enable MDP clocks for quiesce\n");
+ 	mdp4_write(mdp4_kms, REG_MDP4_DTV_ENABLE, 0);
+ 	mdp4_write(mdp4_kms, REG_MDP4_LCDC_ENABLE, 0);
+ 	mdp4_write(mdp4_kms, REG_MDP4_DSI_ENABLE, 0);

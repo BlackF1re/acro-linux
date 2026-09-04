@@ -1,0 +1,32 @@
+From 58f0d70472a16a8cf10f8d0ecad3f8e25bda3280 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Thu, 3 Sep 2026 23:01:57 +0700
+Subject: [PATCH 16/36] drm/msm/dsi: select MSM8x60 V2 host configuration
+
+---
+ drivers/gpu/drm/msm/dsi/dsi_host.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
+index 7e4e3718b536c92dc555de213042857379499447..148dd1c8a5d27d90267cc47b10c762fad4408e37 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -208,6 +208,18 @@ dsi_get_config(struct msm_dsi_host *msm_host)
+ 	int ret;
+ 	u32 major = 0, minor = 0;
+ 
++	/*
++	 * MSM8x60 predates the DSI_VERSION identification scheme used by the
++	 * generic V2 path.  Both the downstream register map and Hikari hardware
++	 * show zero at REG_DSI_VERSION, so select its source-verified V2 variant
++	 * from the SoC-specific compatible instead of rejecting the controller.
++	 */
++	if (of_device_is_compatible(dev->of_node, "qcom,msm8660-dsi-ctrl")) {
++		dev_info(dev, "using MSM8x60 DSI V2 configuration\n");
++		return msm_dsi_cfg_get(MSM_DSI_VER_MAJOR_V2,
++				       MSM_DSI_V2_VER_MINOR_8064);
++	}
++
+ 	ahb_clk = msm_clk_get(msm_host->pdev, "iface");
+ 	if (IS_ERR(ahb_clk)) {
+ 		dev_err_probe(dev, PTR_ERR(ahb_clk), "%s: cannot get interface clock\n",
