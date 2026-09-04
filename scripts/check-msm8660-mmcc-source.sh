@@ -93,5 +93,25 @@ require(
     forbid_critical=True,
 )
 
+# Exact DBG_BUS_VEC_D map.  A prior transcription shifted/reordered these
+# bits, causing physical Hikari to reject mdp_tv_clk with -EBUSY even though
+# its enable bit had been asserted.  Keep strict halt polling; validate the
+# status source instead of using BRANCH_HALT_SKIP.
+for name, enable_bit, halt_bit in (
+    ("tv_enc_clk", 8, 8),
+    ("tv_dac_clk", 10, 9),
+    ("mdp_tv_clk", 0, 11),
+    ("hdmi_tv_clk", 12, 10),
+):
+    require(
+        name,
+        r"\.halt_reg\s*=\s*0x0*1d4\b",
+        rf"\.enable_reg\s*=\s*0x0*0ec\b",
+        rf"\.enable_mask\s*=\s*BIT\({enable_bit}\)",
+        rf"\.halt_bit\s*=\s*{halt_bit}\b",
+    )
+    if "BRANCH_HALT_SKIP" in branch(name):
+        raise SystemExit(f"{name}: TV halt polling must remain enabled")
+
 print("MSM8660_MMCC_SOURCE_GATE=PASS")
 PY
