@@ -26,9 +26,19 @@ for symbol in \
 	CONFIG_DRM=y CONFIG_DRM_MSM=y CONFIG_DRM_MSM_MDP4=y CONFIG_DRM_MSM_DSI=y \
 	CONFIG_DRM_MSM_DSI_45NM_PHY=y \
 	CONFIG_DRM_PANEL_RENESAS_R63306_TMD_MDV22=y \
-	CONFIG_BACKLIGHT_AS3676=y CONFIG_FRAMEBUFFER_CONSOLE=y; do
+	CONFIG_BACKLIGHT_AS3676=y CONFIG_VT=y CONFIG_VT_CONSOLE=y \
+	CONFIG_FRAMEBUFFER_CONSOLE=y; do
 	grep -qx "$symbol" "$config" || { echo "missing $symbol" >&2; exit 1; }
 done
+
+grep -qx '# CONFIG_FRAMEBUFFER_CONSOLE_DEFERRED_TAKEOVER is not set' "$config" || {
+	echo 'Hikari display bring-up requires immediate fbcon takeover' >&2
+	exit 1
+}
+grep -Eq '^CONFIG_CMDLINE=".*console=tty0([ "].*)$' "$config" || {
+	echo 'Hikari display bring-up requires tty0 as a kernel console' >&2
+	exit 1
+}
 
 expect_string() {
 	local node=$1 property=$2 expected=$3 actual
