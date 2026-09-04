@@ -1,0 +1,46 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Hikari diagnostic-survival profile.
+ *
+ * Keep the physically verified BOOT #5.1 USB/ramoops/initramfs path available
+ * without probing the still-experimental MSM8x60 multimedia island.  This is
+ * intentionally a DT-only fallback: the normal Hikari DT continues to carry
+ * the full display bring-up and remains the development target.
+ */
+
+&mmcc {
+	status = "disabled";
+};
+
+&mdp {
+	status = "disabled";
+};
+
+&dsi {
+	status = "disabled";
+};
+
+&dsi_phy {
+	status = "disabled";
+};
+
+&lcd_backlight {
+	status = "disabled";
+};
+
+/* These project-added NoC providers are only needed by multimedia bring-up. */
+&afab {
+	status = "disabled";
+};
+
+&sfab {
+	status = "disabled";
+};
+
+&mmfab {
+	status = "disabled";
+};
+
+&dfab {
+	status = "disabled";
+};
