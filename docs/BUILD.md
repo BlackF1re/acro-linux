@@ -54,8 +54,8 @@ kernel outputs and ELF prototype are never added to Git.
   missing MSM8660 MMSS SFPB schema, DSI PHY name, controller fallback and
   register-name issues found by this check were fixed rather than suppressed.
 - Direct `dt-doc-validate` of the project-added bindings and targeted
-  `dt-validate` of the final Hikari DTB also passed. `dtschema` 2026.6 is kept
-  in `/home/paul/xperia/build/dtschema-venv`, not global Python.
+  `dt-validate` of the final Hikari DTB also passed. `dtschema` 2026.6 is
+  installed in an isolated `pipx` environment, not global Python.
 - The ELF self-test and artifact validator passed. The latter checks the
   original offline p3 hash and size, p3 capacity, appended-DTB tail, ELF32
   header, segment ranges and load-address overlap.
@@ -82,26 +82,31 @@ phone.
 The current locally validated, **not deployed** artifact is:
 
 ```text
-/home/paul/xperia/build/hikari-artifacts-g28-display/hikari-display-complete-dsi-quiesce.elf
-size:   12,516,938 bytes
-SHA-256 d0815b56d7137afd8b97f9f3f14ee718d7240cc946aa1c77986e4d93f56821ff
+/home/paul/xperia/build/hikari-artifacts-g29-display/hikari-display-runtime-pm-safe.elf
+size:   12,517,010 bytes
+SHA-256 6ee18dc8f1efdbd0771524ea66e85086edbecddc325250df1730e3d1aecad465
 ```
 
-It was built from external kernel tree HEAD
-`b44a7cd030f7a5e57ce2f3b3a0190776c3a6548b`. It preserves the verified
-memory, RPM, ramoops, stable PID 1, and USB ACM shell foundation. Relative to
-g27 it performs the complete source-derived MSM8x60 DSI boot-state teardown:
-clear `CLK_CTRL`, clear `CTRL`, stop the 45 nm PLL, flush MMIO, then disable
-master, slave, and AMP AHB in Sony order while retaining halt checks. Display
-and useful positive-current charging remain unverified until physical
+It was built from signed external kernel tree HEAD
+`3c1ddf679af0bfc5ac1af2c9f39afa5fbdf16035`. It preserves the verified
+memory, RPM, ramoops, stable PID 1, and USB ACM shell foundation. The
+source-derived firmware-state reset now runs exactly once during DSI probe,
+with a tracked common-clock-framework reference held across the operation.
+The three MSM8x60 DSI AHB clocks remain referenced for this early bring-up
+artifact, so ordinary runtime suspend/resume cannot repeat the destructive
+reset or enter the physically failing branch-disable path. Driver removal and
+probe unwind release the reference. This deliberately trades display-block
+idle power for deterministic bring-up; it is not the final runtime-PM policy.
+Display and useful positive-current charging remain unverified until physical
 acceptance tests pass.
 
 Its components are:
 
 ```text
-zImage:     11,276,296 bytes, 2d839ea59a82e326fb8fc607d777a774bd74385baca4035b5304f2f0f15bbe67
-zImage+DTB: 11,289,379 bytes, ce0a818ac59ee3f57c666de1793dc594981e85ff14c057df5b4e388b7fe2863b
+zImage:     11,276,368 bytes, b050e0e3201ee3d2831548fe88d1bb55ceafe8ee439193505e382f872003167a
+zImage+DTB: 11,289,451 bytes, 24cc76f4b660f10beaa55784f87e3d630ac46e0d0deed0c4b5205712f78d2291
 DTB:            13,083 bytes
+DTB SHA-256: 29e9279fad22afafab2fafe3cad9af7fc5af4444ad82a54501d7d34a78f0a42c
 initramfs:  1,103,679 bytes, c9a0ea7651ffc6c8c7acb0695764e4278ec38bd984b53381f7cb2f0008ed3894
 ```
 
@@ -113,7 +118,7 @@ local artifact integrity, not permission to flash or a hardware claim.
 The final Sony ELF segment table is:
 
 ```text
-segment 0: offset 0x001000, paddr 0x40208000, size 0xac4323
-segment 1: offset 0xac5323, paddr 0x42a00000, size 0x10d73f
-segment 2: offset 0xbd2a62, paddr 0x00020000, size 0x01d3e8
+segment 0: offset 0x001000, paddr 0x40208000, size 0xac436b
+segment 1: offset 0xac536b, paddr 0x42a00000, size 0x10d73f
+segment 2: offset 0xbd2aaa, paddr 0x00020000, size 0x01d3e8
 ```

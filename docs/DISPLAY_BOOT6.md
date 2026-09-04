@@ -226,7 +226,26 @@ source; clearing `CLK_CTRL` alone did not release the branches.
 
 Exact Sony MSM8x60 `mipi_dsi.c` clears DSI `CLK_CTRL` (`+0x118`) and `CTRL`,
 stops the 45 nm PLL, and disables DSI master, DSI slave, then AMP AHB. The
-local DRM/MSM variant now reproduces that complete no-continuous-splash
-handoff before the checked clock disables. The change is restricted by an
-MSM8x60 configuration flag and retains clock-framework halt verification. It
-is locally built and must still be verified on the physical panel.
+first local reproduction placed that reset in `msm_dsi_runtime_suspend()`.
+That callback is normal lifecycle machinery rather than a one-time firmware
+handoff, so it could reset the controller repeatedly during component probe,
+panel transactions, or later power-management transitions. The following
+physical attempt again ended around checked disables of the slave, master and
+AMP AHB branches before `/init`; moving more shutdown operations into the
+same callback did not make that lifecycle safe.
+
+Signed kernel commit `3c1ddf679af0` therefore makes the operation explicitly
+one-shot. After host and PHY discovery, and before DSI manager registration,
+it takes a tracked bulk clock reference, clears `CLK_CTRL` and `CTRL`, stops
+the 45 nm PLL, flushes the posted MMIO writes, and records the retained-clock
+state. Runtime suspend and resume then leave those AHB references untouched.
+The destroy/error-unwind path releases them exactly once. A project build gate
+requires the one-shot call, retained suspend/resume behavior and matching
+teardown, and forbids controller/PHY reset operations in runtime suspend.
+
+This containment is intentionally conservative: the display AHB clocks stay
+on for the life of the driver, increasing bring-up power consumption. It
+removes the evidenced pre-init failure path without pretending that final
+runtime PM is solved. The locally validated g29 artifact is recorded in
+[BUILD.md](BUILD.md); physical panel, fbcon and charging acceptance remain
+open.

@@ -119,12 +119,17 @@ and `amp_ahb_clk` before the persistent ring became corrupt/truncated. It did
 not reach an observable `/init` or stable ACM terminal. The individual halt
 poll is bounded, so the warnings identify an incomplete boot-state teardown,
 not a proven infinite loop or exact terminal instruction. Exact Sony shutdown
-clears DSI `CLK_CTRL`, `CTRL`, and the 45 nm PLL, then disables master, slave,
-and AMP AHB in that order. The current local kernel implements that complete
-MSM8x60-only sequence and retains halt checking. Physical display acceptance
-remains open. The same g27 log physically verified charger activation and a
-status transition, but not positive battery current or increasing state of
-charge.
+clears DSI `CLK_CTRL`, `CTRL`, and the 45 nm PLL. A subsequent artifact placed
+that full operation in repeatable `msm_dsi_runtime_suspend()` and again ended
+around the same three branch-disable warnings before `/init`. The current
+local kernel instead performs firmware handoff exactly once during DSI probe,
+under a tracked clock reference, and retains those AHB clocks across normal
+runtime suspend/resume. Removal/error unwind releases them. This avoids both
+repeated controller destruction and the physically failing halt-poll path at
+the deliberate cost of higher display-block bring-up power. Physical display
+acceptance remains open. The same g27 log physically verified charger
+activation and a status transition, but not positive battery current or
+increasing state of charge.
 
 ## Status domains
 

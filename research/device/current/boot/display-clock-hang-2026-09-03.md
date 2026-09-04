@@ -76,6 +76,38 @@ BQ24160 `charging enabled` transition message. Neither positive-current
 charging nor visible display output is claimed until the new artifact is run
 on the phone.
 
+## g28 result and lifecycle correction
+
+The physical run of the complete-quiesce artifact still produced the three
+checked-disable warnings from `msm_dsi_runtime_suspend()` and did not provide
+an initramfs marker or stable USB session before the captured ring ended. This
+does not prove a panic or exact terminal instruction, but it proves that
+adding more destructive controller reset work to the ordinary runtime-PM
+callback did not resolve the pre-init failure.
+
+Source review identified a lifecycle error independent of the verified Sony
+register sequence. Firmware handoff is a one-time transition; runtime suspend
+is repeatable and can occur during component setup and panel operations. The
+old implementation cleared DSI controller and PLL state every time the latter
+ran, then attempted to gate hardware whose three halt indications remained
+deasserted on this handset.
+
+Signed kernel commit `3c1ddf679af0` moves the firmware-state reset to a
+one-time call in `dsi_init()` after the host and PHY exist. It first acquires a
+real bulk CCF reference, performs and flushes the controller/PLL reset, and
+retains that reference across runtime suspend/resume. Destroy/error unwind
+releases it. This is a narrow early-bring-up containment: it deliberately
+keeps the DSI AHB clocks enabled and is not final power management. Static
+guards reject any future return of controller/PHY reset to runtime suspend,
+loss of retained-clock handling in resume, or missing teardown.
+
+The resulting local g29 artifact has SHA-256
+`6ee18dc8f1efdbd0771524ea66e85086edbecddc325250df1730e3d1aecad465`.
+It has passed source, kernel, DT schema, display, charging, appended-DTB,
+persistent-RAM, decompressor-layout and Sony-ELF validation. It has not been
+deployed; the fix is therefore `IMPLEMENTING`, not physical proof of display
+or charging function.
+
 ## g27 physical result
 
 Artifact SHA-256
