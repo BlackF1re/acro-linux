@@ -27,6 +27,31 @@ def check_mmcc(kernel: Path) -> None:
     if "CLK_IS_CRITICAL" in body:
         fail("MSM8x60 DSI slave AHB clock must follow runtime-PM ownership")
 
+    mdp_gdsc = re.search(
+        r"static struct gdsc mdp_gdsc = \{(?P<body>.*?)\n\};", source, re.S
+    )
+    if not mdp_gdsc or "RPM_ALWAYS_ON" not in mdp_gdsc.group("body"):
+        fail("MSM8x60 MDP legacy footswitch must remain powered after init")
+    for fragment in (
+        "mmcc_msm8660_init_mdp_footswitch",
+        "MDP_FS_AXI_RESET_MASK",
+        "MDP_FS_AHB_RESET_MASK",
+        "MDP_FS_CORE_RESET_MASK",
+        "LEGACY_FS_ENABLE_BIT",
+        "LEGACY_FS_CLAMP_BIT",
+        "MDP footswitch: clock-assisted AXI/AHB/core reset completed",
+    ):
+        if fragment not in source:
+            fail(f"MSM8x60 MDP footswitch sequence lacks: {fragment}")
+
+    mdp4 = (
+        kernel / "drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c"
+    ).read_text()
+    if 'of_machine_is_compatible("qcom,msm8260")' not in mdp4:
+        fail("MSM8260 MDP4 must use its 200 MHz maximum core rate")
+    if "failed to enable MDP clocks for revision read" not in mdp4:
+        fail("MDP4 revision read must reject failed clock preparation")
+
     cfg = (kernel / "drivers/gpu/drm/msm/dsi/dsi_cfg.c").read_text()
     dsi = (kernel / "drivers/gpu/drm/msm/dsi/dsi.c").read_text()
     host = (kernel / "drivers/gpu/drm/msm/dsi/dsi_host.c").read_text()
