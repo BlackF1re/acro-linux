@@ -15,6 +15,21 @@
 	compatible = "sony,hikari", "qcom,msm8660";
 
 	/*
+	 * The MSM8x60 multimedia clock controller is secure-only on Sony's
+	 * production firmware.  The qcom_scm convention probe alone does not
+	 * instantiate the SCM platform driver: it needs this firmware node before
+	 * MMCC can use qcom_scm_io_readl()/writel().  MSM8660's binding requires
+	 * the RPM Daytona fabric clock as its single core clock.
+	 */
+	firmware {
+		scm {
+			compatible = "qcom,scm-msm8660", "qcom,scm";
+			clocks = <&rpmcc RPM_DAYTONA_FABRIC_CLK>;
+			clock-names = "core";
+		};
+	};
+
+	/*
 	 * The legacy Fuji/TWRP kernel and a physical TWRP /proc/iomem capture
 	 * both identify this as the 128 KiB persistent ram_console region.
 	 * Keep it mapped: ramoops writes the console itself.  Its zero ECC layout
