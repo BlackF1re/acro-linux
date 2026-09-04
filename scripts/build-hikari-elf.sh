@@ -17,7 +17,7 @@ output=${OUTPUT:-$artifact_dir/hikari-current.elf}
 require_display_bringup=${REQUIRE_DISPLAY_BRINGUP:-1}
 require_usb_debug=${REQUIRE_USB_DEBUG:-1}
 require_charging=${REQUIRE_CHARGING:-1}
-ramdisk_addr=${RAMDISK_ADDR:-0x42a00000}
+ramdisk_addr=${RAMDISK_ADDR:-0x42c10000}
 kernel_addr=${KERNEL_ADDR:-0x40208000}
 p3_limit=$((20 * 1024 * 1024))
 
