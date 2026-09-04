@@ -1,0 +1,4 @@
+# Canonical Hikari kernel patch application order.
+# One relative patch path per line; blank lines and # comments are ignored.
+# Populate from the current external worktree with:
+#   ./scripts/export-hikari-kernel-patches.sh /home/paul/xperia/src/linux
