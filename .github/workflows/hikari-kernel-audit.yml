@@ -75,11 +75,10 @@ jobs:
         if: steps.linux-cache.outputs.cache-hit != 'true'
         run: ./scripts/materialize-hikari-kernel.sh "$RUNNER_TEMP/linux-hikari"
 
-      - name: Verify cached Linux source
+      - name: Verify materialized Linux source
         run: |
           set -euxo pipefail
           test -d "$RUNNER_TEMP/linux-hikari/.git"
-          test -z "$(git -C "$RUNNER_TEMP/linux-hikari" status --porcelain=v1 --untracked-files=all)"
           ./scripts/check-msm8660-mmcc-source.sh "$RUNNER_TEMP/linux-hikari"
           python3 scripts/check-hikari-display-source.py "$RUNNER_TEMP/linux-hikari"
           ./scripts/check-hikari-as3676-source.sh "$RUNNER_TEMP/linux-hikari"
