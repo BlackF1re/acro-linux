@@ -51,6 +51,15 @@ for needle in sequence:
     if new < 0:
         raise SystemExit(f'AS3676 missing ordered Hikari startup step: {needle}')
     pos = new
+
+# DCDC may be prepared at probe, but current sinks must remain blanked until
+# the DRM panel core has successfully enabled the panel and calls
+# backlight_enable().  This prevents a false-positive lit backlight over a
+# sleeping/unconfigured LCD.
+if '.power = BACKLIGHT_POWER_OFF,' not in text:
+    raise SystemExit('AS3676 must register LCD backlight initially blanked')
+if 'backlight_get_brightness(bl)' not in text:
+    raise SystemExit('AS3676 update_status must honor backlight blanking state')
 PY
 
 grep -A2 '^config BACKLIGHT_AS3676$' "$kconfig" | grep -q 'depends on I2C && LEDS_CLASS'
