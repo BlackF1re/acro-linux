@@ -285,6 +285,11 @@
  * primary I2C and BMA250 on the MPU3050 secondary bus.  Use the mainline
  * MPU3050 i2c-gate instead of carrying the old InvenSense MPL glue.
  */
+&gsbi12 {
+	qcom,mode = <GSBI_PROT_I2C>;
+	status = "okay";
+};
+
 &gsbi12_i2c {
 	pinctrl-names = "default";
 	pinctrl-0 = <&hikari_gsbi12_i2c_pins>;
