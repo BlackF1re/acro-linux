@@ -82,13 +82,13 @@ phone.
 The current locally validated, **not deployed** artifact is:
 
 ```text
-/home/paul/xperia/build/hikari-artifacts-g33-display/hikari-display-secure-mmcc.elf
-size:   12,516,700 bytes
-SHA-256 8f0dbccff8f06dbdadb21f1837d83a9b36d2ed718e2fdaac654aabe8d232d7cd
+/home/paul/xperia/build/hikari-artifacts-g34-display/hikari-display-scm-provider.elf
+size:   12,519,195 bytes
+SHA-256 82979892a9a431bec11b8e75cb8648acab8212cd79414c0f81840c4c5fdb32fc
 ```
 
 It was built from signed external kernel tree HEAD
-`067c4e54fde9`. It preserves the verified
+`073f7ab967d08d6c60f9c491e7ac2fa81fb1600f`. It preserves the verified
 memory, RPM, ramoops, stable PID 1, and USB ACM shell foundation. The
 source-derived firmware-state reset now runs exactly once during DSI probe,
 with a tracked common-clock-framework reference held across the operation.
@@ -101,24 +101,23 @@ Display and useful positive-current charging remain unverified until physical
 acceptance tests pass. In addition to the `MDP_GDSC` relationship it now
 reproduces the exact Sony/C.A.F. eight-clock MDP footswitch initialization.
 MDP4 refuses MMIO if clock preparation fails and probes MDP4/DSI asynchronously
-as a USB-console fail-safe. The g31 physical post-mortem proved that the
-footswitch completed, but immediate cleanup disabled three branches that still
-reported active and then crashed while restoring a bypass-RCG bootloader rate.
-The g32 physical run proved that retaining those clocks removes the cleanup
-Oops, but its footswitch readback remained `GFS=0x0` and the first MDP4 MMIO
-read still stalled. The g33 kernel uses Qualcomm SCM secure IO for the complete
-MSM8x60 MMCC resource, initializes the legacy delay/retention fields, and
-refuses MDP MMIO unless the final enable/clamp state is valid. This is a narrow
-correction for the observed register-bus stall, not a display acceptance claim.
+as a USB-console fail-safe. Physical g33 evidence then showed the secure-MMCC
+driver deferred before probe because the DT contained no SCM platform device;
+the early architecture convention message was insufficient. This artifact
+adds `qcom,scm-msm8660` with the required RPM Daytona core clock. It is a narrow
+correction for the observed supplier boundary, not a display acceptance claim.
+The initramfs also installs three read-only reports for general hardware,
+display, and power/charging diagnosis. It retains the same BusyBox binary and
+408-applet set.
 
 Its components are:
 
 ```text
-zImage:     11,276,024 bytes, 253c88373f3a68304a10fb3405a2a5e648daa1b5c9308ae10297e53e8551c956
-zImage+DTB: 11,289,141 bytes, e5e52167d2316a5d73f7601b8fe4beb27e4cec033e6ee910d2dad898268f6318
-DTB:            13,117 bytes
-DTB SHA-256: a2ea5a7bc629e090064992763bb34dd41ea3a994061f4f806c3268291a12fd3c
-initramfs:  1,103,679 bytes, c9a0ea7651ffc6c8c7acb0695764e4278ec38bd984b53381f7cb2f0008ed3894
+zImage:     11,277,096 bytes, 82c31ad9075c2dacadfdeee1ec0ee693acb88ee29315f8cfd1c81229dd4d7932
+zImage+DTB: 11,290,325 bytes, cbdbf9d7d388cb9258b6c06fed7051d1ee5d9cf49867f95ed412a7716157d736
+DTB:            13,229 bytes
+DTB SHA-256: 91a672b32e3dfd06f83e5385a1ba081a03b442b85ace12da9b9ae3246f9abd09
+initramfs:  1,104,990 bytes, 0481f7e2764ba10fb2a70e1f07983df5e0d09ad7c656c3686223e0aa3777b690
 ```
 
 The Sony ELF loads segment 0 at `0x40208000`, segment 1 at `0x42a00000`, and
@@ -129,7 +128,7 @@ local artifact integrity, not permission to flash or a hardware claim.
 The final Sony ELF segment table is:
 
 ```text
-segment 0: offset 0x001000, paddr 0x40208000, size 0xac4235
-segment 1: offset 0xac5235, paddr 0x42a00000, size 0x10d73f
-segment 2: offset 0xbd2974, paddr 0x00020000, size 0x01d3e8
+segment 0: offset 0x001000, paddr 0x40208000, size 0xac46d5
+segment 1: offset 0xac56d5, paddr 0x42a00000, size 0x10dc5e
+segment 2: offset 0xbd3333, paddr 0x00020000, size 0x01d3e8
 ```

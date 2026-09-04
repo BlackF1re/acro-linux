@@ -160,8 +160,20 @@ selects secure IO and routes the complete multimedia clock-controller access
 path through SCM. The current local kernel therefore uses SCM-backed MMCC
 regmap accesses, restores the legacy footswitch delay/retention setup, and
 rejects an invalid final enable/clamp readback before MDP MMIO. The corrected
-artifact is locally validated but has not been deployed; display/fbcon remain
-`NOT_VERIFIED`. See [the sanitized g32 post-mortem](../research/device/current/boot/g32-display-secure-mmcc.md).
+artifact became physical run g33; display/fbcon remained `NOT_VERIFIED` and
+the next supplier failure boundary is recorded below. See [the sanitized g32
+post-mortem](../research/device/current/boot/g32-display-secure-mmcc.md).
+
+The g33 physical run proved that the secure-MMCC implementation failed safely
+but never reached MMCC probe.  The native kernel and USB shell remained alive;
+`4000000.clock-controller` was unbound and DSI/MDP were deferred behind it.
+Although the architecture convention probe printed `qcom_scm: convention: smc
+legacy`, there was no bound SCM platform device because the Hikari DT lacked a
+`qcom,scm` firmware node.  The current local DT now instantiates the MSM8660
+SCM interface with its required RPM Daytona core clock.  The final DTB and a
+scoped SCM `dtbs_check` pass.  This fixes the exact deferred-supplier boundary;
+display pixels, fbcon, and real backlight output remain `NOT_VERIFIED` until a
+physical run. See [the sanitized g33 diagnosis](../research/device/current/boot/g33-display-scm-provider.md).
 
 ## Status domains
 
