@@ -226,7 +226,75 @@ source; clearing `CLK_CTRL` alone did not release the branches.
 
 Exact Sony MSM8x60 `mipi_dsi.c` clears DSI `CLK_CTRL` (`+0x118`) and `CTRL`,
 stops the 45 nm PLL, and disables DSI master, DSI slave, then AMP AHB. The
-local DRM/MSM variant now reproduces that complete no-continuous-splash
-handoff before the checked clock disables. The change is restricted by an
-MSM8x60 configuration flag and retains clock-framework halt verification. It
-is locally built and must still be verified on the physical panel.
+first local reproduction placed that reset in `msm_dsi_runtime_suspend()`.
+That callback is normal lifecycle machinery rather than a one-time firmware
+handoff, so it could reset the controller repeatedly during component probe,
+panel transactions, or later power-management transitions. The following
+physical attempt again ended around checked disables of the slave, master and
+AMP AHB branches before `/init`; moving more shutdown operations into the
+same callback did not make that lifecycle safe.
+
+Signed kernel commit `3c1ddf679af0` therefore makes the operation explicitly
+one-shot. After host and PHY discovery, and before DSI manager registration,
+it takes a tracked bulk clock reference, clears `CLK_CTRL` and `CTRL`, stops
+the 45 nm PLL, flushes the posted MMIO writes, and records the retained-clock
+state. Runtime suspend and resume then leave those AHB references untouched.
+The destroy/error-unwind path releases them exactly once. A project build gate
+requires the one-shot call, retained suspend/resume behavior and matching
+teardown, and forbids controller/PHY reset operations in runtime suspend.
+
+This containment is intentionally conservative: the display AHB clocks stay
+on for the life of the driver, increasing bring-up power consumption. It
+removes the evidenced pre-init failure path without pretending that final
+runtime PM is solved. The locally validated g29 artifact is recorded in
+[BUILD.md](BUILD.md); physical panel, fbcon and charging acceptance remain
+open.
+
+## g29 post-mortem: missing MDP power domain
+
+The g29 physical attempt proved that the one-shot DSI quiesce completed and
+retained its AHB clocks. It advanced through MSM8x60 DSI V2 selection and
+MDP4/DSI component binding, then the synchronous kernel-init thread stopped
+progressing. Charger workqueue messages continued for 72 seconds, so this was
+not a whole-kernel panic. There was no `MDP4 version`, initramfs release,
+`/init`, or Hikari userspace marker.
+
+The deployed MDP4 node lacked a power domain. Exact Sony MSM8x60 source puts
+`mdp.0` behind `FS_MDP` and maps its clocks to `footswitch-8x60.4`; the current
+MMCC driver exposes the same island as `MDP_GDSC` ID 4. The corrected Hikari
+node uses `power-domains = <&mmcc MDP_GDSC>`, so the platform core powers the
+island before `mdp4_kms_init()` performs its first revision-register read.
+The binding and final-DTB gate enforce this relationship.
+
+The bring-up cmdline also uses asynchronous `mdp4,msm_dsi` probing. This is a
+diagnostic fail-open measure: another display-side MMIO stall will no longer
+prevent later USB initcalls from registering the ttyGS0 kernel console. The
+full sanitized diagnosis is in
+[g29-display-mdp-power-stall.md](../research/device/current/boot/g29-display-mdp-power-stall.md).
+
+## g30 post-mortem: MSM8x60 MDP footswitch sequence
+
+The g30 physical attempt showed that attaching `power-domains = <&mmcc
+MDP_GDSC>` was necessary but not sufficient.  The kernel registered g_serial,
+detected AS3676 (matching the observed backlight), unhalted MMFAB, selected and
+quiesced the MSM8x60 DSI V2 block, and bound MDP4 to DSI.  Its last message was
+the diagnostic immediately before the first `REG_MDP4_VERSION` read.  There
+was no returned version, panic, `/init`, or physical gadget enumeration.
+
+Exact Sony/C.A.F. `footswitch-8x60.c` requires more than a generic GDSC enable:
+the eight MDP-domain clocks are prepared, both MDP AXI ports are unhalted,
+AXI/AHB/core clock domains are reset, the rail is enabled and allowed to
+charge, I/O is unclamped, resets are released, and core/pixel memory retention
+is selected.  The kernel now performs that source-derived sequence once after
+MMCC clock registration and before its provider probe completes.  The MDP
+domain remains powered for bring-up because generic runtime collapse cannot
+yet repeat the sequence safely.
+
+MDP4 now checks and unwinds every clock-enable failure before MMIO, and uses
+the Sony MSM8260 200 MHz core limit rather than the APQ8064 266.667 MHz limit.
+This makes a missing prerequisite a clean display-probe failure instead of a
+whole-kernel register-bus lock, preserving the verified USB diagnostics.
+Signed kernel commits are `678b7e106c20` and `18f656abb9fb`; the full sanitized
+post-mortem is
+[g30-display-mdp-register-hang.md](../research/device/current/boot/g30-display-mdp-register-hang.md).
+Physical pixels, scanout and fbcon remain `NOT_VERIFIED`.

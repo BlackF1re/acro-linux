@@ -54,8 +54,8 @@ kernel outputs and ELF prototype are never added to Git.
   missing MSM8660 MMSS SFPB schema, DSI PHY name, controller fallback and
   register-name issues found by this check were fixed rather than suppressed.
 - Direct `dt-doc-validate` of the project-added bindings and targeted
-  `dt-validate` of the final Hikari DTB also passed. `dtschema` 2026.6 is kept
-  in `/home/paul/xperia/build/dtschema-venv`, not global Python.
+  `dt-validate` of the final Hikari DTB also passed. `dtschema` 2026.6 is
+  installed in an isolated `pipx` environment, not global Python.
 - The ELF self-test and artifact validator passed. The latter checks the
   original offline p3 hash and size, p3 capacity, appended-DTB tail, ELF32
   header, segment ranges and load-address overlap.
@@ -82,26 +82,42 @@ phone.
 The current locally validated, **not deployed** artifact is:
 
 ```text
-/home/paul/xperia/build/hikari-artifacts-g28-display/hikari-display-complete-dsi-quiesce.elf
-size:   12,516,938 bytes
-SHA-256 d0815b56d7137afd8b97f9f3f14ee718d7240cc946aa1c77986e4d93f56821ff
+/home/paul/xperia/build/hikari-artifacts-g33-display/hikari-display-secure-mmcc.elf
+size:   12,516,700 bytes
+SHA-256 8f0dbccff8f06dbdadb21f1837d83a9b36d2ed718e2fdaac654aabe8d232d7cd
 ```
 
-It was built from external kernel tree HEAD
-`b44a7cd030f7a5e57ce2f3b3a0190776c3a6548b`. It preserves the verified
-memory, RPM, ramoops, stable PID 1, and USB ACM shell foundation. Relative to
-g27 it performs the complete source-derived MSM8x60 DSI boot-state teardown:
-clear `CLK_CTRL`, clear `CTRL`, stop the 45 nm PLL, flush MMIO, then disable
-master, slave, and AMP AHB in Sony order while retaining halt checks. Display
-and useful positive-current charging remain unverified until physical
-acceptance tests pass.
+It was built from signed external kernel tree HEAD
+`067c4e54fde9`. It preserves the verified
+memory, RPM, ramoops, stable PID 1, and USB ACM shell foundation. The
+source-derived firmware-state reset now runs exactly once during DSI probe,
+with a tracked common-clock-framework reference held across the operation.
+The three MSM8x60 DSI AHB clocks remain referenced for this early bring-up
+artifact, so ordinary runtime suspend/resume cannot repeat the destructive
+reset or enter the physically failing branch-disable path. Driver removal and
+probe unwind release the reference. This deliberately trades display-block
+idle power for deterministic bring-up; it is not the final runtime-PM policy.
+Display and useful positive-current charging remain unverified until physical
+acceptance tests pass. In addition to the `MDP_GDSC` relationship it now
+reproduces the exact Sony/C.A.F. eight-clock MDP footswitch initialization.
+MDP4 refuses MMIO if clock preparation fails and probes MDP4/DSI asynchronously
+as a USB-console fail-safe. The g31 physical post-mortem proved that the
+footswitch completed, but immediate cleanup disabled three branches that still
+reported active and then crashed while restoring a bypass-RCG bootloader rate.
+The g32 physical run proved that retaining those clocks removes the cleanup
+Oops, but its footswitch readback remained `GFS=0x0` and the first MDP4 MMIO
+read still stalled. The g33 kernel uses Qualcomm SCM secure IO for the complete
+MSM8x60 MMCC resource, initializes the legacy delay/retention fields, and
+refuses MDP MMIO unless the final enable/clamp state is valid. This is a narrow
+correction for the observed register-bus stall, not a display acceptance claim.
 
 Its components are:
 
 ```text
-zImage:     11,276,296 bytes, 2d839ea59a82e326fb8fc607d777a774bd74385baca4035b5304f2f0f15bbe67
-zImage+DTB: 11,289,379 bytes, ce0a818ac59ee3f57c666de1793dc594981e85ff14c057df5b4e388b7fe2863b
-DTB:            13,083 bytes
+zImage:     11,276,024 bytes, 253c88373f3a68304a10fb3405a2a5e648daa1b5c9308ae10297e53e8551c956
+zImage+DTB: 11,289,141 bytes, e5e52167d2316a5d73f7601b8fe4beb27e4cec033e6ee910d2dad898268f6318
+DTB:            13,117 bytes
+DTB SHA-256: a2ea5a7bc629e090064992763bb34dd41ea3a994061f4f806c3268291a12fd3c
 initramfs:  1,103,679 bytes, c9a0ea7651ffc6c8c7acb0695764e4278ec38bd984b53381f7cb2f0008ed3894
 ```
 
@@ -113,7 +129,7 @@ local artifact integrity, not permission to flash or a hardware claim.
 The final Sony ELF segment table is:
 
 ```text
-segment 0: offset 0x001000, paddr 0x40208000, size 0xac4323
-segment 1: offset 0xac5323, paddr 0x42a00000, size 0x10d73f
-segment 2: offset 0xbd2a62, paddr 0x00020000, size 0x01d3e8
+segment 0: offset 0x001000, paddr 0x40208000, size 0xac4235
+segment 1: offset 0xac5235, paddr 0x42a00000, size 0x10d73f
+segment 2: offset 0xbd2974, paddr 0x00020000, size 0x01d3e8
 ```

@@ -55,7 +55,7 @@ if [[ "$require_usb_debug" == 1 ]]; then
       exit 1
     }
   done
-  grep -qx 'CONFIG_CMDLINE="console=tty0 console=ttyGS0,115200"' "$build_dir/.config" || {
+  grep -Eq '^CONFIG_CMDLINE=".*console=tty0 .*console=ttyGS0,115200([ "].*)$' "$build_dir/.config" || {
     echo 'Hikari BOOT #5.1 build requires the late ttyGS0 console cmdline' >&2
     exit 1
   }
@@ -114,7 +114,7 @@ if [[ -n "$initramfs_source" ]]; then
         exit 1
       }
     done
-    grep -qx 'CONFIG_CMDLINE="console=tty0 console=ttyGS0,115200"' "$build_dir/.config" || {
+    grep -Eq '^CONFIG_CMDLINE=".*console=tty0 .*console=ttyGS0,115200([ "].*)$' "$build_dir/.config" || {
       echo 'Hikari BOOT #5.1 build lost the late ttyGS0 console cmdline' >&2
       exit 1
     }

@@ -22,7 +22,7 @@ done
 command -v fdtget >/dev/null || { echo 'fdtget is required' >&2; exit 1; }
 
 for symbol in \
-	CONFIG_MSM_MMCC_8660=y CONFIG_INTERCONNECT_QCOM_MSM8660=y \
+	CONFIG_QCOM_SCM=y CONFIG_MSM_MMCC_8660=y CONFIG_INTERCONNECT_QCOM_MSM8660=y \
 	CONFIG_DRM=y CONFIG_DRM_MSM=y CONFIG_DRM_MSM_MDP4=y CONFIG_DRM_MSM_DSI=y \
 	CONFIG_DRM_MSM_DSI_45NM_PHY=y \
 	CONFIG_DRM_PANEL_RENESAS_R63306_TMD_MDV22=y \
@@ -56,6 +56,21 @@ expect_string /display-controller@5100000 clock-names core_clk
 expect_string /display-controller@5100000 clock-names iface_clk
 expect_string /display-controller@5100000 clock-names bus_clk
 expect_string /display-controller@5100000 clock-names lut_clk
+
+# Sony's MSM8x60 BSP supplies mdp.0 through footswitch FS_MDP (ID 4).  A
+# clock-only MDP description can hang the CPU on its first 0x05100000 read.
+mmcc_phandle=$(fdtget -t x "$dtb" /clock-controller@4000000 phandle)
+mdp_domain=$(fdtget -t x "$dtb" /display-controller@5100000 power-domains |
+	tr -s ' ' | sed 's/^ //;s/ $//')
+[[ $mdp_domain == "$mmcc_phandle 4" ]] || {
+	echo "MDP power-domain must resolve to MMCC MDP_GDSC (4), got '$mdp_domain'" >&2
+	exit 1
+}
+
+grep -Eq '^CONFIG_CMDLINE=".*driver_async_probe=([^ "]*,)*mdp4(,[^ "]*)*.*"$' "$config" || {
+	echo 'display bring-up requires asynchronous mdp4 probe as a USB-console fail-safe' >&2
+	exit 1
+}
 expect_string /dsi@4700000 compatible qcom,msm8660-dsi-ctrl
 expect_string /dsi@4700000 compatible qcom,mdss-dsi-ctrl
 expect_hex /dsi@4700000 reg '4700000 200'
@@ -67,6 +82,20 @@ expect_hex /soc/gsbi@19800000/i2c@19880000/backlight@40 reg 40
 expect_string /dsi-phy@47000f0 compatible qcom,msm8660-dsi-phy-45nm
 expect_hex /dsi-phy@47000f0 reg '47000f0 1e0 4700200 d0'
 expect_hex /reserved-memory/ramoops@7ffe0000 reg '7ffe0000 20000'
+
+# Secure MMCC access cannot merely wait on qcom_scm_is_available(): an SCM
+# platform device must exist and bind first.  Its MSM8660 binding requires the
+# RPM Daytona fabric clock as the sole core clock.
+expect_string /firmware/scm compatible qcom,scm-msm8660
+expect_string /firmware/scm compatible qcom,scm
+expect_string /firmware/scm clock-names core
+rpmcc_phandle=$(fdtget -t x "$dtb" /soc/rpm@104000/clock-controller phandle)
+scm_clock=$(fdtget -t x "$dtb" /firmware/scm clocks |
+	tr -s ' ' | sed 's/^ //;s/ $//')
+[[ $scm_clock == "$rpmcc_phandle a" ]] || {
+	echo "SCM core clock must resolve to RPM_DAYTONA_FABRIC_CLK (10), got '$scm_clock'" >&2
+	exit 1
+}
 
 # The MSM8x60 V2 host exposes direct byte/pixel/escape inputs.  The source
 # divider is internal to the DSI PHY/host path; describing APQ8064-style src

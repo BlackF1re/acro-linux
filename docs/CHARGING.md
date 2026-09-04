@@ -78,6 +78,14 @@ verifies native driver programming and charger activation/status transition.
 It does not yet verify useful battery charging: the retained evidence lacks a
 reliable positive-current observation and state-of-charge increase.
 
+The g29 post-mortem again logged successful conservative charger programming
+at 500 mA input, 1.525 A charge-current limit and 4.20 V regulation. Its later
+asynchronous policy reads returned `-EAGAIN` once and then `-ETIMEDOUT` while
+the main init thread was stalled in the unpowered display island. These events
+prove neither useful positive battery current nor a charger root cause. They
+remain a separate charging reliability issue to retest after display init no
+longer stalls the kernel-init path.
+
 The recurring `l6: voltage operation not allowed` warning comes from the
 Qualcomm USB HS PHY requesting the 3.05--3.30 V voltage triplet on PM8058 L6,
 which Hikari already exposes as a fixed 3.05 V rail. The local PHY correction

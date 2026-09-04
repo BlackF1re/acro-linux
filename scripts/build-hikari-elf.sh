@@ -31,7 +31,7 @@ python3 "$repo_root/tools/check_hikari_kernel_guards.py" --kernel-src "$kernel_s
 # needs before CONFIG_INITRAMFS_SOURCE can point back at the resulting archive.
 KERNEL_SRC="$kernel_src" KERNEL_FRAGMENT="$kernel_fragment" \
   BUILD_DIR="$kernel_build" \
-  TARGETS=usr/gen_init_cpio \
+  TARGETS=usr/ \
   REQUIRE_USB_DEBUG="$require_usb_debug" \
   REQUIRE_DISPLAY_BRINGUP="$require_display_bringup" \
   REQUIRE_CHARGING="$require_charging" \

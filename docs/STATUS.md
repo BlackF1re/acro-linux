@@ -119,12 +119,49 @@ and `amp_ahb_clk` before the persistent ring became corrupt/truncated. It did
 not reach an observable `/init` or stable ACM terminal. The individual halt
 poll is bounded, so the warnings identify an incomplete boot-state teardown,
 not a proven infinite loop or exact terminal instruction. Exact Sony shutdown
-clears DSI `CLK_CTRL`, `CTRL`, and the 45 nm PLL, then disables master, slave,
-and AMP AHB in that order. The current local kernel implements that complete
-MSM8x60-only sequence and retains halt checking. Physical display acceptance
-remains open. The same g27 log physically verified charger activation and a
-status transition, but not positive battery current or increasing state of
-charge.
+clears DSI `CLK_CTRL`, `CTRL`, and the 45 nm PLL. A subsequent artifact placed
+that full operation in repeatable `msm_dsi_runtime_suspend()` and again ended
+around the same three branch-disable warnings before `/init`. The current
+local kernel instead performs firmware handoff exactly once during DSI probe,
+under a tracked clock reference, and retains those AHB clocks across normal
+runtime suspend/resume. Removal/error unwind releases them. This avoids both
+repeated controller destruction and the physically failing halt-poll path at
+the deliberate cost of higher display-block bring-up power. Physical display
+acceptance remains open. The same g27 log physically verified charger
+activation and a status transition, but not positive battery current or
+increasing state of charge.
+
+The g29 log located a missing MDP power-domain relationship. The subsequent
+g30 physical log proved that a plain `MDP_GDSC` attachment still left the
+MSM8x60 register bus inaccessible: after DSI quiesce and component binding,
+the kernel stopped exactly at the first MDP4 version-register read. AS3676 had
+already enabled the observed backlight; g_serial had only registered, so the
+global MMSS hang also prevented stable physical USB enumeration. The current
+local correction reproduces the exact Sony/C.A.F. eight-clock FS_MDP reset,
+rail, unclamp and retention sequence, retains the island for bring-up, caps
+MSM8260 MDP at 200 MHz, and rejects clock failures before MMIO. Display probing
+remains asynchronous as a USB-console fail-safe. This is an evidence-backed
+boot-blocker fix, not a claim that scanout or fbcon is working.
+
+The g31 physical log then proved that the source-derived MDP footswitch
+sequence itself completed. Its cleanup immediately reported the LCDC, pixel
+and TV branches stuck on, then dereferenced a null clock parent while restoring
+a bootloader rate through `clk_rcg_bypass_determine_rate()`. This kernel Oops
+occurred during MMCC probe, before DRM and `/init`; it explains the stable USB
+electrical connection without terminal bytes and gives no panel verdict. The
+current g32 local kernel keeps the eight reset-clock references prepared for
+the temporary always-on domain and releases them only through device-managed
+probe/unbind cleanup. See [the sanitized g31 post-mortem](../research/device/current/boot/g31-display-mmcc-cleanup-oops.md).
+
+The g32 physical run removed that cleanup Oops but again stopped at the first
+MDP4 register read. Its decisive clue is the preceding footswitch readback
+`GFS=0x0`: the enable operation never latched. Exact Sony/C.A.F. MSM8x60 code
+selects secure IO and routes the complete multimedia clock-controller access
+path through SCM. The current local kernel therefore uses SCM-backed MMCC
+regmap accesses, restores the legacy footswitch delay/retention setup, and
+rejects an invalid final enable/clamp readback before MDP MMIO. The corrected
+artifact is locally validated but has not been deployed; display/fbcon remain
+`NOT_VERIFIED`. See [the sanitized g32 post-mortem](../research/device/current/boot/g32-display-secure-mmcc.md).
 
 ## Status domains
 
