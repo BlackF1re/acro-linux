@@ -1,0 +1,70 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Sony Xperia acro S (Hikari) board hardware that is already backed by
+ * physical inventory plus exact Fuji/Hikari downstream wiring and by an
+ * existing mainline driver.  Keep speculative peripherals out of this file.
+ */
+
+#include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
+#include "pm8058.dtsi"
+
+/* Fuji/Hikari routes the PM8058 interrupt to MSM TLMM GPIO88, active low. */
+&pm8058 {
+	interrupts-extended = <&tlmm 88 IRQ_TYPE_LEVEL_LOW>;
+};
+
+/*
+ * Exact downstream SDCC rails:
+ *   SDCC1/eMMC VDD  = PM8901 L5, 2.85 V, always on
+ *   SDCC1/eMMC VCCQ = PM8901 LVS0, always on
+ *   SDCC3/microSD   = PM8058 L14, 2.85 V
+ */
+&rpm {
+	regulators-0 {
+		pm8901_l5: l5 {
+			regulator-min-microvolt = <2850000>;
+			regulator-max-microvolt = <2850000>;
+			regulator-always-on;
+		};
+
+		pm8901_lvs0: lvs0 {
+			regulator-always-on;
+		};
+	};
+
+	regulators-1 {
+		pm8058_l14: l14 {
+			regulator-min-microvolt = <2850000>;
+			regulator-max-microvolt = <2850000>;
+		};
+	};
+};
+
+/* PM8058 GPIO22 is the Hikari microSD card-detect input, active low. */
+&pm8058_gpio {
+	hikari_sd_detect: sd-card-detect-state {
+		pinconf {
+			pins = "gpio22";
+			function = "normal";
+			input-enable;
+			bias-pull-up;
+			qcom,pull-up-strength = <PMIC_GPIO_PULL_UP_30>;
+		};
+	};
+};
+
+/* Physical inventory: MAG2GA eMMC on MSM SDCC1, 8-bit. */
+&sdcc1 {
+	vmmc-supply = <&pm8901_l5>;
+	vqmmc-supply = <&pm8901_lvs0>;
+	status = "okay";
+};
+
+/* Physical inventory: removable microSD slot on MSM SDCC3. */
+&sdcc3 {
+	vmmc-supply = <&pm8058_l14>;
+	cd-gpios = <&pm8058_gpio 21 GPIO_ACTIVE_LOW>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&hikari_sd_detect>;
+	status = "okay";
+};

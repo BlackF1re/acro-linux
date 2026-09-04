@@ -67,4 +67,20 @@ CONFIG_BATTERY_BQ27XXX_I2C=y
 # The physical gauge's programmed data is authoritative; never update its NVM.
 # CONFIG_BATTERY_BQ27XXX_DT_UPDATES_NVM is not set
 CONFIG_CHARGER_BQ24160=y
+
+# Source-backed board hardware baseline.  These remain built in so storage,
+# PMIC input/RTC and diagnostic ADC telemetry are available before userspace.
+CONFIG_MMC=y
+CONFIG_MMC_BLOCK=y
+CONFIG_MMC_ARMMMCI=y
+CONFIG_MFD_PM8XXX=y
+CONFIG_PINCTRL_QCOM_SSBI_PMIC=y
+CONFIG_INPUT_PMIC8XXX_PWRKEY=y
+CONFIG_INPUT_PM8XXX_VIBRATOR=y
+CONFIG_RTC_CLASS=y
+CONFIG_RTC_DRV_PM8XXX=y
+CONFIG_IIO=y
+CONFIG_QCOM_PM8XXX_XOADC=y
+CONFIG_HWMON=y
+CONFIG_SENSORS_IIO_HWMON=y
 # CONFIG_DEBUG_INFO is not set

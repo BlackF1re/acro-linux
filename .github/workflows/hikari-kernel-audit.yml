@@ -54,9 +54,10 @@ jobs:
           make -C "$KERNEL" O="$BUILD" ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- \
             CHECK_DTBS=y qcom/qcom-msm8260-sony-hikari.dtb
 
-      - name: Run project display and charging gates
+      - name: Run project hardware gates
         run: |
           BUILD="$RUNNER_TEMP/build-hikari"
           DTB="$BUILD/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb"
           ./scripts/check-hikari-display.sh --config "$BUILD/.config" --dtb "$DTB"
           ./scripts/check-hikari-charging.sh --config "$BUILD/.config" --dtb "$DTB"
+          ./scripts/check-hikari-board-hardware.sh --config "$BUILD/.config" --dtb "$DTB"
