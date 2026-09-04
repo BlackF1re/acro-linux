@@ -175,6 +175,17 @@ scoped SCM `dtbs_check` pass.  This fixes the exact deferred-supplier boundary;
 display pixels, fbcon, and real backlight output remain `NOT_VERIFIED` until a
 physical run. See [the sanitized g33 diagnosis](../research/device/current/boot/g33-display-scm-provider.md).
 
+The later g35 physical run proved that the SCM provider itself binds, then
+stopped synchronously at the first secure MMCC operation before DRM, `/init`,
+or stable UDC operation. The retained log contains no Oops or panic. Exact
+Sony MSM8x60 source exposed two concrete implementation errors: legacy atomic
+`SCM_IO_READ` returns its register value directly in `r0`, not SMCCC-style
+`r1`, and MMCC `SAXI_EN` is register offset `0x0030` with value `0x000001d8`
+(not offset `0x01d8`). The current local kernel corrects both, restores the
+exact Sony AHB/MAXI masks, and adds post-operation stage markers. The g36 ELF
+passes all local gates but remains undeployed; display/fbcon are still
+`NOT_VERIFIED`. See [the sanitized g35 diagnosis](../research/device/current/boot/g35-display-secure-mmcc-init-hang.md).
+
 ## Status domains
 
 status/hardware.yaml deliberately separates physical hardware evidence, the
