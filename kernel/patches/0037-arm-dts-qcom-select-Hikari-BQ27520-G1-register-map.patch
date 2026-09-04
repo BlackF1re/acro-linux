@@ -1,0 +1,25 @@
+From 025ce1e57f1996ff82ebe71fffc1965780cd3dd2 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Sat, 5 Sep 2026 02:48:34 +0700
+Subject: [PATCH] arm: dts: qcom: select Hikari BQ27520 G1 register map
+
+---
+ arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+index b8393861149c..e44578909b5d 100644
+--- a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
++++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+@@ -312,7 +312,7 @@ lcd_backlight: backlight@40 {
+ 
+ 	/* Exact Fuji/Hikari GSBI8 addresses: BQ27520 = 0x55, BQ24160 = 0x6b. */
+ 	bq27520: fuel-gauge@55 {
+-		compatible = "ti,bq27520";
++		compatible = "ti,bq27520g1";
+ 		reg = <0x55>;
+ 		monitored-battery = <&battery>;
+ 		status = "okay";
+-- 
+2.53.0
+

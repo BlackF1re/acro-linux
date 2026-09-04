@@ -38,3 +38,4 @@
 0034-arm-dts-qcom-add-Hikari-SCM-firmware-node.patch
 0035-firmware-qcom-avoid-modern-SCM-probes-on-MSM8x60.patch
 0036-fix-match-MSM8x60-secure-MMCC-access-ABI.patch
+0037-arm-dts-qcom-select-Hikari-BQ27520-G1-register-map.patch

@@ -23,7 +23,7 @@ grep -qx '# CONFIG_BATTERY_BQ27XXX_DT_UPDATES_NVM is not set' "$config" || {
 dt=$(mktemp)
 trap 'rm -f "$dt"' EXIT
 dtc -I dtb -O dts "$dtb" >"$dt"
-for required in 'fuel-gauge@55' 'charger@6b' 'backlight@40' 'ti,bq27520' 'ti,bq24160' \
+for required in 'fuel-gauge@55' 'charger@6b' 'backlight@40' 'ti,bq27520g1' 'ti,bq24160' \
 	'charge-full-design-microamp-hours = <0x1cfde0>' \
 	'ti,usb-input-current-limit-microamp = <0x7a120>' \
 	'ti,constant-charge-current-max-microamp = <0x174508>' \
