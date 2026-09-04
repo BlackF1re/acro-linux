@@ -58,6 +58,20 @@ def main() -> int:
     )
     require(panel, off_sequence, "Sony MDV22 power-off order")
 
+    # The DT backlight phandle must be resolved by the panel driver.  The DRM
+    # panel core then calls backlight_enable()/disable() in the correct KMS
+    # lifecycle; a probed standalone AS3676 is not sufficient.
+    require(
+        panel,
+        "ret=drm_panel_of_backlight(&m->panel);",
+        "MDV22 DRM backlight lookup",
+    )
+    require(
+        panel,
+        '"failed to get backlight\\n"',
+        "MDV22 deferred backlight probe diagnostic",
+    )
+
     print("HIKARI_DISPLAY_SOURCE_GATE=PASS")
     return 0
 
