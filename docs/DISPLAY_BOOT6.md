@@ -271,3 +271,30 @@ diagnostic fail-open measure: another display-side MMIO stall will no longer
 prevent later USB initcalls from registering the ttyGS0 kernel console. The
 full sanitized diagnosis is in
 [g29-display-mdp-power-stall.md](../research/device/current/boot/g29-display-mdp-power-stall.md).
+
+## g30 post-mortem: MSM8x60 MDP footswitch sequence
+
+The g30 physical attempt showed that attaching `power-domains = <&mmcc
+MDP_GDSC>` was necessary but not sufficient.  The kernel registered g_serial,
+detected AS3676 (matching the observed backlight), unhalted MMFAB, selected and
+quiesced the MSM8x60 DSI V2 block, and bound MDP4 to DSI.  Its last message was
+the diagnostic immediately before the first `REG_MDP4_VERSION` read.  There
+was no returned version, panic, `/init`, or physical gadget enumeration.
+
+Exact Sony/C.A.F. `footswitch-8x60.c` requires more than a generic GDSC enable:
+the eight MDP-domain clocks are prepared, both MDP AXI ports are unhalted,
+AXI/AHB/core clock domains are reset, the rail is enabled and allowed to
+charge, I/O is unclamped, resets are released, and core/pixel memory retention
+is selected.  The kernel now performs that source-derived sequence once after
+MMCC clock registration and before its provider probe completes.  The MDP
+domain remains powered for bring-up because generic runtime collapse cannot
+yet repeat the sequence safely.
+
+MDP4 now checks and unwinds every clock-enable failure before MMIO, and uses
+the Sony MSM8260 200 MHz core limit rather than the APQ8064 266.667 MHz limit.
+This makes a missing prerequisite a clean display-probe failure instead of a
+whole-kernel register-bus lock, preserving the verified USB diagnostics.
+Signed kernel commits are `678b7e106c20` and `18f656abb9fb`; the full sanitized
+post-mortem is
+[g30-display-mdp-register-hang.md](../research/device/current/boot/g30-display-mdp-register-hang.md).
+Physical pixels, scanout and fbcon remain `NOT_VERIFIED`.

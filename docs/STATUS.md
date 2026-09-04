@@ -131,14 +131,17 @@ acceptance remains open. The same g27 log physically verified charger
 activation and a status transition, but not positive battery current or
 increasing state of charge.
 
-The subsequent g29 physical log proves that the one-shot DSI quiesce completed
-and that the failure moved forward: MDP4 bound DSI, then stopped before its
-revision message while background charger work continued. The final DTB had
-omitted the Sony-required MDP footswitch. The current local correction attaches
-MDP4 to MMCC `MDP_GDSC` ID 4, which the platform core powers before probe, and
-makes display probing asynchronous so a future MMSS stall cannot suppress the
-later USB kernel console. This is an evidence-backed boot-blocker fix, not a
-claim that scanout or fbcon is working.
+The g29 log located a missing MDP power-domain relationship. The subsequent
+g30 physical log proved that a plain `MDP_GDSC` attachment still left the
+MSM8x60 register bus inaccessible: after DSI quiesce and component binding,
+the kernel stopped exactly at the first MDP4 version-register read. AS3676 had
+already enabled the observed backlight; g_serial had only registered, so the
+global MMSS hang also prevented stable physical USB enumeration. The current
+local correction reproduces the exact Sony/C.A.F. eight-clock FS_MDP reset,
+rail, unclamp and retention sequence, retains the island for bring-up, caps
+MSM8260 MDP at 200 MHz, and rejects clock failures before MMIO. Display probing
+remains asynchronous as a USB-console fail-safe. This is an evidence-backed
+boot-blocker fix, not a claim that scanout or fbcon is working.
 
 ## Status domains
 
