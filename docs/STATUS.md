@@ -105,6 +105,27 @@ the branch critical. The current local kernel corrects that ownership/bit and
 also fixes truncated MDV22 command-table payloads. These corrections are built
 and validated but not deployed; display/fbcon remain `NOT_VERIFIED`.
 
+A later physical log advanced to DSI link-clock setup and rejected three
+unsupported runtime reparent operations with `-EINVAL`. Exact Fuji clock data
+shows that MSM8x60 uses a direct byte branch, fixed PXO/2 escape clock, and the
+shared MDP pixel RCG rather than the APQ8064-style source-clock graph. The
+current local kernel and canonical project DTS implement that model; the build
+gate now rejects the obsolete assigned-parent topology. This is a precise
+software correction, not yet evidence of visible scanout or charging.
+
+The g27 physical log selected the MSM8x60 DSI V2 configuration and bound MDP4,
+then emitted checked-disable warnings for `dsi_s_ahb_clk`, `dsi_m_ahb_clk`,
+and `amp_ahb_clk` before the persistent ring became corrupt/truncated. It did
+not reach an observable `/init` or stable ACM terminal. The individual halt
+poll is bounded, so the warnings identify an incomplete boot-state teardown,
+not a proven infinite loop or exact terminal instruction. Exact Sony shutdown
+clears DSI `CLK_CTRL`, `CTRL`, and the 45 nm PLL, then disables master, slave,
+and AMP AHB in that order. The current local kernel implements that complete
+MSM8x60-only sequence and retains halt checking. Physical display acceptance
+remains open. The same g27 log physically verified charger activation and a
+status transition, but not positive battery current or increasing state of
+charge.
+
 ## Status domains
 
 status/hardware.yaml deliberately separates physical hardware evidence, the
@@ -129,6 +150,9 @@ current local kernel fixes this without weakening the 500 mA cap,
 temperature/voltage policy, read-only BQ27520 use, or NVM prohibition. Native
 charging remains unverified pending positive-current/SOC testing. Raw
 STAT/FAULT transition logging remains diagnostic; it does not force charging.
+The latest local kernel additionally logs successful CE/HZ release once; the
+last physical attempt stalled in DSI runtime suspend before initramfs could
+provide a complete charge-current observation.
 Cradle/IN and suspend charging remain blocked pending dedicated physical
 evidence. See
 [CHARGING.md](CHARGING.md).

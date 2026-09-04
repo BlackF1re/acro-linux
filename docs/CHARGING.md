@@ -71,6 +71,21 @@ This is an evidence-backed software correction, not a physical charging
 claim. Acceptance still requires positive battery current and increasing
 state of charge on the Xperia.
 
+The g27 attempt sampled raw state `0x23`, logged one successful `charging
+enabled` transition after CE/HZ release at the conservative 500 mA input
+limit, and later sampled raw state `0x40` with `FAULT=0`. This physically
+verifies native driver programming and charger activation/status transition.
+It does not yet verify useful battery charging: the retained evidence lacks a
+reliable positive-current observation and state-of-charge increase.
+
+The recurring `l6: voltage operation not allowed` warning comes from the
+Qualcomm USB HS PHY requesting the 3.05--3.30 V voltage triplet on PM8058 L6,
+which Hikari already exposes as a fixed 3.05 V rail. The local PHY correction
+skips only that redundant voltage request when the regulator already reports
+a value inside the driver's supported range. It preserves regulator load,
+enable, topology, and the proven USB path. Power-cycle, suspend/resume, and
+positive charging remain physically unverified.
+
 ## Required physical acceptance test
 
 After owner-approved deployment, use the already verified USB ACM root shell

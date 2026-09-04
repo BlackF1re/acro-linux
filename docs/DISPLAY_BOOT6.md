@@ -162,12 +162,13 @@ is `IMPLEMENTING`, not `VERIFIED`, until it registers DRM on the handset.
 ## Runtime-suspend clock hang and panel payload correction
 
 The following physical run advanced beyond DSI variant selection and supplied
-a more precise pre-`/init` failure boundary. Its persistent log stopped in
-`msm_dsi_runtime_suspend()` while the clock framework waited forever for
-`dsi_m_ahb_clk` to report off; a later trace similarly named `amp_ahb_clk`.
-Consequently CPU0 never reached the initramfs, which also explains the missing
-or unreliable USB userspace diagnostics in that run. This is not evidence of
-a panel electrical failure.
+a more precise pre-`/init` failure boundary. Its persistent log recorded
+checked-disable warnings for `dsi_m_ahb_clk` and `amp_ahb_clk`; initramfs and
+USB-userspace markers were not observed. The clock driver's individual halt
+poll is bounded to roughly 200 microseconds. Stack-trace output accounts for
+most of the wall-clock gap, so this evidence does not prove an infinite loop
+inside clock disable. It does prove that the DSI boot state was not fully
+quiesced before gating. This is not evidence of a panel electrical failure.
 
 Exact Sony/OpenSEMC MSM8x60 clock data assigns MMSS halt bits 18, 19 and 20 to
 AMP AHB, DSI master AHB and DSI slave AHB respectively. The project bootstrap
@@ -184,3 +185,48 @@ checks the halt-bit rule and every command-table count before packaging.
 The resulting artifact is locally valid and retains the physically verified
 USB ACM and ramoops paths. Visible native-resolution scanout, panel enable and
 backlight remain `NOT_VERIFIED` until the artifact is tested on the phone.
+
+## MSM8x60 DSI link-clock correction
+
+The next physical log proved that the AHB halt-bit correction worked far
+enough to reach link-clock setup, but exposed an APQ8064-derived topology that
+does not exist on the Fuji clock controller:
+
+```text
+failed to reparent dsi1_byte_clk to dsi1pllbyte: -22
+failed to reparent dsi1_pixel_clk to dsi1pll: -22
+failed to reparent dsi1_esc_clk to dsi1pllbyte: -22
+```
+
+The exact Sony `clock-8x60.c` model instead has a direct DSI byte branch at
+`MISC_CC[2]`, a fixed PXO/2 escape clock at `MISC_CC[0]`, and the shared MDP
+pixel RCG at `PIXEL_CC/MD/NS`. The DRM/MSM MSM8x60 host variant now requests
+only those direct `byte`, `pixel`, and `core` inputs: it does not request an
+APQ8064-style `src` clock and does not attempt to program the fixed escape
+rate. The MMCC implementation supplies the exact direct branches and the
+69.672960 MHz `567/3125` PLL8 pixel rate.
+
+The project-owned canonical DTS and its copied kernel-tree DTS are now kept
+identical. The display gate rejects `assigned-clocks` or
+`assigned-clock-parents` on the MSM8x60 DSI node, preventing the build system
+from silently restoring the invalid topology. Kernel commits `a9c320a7dbec`
+and `73e268175648` contain the link-clock and optional-MDP-rail corrections.
+These changes are locally validated only; visible display remains
+`NOT_VERIFIED` pending an owner-approved physical test.
+
+## MSM8x60 DSI controller quiesce
+
+The g27 physical post-mortem advanced through MSM8x60 DSI V2 selection and
+MDP4 component binding. `msm_dsi_runtime_suspend()` then reported all three
+DSI AHB branches still on. The bounded polls returned after warning, but no
+initramfs marker or stable ACM terminal followed before the persistent ring
+became corrupt/truncated. The exact later failure instruction therefore
+remains unknown. Their MMCC halt-bit mapping already agrees with exact Sony
+source; clearing `CLK_CTRL` alone did not release the branches.
+
+Exact Sony MSM8x60 `mipi_dsi.c` clears DSI `CLK_CTRL` (`+0x118`) and `CTRL`,
+stops the 45 nm PLL, and disables DSI master, DSI slave, then AMP AHB. The
+local DRM/MSM variant now reproduces that complete no-continuous-splash
+handoff before the checked clock disables. The change is restricted by an
+MSM8x60 configuration flag and retains clock-framework halt verification. It
+is locally built and must still be verified on the physical panel.
