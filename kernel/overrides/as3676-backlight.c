@@ -242,6 +242,12 @@ static int as3676_probe(struct i2c_client *client)
 		.type = BACKLIGHT_RAW,
 		.max_brightness = 127,
 		.brightness = 32,
+		/*
+		 * Prepare Sony's DCDC at probe, but keep sinks 1/2/6 dark until the
+		 * DRM panel core calls backlight_enable() after a successful panel
+		 * enable. This makes a lit LCD a meaningful KMS milestone.
+		 */
+		.power = BACKLIGHT_POWER_OFF,
 	};
 	struct as3676 *as;
 	unsigned int id1, id2;
@@ -295,7 +301,7 @@ static int as3676_probe(struct i2c_client *client)
 		return ret;
 
 	dev_info(&client->dev,
-		 "AS3676 detected (IDs %#x %#x): LCD, button and RGB LEDs registered\n",
+		 "AS3676 detected (IDs %#x %#x): LCD DCDC ready; backlight waits for DRM panel enable\n",
 		 id1, id2);
 
 	return backlight_update_status(as->bl);
