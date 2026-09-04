@@ -42,6 +42,7 @@ done
 for input in "$kernel_build/.config" "$kernel_build/vmlinux" "$zimage" "$dtb" "$ramdisk" "$rpm"; do
   [[ -f $input ]] || { echo "missing packaging input: $input" >&2; exit 1; }
 done
+[[ -s $rpm ]] || { echo "RPM payload is empty: $rpm" >&2; exit 1; }
 [[ ! -e $output ]] || { echo "refusing to overwrite artifact: $output" >&2; exit 1; }
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
@@ -61,11 +62,11 @@ if len(data) < 40 or data[:4] != b'\xd0\x0d\xfe\xed':
     raise SystemExit('DTB does not start with the FDT magic')
 PY
 
-# The exact RPM segment remains an explicit caller-owned input.  Validate that
-# it at least has the legacy ARM ELF shape before embedding it; this does not
-# make any redistribution claim about the binary.
-python3 "$repo_root/tools/sony_elf.py" inspect "$rpm" >/dev/null
-
+# The p3-derived rpm.segment used by the verified Hikari boot chain is the raw
+# bytes of the legacy RPM PT_LOAD payload, not a standalone ELF file.  Do not
+# mis-detect it with sony_elf.py inspect.  The range gate below validates that
+# the raw payload fits at the verified 0x00020000 load address, and the final
+# ELF verifier requires exactly three PT_LOAD segments after packaging.
 "$repo_root/scripts/check-hikari-firstboot-memory.sh" \
   --kernel-build "$kernel_build" \
   --zimage "$zimage" \
@@ -85,14 +86,22 @@ python3 "$repo_root/tools/sony_elf.py" build \
   --rpm-addr "$rpm_addr" \
   --limit "$limit"
 
-# Verify that segment zero is byte-for-byte zImage+DTB, rather than trusting
-# only the builder invocation.
-python3 - "$output" "$appended" <<'PY'
+# Verify all three packaged payloads and their configured physical load
+# addresses rather than trusting only the builder invocation.
+python3 - "$output" "$appended" "$ramdisk" "$rpm" \
+  "$kernel_addr" "$ramdisk_addr" "$rpm_addr" <<'PY'
 from pathlib import Path
 import struct
 import sys
+
 elf = Path(sys.argv[1]).read_bytes()
-expected = Path(sys.argv[2]).read_bytes()
+expected_kernel = Path(sys.argv[2]).read_bytes()
+expected_ramdisk = Path(sys.argv[3]).read_bytes()
+expected_rpm = Path(sys.argv[4]).read_bytes()
+kernel_addr = int(sys.argv[5], 0)
+ramdisk_addr = int(sys.argv[6], 0)
+rpm_addr = int(sys.argv[7], 0)
+
 header = struct.Struct('<16sHHIIIIIHHHHHH')
 ph = struct.Struct('<IIIIIIII')
 fields = header.unpack_from(elf)
@@ -104,9 +113,28 @@ for i in range(phnum):
         loads.append(ent)
 if len(loads) != 3:
     raise SystemExit(f'expected exactly 3 PT_LOAD segments, got {len(loads)}')
-_, off, _, paddr, filesz, _, flags, _ = loads[0]
-if paddr != 0x40208000 or flags != 0 or elf[off:off + filesz] != expected:
-    raise SystemExit('kernel PT_LOAD does not match the requested zImage+DTB')
+
+expected = {
+    kernel_addr: expected_kernel,
+    ramdisk_addr: expected_ramdisk,
+    rpm_addr: expected_rpm,
+}
+if len(expected) != 3:
+    raise SystemExit('Sony ELF load addresses must be distinct')
+
+seen = set()
+for ent in loads:
+    _, off, _, paddr, filesz, _, _, _ = ent
+    payload = elf[off:off + filesz]
+    if paddr not in expected:
+        raise SystemExit(f'unexpected PT_LOAD physical address 0x{paddr:08x}')
+    if paddr in seen:
+        raise SystemExit(f'duplicate PT_LOAD physical address 0x{paddr:08x}')
+    if payload != expected[paddr]:
+        raise SystemExit(f'PT_LOAD payload mismatch at 0x{paddr:08x}')
+    seen.add(paddr)
+if seen != set(expected):
+    raise SystemExit('one or more expected Sony ELF PT_LOAD segments are missing')
 PY
 
 sha256sum "$output"
