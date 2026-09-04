@@ -1,6 +1,7 @@
-# Canonical Hikari kernel patch application order.
-# Patches 0001-0036 are the imported historical worktree; later patches are
-# project-owned corrective work applied on top without rewriting that history.
+# Canonical imported Hikari kernel patch application order.
+# These are the 36 historical commits exported from the former external
+# worktree. Project-owned corrections are applied strictly and committed by
+# scripts/materialize-hikari-kernel.sh after this imported history.
 0001-clk-qcom-gdsc-add-LEGACY_FOOTSWITCH-support-for-MSM8.patch
 0002-clk-qcom-gdsc-add-RPM_ALWAYS_ON-flag.patch
 0003-dt-bindings-interconnect-qcom-add-msm8660-NoC.patch
@@ -37,4 +38,3 @@
 0034-arm-dts-qcom-add-Hikari-SCM-firmware-node.patch
 0035-firmware-qcom-avoid-modern-SCM-probes-on-MSM8x60.patch
 0036-fix-match-MSM8x60-secure-MMCC-access-ABI.patch
-0037-clk-qcom-correct-MSM8x60-MMCC-branch-mappings.patch

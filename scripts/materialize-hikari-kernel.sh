@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Reconstruct the Hikari kernel tree from a pinned Linus base plus the
-# repository-owned patch series. No device access is performed.
+# repository-owned patch series and strict project corrections. No device
+# access is performed.
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
@@ -19,7 +20,6 @@ command -v git >/dev/null || { echo 'git is required' >&2; exit 1; }
 mapfile -t patches < <(sed -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' "$series")
 if (( ${#patches[@]} == 0 )); then
   echo 'Hikari patch series is empty.' >&2
-  echo 'Import the historical worktree with scripts/export-hikari-kernel-patches.sh first.' >&2
   exit 2
 fi
 
@@ -45,9 +45,6 @@ git -C "$out" fetch --no-tags --depth=1 upstream "$LINUX_BASE"
 git -C "$out" checkout --detach FETCH_HEAD >/dev/null
 git -C "$out" switch -c hikari >/dev/null
 
-# git-am needs a committer identity even though every mail patch carries its
-# own author. Keep the identity and committer date deterministic so repeated
-# materializations produce the same reconstructed commit IDs.
 git -C "$out" config user.name "Hikari Patch Materializer"
 git -C "$out" config user.email "hikari-materializer@localhost"
 
@@ -66,18 +63,29 @@ for rel in "${patches[@]}"; do
   fi
 done
 
-# Fail closed on known MSM8x60 MMCC transcription regressions before board DT
-# preparation or any expensive build. The rules are exact Sony/CAF hardware
-# mappings, not Hikari-specific guesses.
-"$repo_root/scripts/check-msm8660-mmcc-source.sh" "$out"
+# Project correction #37 is expressed as a strict source transform instead of
+# a hand-authored mail patch. The transform aborts unless every historical
+# value is exactly the one verified in the imported v1 source, then we record
+# the result as a deterministic kernel commit.
+python3 "$repo_root/scripts/apply-msm8660-mmcc-corrections.py" "$out"
+git -C "$out" add drivers/clk/qcom/mmcc-msm8660.c
+if git -C "$out" diff --cached --quiet; then
+  echo 'MMCC correction produced no diff; refusing ambiguous materialization' >&2
+  exit 5
+fi
+GIT_AUTHOR_NAME=BlackF1re \
+GIT_AUTHOR_EMAIL=55582873+BlackF1re@users.noreply.github.com \
+GIT_AUTHOR_DATE=2026-09-04T20:30:00+03:00 \
+GIT_COMMITTER_NAME="Hikari Patch Materializer" \
+GIT_COMMITTER_EMAIL=hikari-materializer@localhost \
+GIT_COMMITTER_DATE=2026-09-04T20:30:00+03:00 \
+git -C "$out" commit -q -m $'clk: qcom: correct MSM8x60 MMCC branch mappings\n\nMatch exact Sony/CAF MSM8x60 VPE, ROT, IMEM and VCODEC branch mappings and remove unsupported critical semantics from optional multimedia branches.\n\nSigned-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>'
 
-# The project DTS intentionally remains project-owned instead of becoming a
-# permanent fork-only board file. Apply the idempotent DT/schema preparation
-# after reconstructing and validating the kernel commit stack.
+"$repo_root/scripts/check-msm8660-mmcc-source.sh" "$out"
 "$repo_root/scripts/prepare-hikari-kernel-tree.sh" "$out"
 
 printf 'Hikari kernel materialized successfully.\n'
 printf 'Base: %s\n' "$LINUX_BASE"
 printf 'HEAD: %s\n' "$(git -C "$out" rev-parse HEAD)"
 printf 'Tree: %s\n' "$out"
-printf 'Patches: %d\n' "${#patches[@]}"
+printf 'Imported patches: %d\n' "${#patches[@]}"
