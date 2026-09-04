@@ -1,0 +1,142 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Sony Xperia acro S (Hikari) Broadcom BCM4330 radio wiring.
+ *
+ * Downstream Sony sources place WLAN on MSM SDCC4 and Bluetooth on GSBI6
+ * UARTDM.  Keep firmware/calibration data out of DT: those remain userspace
+ * firmware assets and must come from the device/vendor firmware package.
+ */
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/soc/qcom,gsbi.h>
+
+/ {
+	hikari_wifi_pwrseq: wifi-pwrseq {
+		compatible = "mmc-pwrseq-simple";
+		/* Sony bcmdhd names this WL_RST_N and drives it high to run. */
+		reset-gpios = <&tlmm 130 GPIO_ACTIVE_LOW>;
+	};
+};
+
+/* Sony powers SDCC4/BCM4330 from PM8058 S3 at 1.8 V. */
+&rpm {
+	regulators-1 {
+		pm8058_s3: s3 {
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+		};
+	};
+};
+
+&tlmm {
+	/* Dedicated MSM8x60 SDC4 pads: 16 mA clock, 10 mA pulled-up CMD/DATA. */
+	hikari_sdc4_pins: sdc4-state {
+		clk-pins {
+			pins = "sdc4_clk";
+			drive-strength = <16>;
+			bias-disable;
+		};
+
+		cmd-data-pins {
+			pins = "sdc4_cmd", "sdc4_data";
+			drive-strength = <10>;
+			bias-pull-up;
+		};
+	};
+
+	/* Broadcom WLAN out-of-band HOST_WAKE. */
+	hikari_wifi_hostwake: wifi-hostwake-state {
+		pins = "gpio128";
+		function = "gpio";
+		input-enable;
+		bias-disable;
+	};
+
+	/* GSBI6 UARTDM carries BCM4330 Bluetooth H4 with RTS/CTS flow control. */
+	hikari_bt_uart: bluetooth-uart-state {
+		pins = "gpio53", "gpio54", "gpio55", "gpio56";
+		function = "gsbi6";
+		drive-strength = <2>;
+		bias-disable;
+	};
+
+	hikari_bt_reset: bluetooth-reset-state {
+		pins = "gpio23";
+		function = "gpio";
+		output-low;
+		bias-disable;
+		drive-strength = <2>;
+	};
+
+	hikari_bt_device_wake: bluetooth-device-wake-state {
+		pins = "gpio137";
+		function = "gpio";
+		output-low;
+		bias-disable;
+		drive-strength = <2>;
+	};
+
+	hikari_bt_host_wake: bluetooth-host-wake-state {
+		pins = "gpio63";
+		function = "gpio";
+		input-enable;
+		bias-pull-down;
+		drive-strength = <2>;
+	};
+};
+
+/*
+ * BCM4330 WLAN is permanently soldered to SDCC4.  Sony's board data uses a
+ * four-bit bus, 400 kHz..48 MHz and marks the card non-removable.  The old
+ * virtual card-detect callback is unnecessary with DT non-removable + pwrseq.
+ */
+&sdcc4 {
+	vmmc-supply = <&pm8058_s3>;
+	bus-width = <4>;
+	max-frequency = <48000000>;
+	non-removable;
+	cap-sdio-irq;
+	mmc-pwrseq = <&hikari_wifi_pwrseq>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&hikari_sdc4_pins>;
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	wifi@1 {
+		compatible = "brcm,bcm4330-fmac", "brcm,bcm4329-fmac";
+		reg = <1>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <128 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "host-wake";
+		pinctrl-names = "default";
+		pinctrl-0 = <&hikari_wifi_hostwake>;
+	};
+};
+
+/*
+ * BCM4330 Bluetooth uses GSBI6 UARTDM.  Sony drives BT_RST_N high to power
+ * the controller, MSM_WAKES_BT on GPIO137 and samples BT_WAKES_MSM on GPIO63.
+ * Mainline hci_bcm/serdev replaces the legacy bt_power + bcm_bt_lpm glue.
+ */
+&gsbi6 {
+	qcom,mode = <GSBI_PROT_UART_W_FC>;
+	status = "okay";
+};
+
+&gsbi6_serial {
+	pinctrl-names = "default";
+	pinctrl-0 = <&hikari_bt_uart>;
+	uart-has-rtscts;
+	status = "okay";
+
+	bluetooth {
+		compatible = "brcm,bcm4330-bt";
+		shutdown-gpios = <&tlmm 23 GPIO_ACTIVE_HIGH>;
+		device-wakeup-gpios = <&tlmm 137 GPIO_ACTIVE_HIGH>;
+		host-wakeup-gpios = <&tlmm 63 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&hikari_bt_reset &hikari_bt_device_wake &hikari_bt_host_wake>;
+	};
+};
