@@ -60,9 +60,14 @@ for rel in "${patches[@]}"; do
   fi
 done
 
+# Fail closed on known MSM8x60 MMCC transcription regressions before board DT
+# preparation or any expensive build.  The rules are exact Sony/CAF hardware
+# mappings, not Hikari-specific guesses.
+"$repo_root/scripts/check-msm8660-mmcc-source.sh" "$out"
+
 # The project DTS intentionally remains project-owned instead of becoming a
-# permanent fork-only board file.  Apply the idempotent DT/schema preparation
-# after reconstructing the kernel commit stack.
+# permanent fork-only board file. Apply the idempotent DT/schema preparation
+# after reconstructing and validating the kernel commit stack.
 "$repo_root/scripts/prepare-hikari-kernel-tree.sh" "$out"
 
 printf 'Hikari kernel materialized successfully.\n'
