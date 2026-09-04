@@ -59,7 +59,8 @@ pmic=/soc/ssbi@500000/pmic
 rpm=/soc/rpm@104000
 touch=/soc/gsbi@16200000/i2c@16280000/touchscreen@2c
 nfc=/soc/gsbi@19800000/i2c@19880000/nfc@28
-gyro=/soc/gsbi@19c00000/i2c@19c80000/gyroscope@68
+gsbi12=/soc/gsbi@19c00000
+gyro="$gsbi12/i2c@19c80000/gyroscope@68"
 accel="$gyro/i2c-gate/accelerometer@18"
 keypad="$pmic/keypad@148"
 gpio_keys=/gpio-keys
@@ -155,6 +156,11 @@ read -r _provider bt_host_index bt_host_flags <<<"$(fdtget -tu "$dtb" "$bt" host
 [[ $(fdtget -tu "$dtb" "$touch/rmi4-f11@11" syna,clip-x-high) -eq 719 ]]
 [[ $(fdtget -tu "$dtb" "$touch/rmi4-f11@11" syna,clip-y-high) -eq 1279 ]]
 grep -qx '# CONFIG_RMI4_F34 is not set' "$config"
+
+# Sony puts MPU3050/BMA250 on GSBI12 QUP I2C.  qcom_gsbi requires qcom,mode;
+# without it the parent probe returns -EINVAL before the sensor bus can work.
+[[ $(fdtget -tu "$dtb" "$gsbi12" qcom,mode) -eq 2 ]]
+[[ $(fdtget -ts "$dtb" "$gsbi12" status) == okay ]]
 
 # Sony powers the shared sensor domain at board init: 1.8 V I/O and 2.85 V VDD.
 [[ $(fdtget -tu "$dtb" "$rpm/regulators-1/l8" regulator-min-microvolt) -eq 1800000 ]]
