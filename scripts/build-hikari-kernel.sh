@@ -8,16 +8,13 @@ kernel_src=${KERNEL_SRC:-/home/paul/xperia/src/linux}
 build_dir=${BUILD_DIR:-"$hikari_build_root/linux-hikari-current"}
 cross_compile=${CROSS_COMPILE:-arm-linux-gnueabihf-}
 jobs=${JOBS:-"$(nproc)"}
-targets=${TARGETS:-"zImage qcom/qcom-msm8260-sony-hikari.dtb qcom/qcom-msm8260-sony-hikari-safe.dtb"}
+targets=${TARGETS:-"zImage qcom/qcom-msm8260-sony-hikari.dtb qcom/qcom-msm8260-sony-hikari-gpu.dtb qcom/qcom-msm8260-sony-hikari-safe.dtb"}
 initramfs_source=${INITRAMFS_SOURCE:-}
 kernel_fragment=${KERNEL_FRAGMENT:-"$repo_root/kernel/configs/hikari-boot6-display.fragment"}
 require_usb_debug=${REQUIRE_USB_DEBUG:-0}
 require_display_bringup=${REQUIRE_DISPLAY_BRINGUP:-0}
 require_charging=${REQUIRE_CHARGING:-0}
 
-# Keep local prototype bytes reproducible across repeated builds from the same
-# source and inputs. Callers may deliberately override these conventional
-# kernel build identity variables.
 export KBUILD_BUILD_TIMESTAMP=${KBUILD_BUILD_TIMESTAMP:-"1970-01-01 00:00:00 UTC"}
 export KBUILD_BUILD_VERSION=${KBUILD_BUILD_VERSION:-1}
 export KBUILD_BUILD_USER=${KBUILD_BUILD_USER:-hikari-build}
@@ -36,6 +33,7 @@ case "$build_dir" in "$hikari_build_root"/*) ;; *) echo "BUILD_DIR must be below
 make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" qcom_defconfig
 "$kernel_src/scripts/kconfig/merge_config.sh" -m -O "$build_dir" "$build_dir/.config" "$kernel_fragment"
 make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" olddefconfig
+
 grep -qx 'CONFIG_ARCH_QCOM_RESERVE_SMEM=y' "$build_dir/.config" || {
   echo "Hikari boot build requires CONFIG_ARCH_QCOM_RESERVE_SMEM=y" >&2
   exit 1
@@ -68,7 +66,7 @@ if [[ "$require_display_bringup" == 1 ]]; then
   for required in \
     CONFIG_MSM_MMCC_8660=y CONFIG_INTERCONNECT_QCOM_MSM8660=y \
     CONFIG_DRM=y CONFIG_DRM_MSM=y CONFIG_DRM_MSM_MDP4=y CONFIG_DRM_MSM_DSI=y \
-    CONFIG_DRM_MSM_DSI_45NM_PHY=y \
+    CONFIG_DRM_MSM_DSI_45NM_PHY=y CONFIG_MSM_IOMMU=y \
     CONFIG_DRM_PANEL_RENESAS_R63306_TMD_MDV22=y \
     CONFIG_DRM_FBDEV_EMULATION=y CONFIG_FRAMEBUFFER_CONSOLE=y \
     CONFIG_BACKLIGHT_AS3676=y CONFIG_I2C_QUP=y; do
@@ -91,6 +89,7 @@ if [[ "$require_charging" == 1 ]]; then
     exit 1
   }
 fi
+
 if [[ -n "$initramfs_source" ]]; then
   test -f "$initramfs_source" || { echo "INITRAMFS_SOURCE is not a regular file" >&2; exit 1; }
   "$kernel_src/scripts/config" --file "$build_dir/.config" --set-str INITRAMFS_SOURCE "$initramfs_source"
@@ -127,7 +126,7 @@ if [[ -n "$initramfs_source" ]]; then
     for required in \
       CONFIG_MSM_MMCC_8660=y CONFIG_INTERCONNECT_QCOM_MSM8660=y \
       CONFIG_DRM=y CONFIG_DRM_MSM=y CONFIG_DRM_MSM_MDP4=y CONFIG_DRM_MSM_DSI=y \
-      CONFIG_DRM_MSM_DSI_45NM_PHY=y \
+      CONFIG_DRM_MSM_DSI_45NM_PHY=y CONFIG_MSM_IOMMU=y \
       CONFIG_DRM_PANEL_RENESAS_R63306_TMD_MDV22=y \
       CONFIG_DRM_FBDEV_EMULATION=y CONFIG_FRAMEBUFFER_CONSOLE=y \
       CONFIG_BACKLIGHT_AS3676=y CONFIG_I2C_QUP=y; do
@@ -151,13 +150,14 @@ if [[ -n "$initramfs_source" ]]; then
     }
   fi
 fi
+
 read -r -a build_targets <<<"$targets"
 make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" \
   -j"$jobs" "${build_targets[@]}"
 if [[ " $targets " == *" zImage "* ]]; then
   echo "zImage: $build_dir/arch/arm/boot/zImage"
 fi
-for dtb_name in qcom-msm8260-sony-hikari.dtb qcom-msm8260-sony-hikari-safe.dtb; do
+for dtb_name in qcom-msm8260-sony-hikari.dtb qcom-msm8260-sony-hikari-gpu.dtb qcom-msm8260-sony-hikari-safe.dtb; do
   if [[ " $targets " == *" qcom/$dtb_name "* ]]; then
     echo "DTB:    $build_dir/arch/arm/boot/dts/qcom/$dtb_name"
   fi
