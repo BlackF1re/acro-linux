@@ -185,6 +185,35 @@
 		reg = <0x05700000 0x1000>;
 	};
 
+	/*
+	 * MSM8x60 has two MDP IOMMU ports, each with two context banks.  Sony's
+	 * devices-iommu.c gives these exact apertures and interrupt assignments;
+	 * the context/MID wiring is shared by MSM8x60 and APQ8064.  Keep the
+	 * APQ8064 fallback because the upstream msm_iommu driver represents this
+	 * common first-generation Qualcomm IOMMU implementation.
+	 */
+	mdp_port0: iommu@7500000 {
+		compatible = "qcom,msm8660-iommu", "qcom,apq8064-iommu";
+		reg = <0x07500000 0x00100000>;
+		interrupts = <GIC_SPI 63 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 64 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&mmcc SMMU_AHB_CLK>, <&mmcc MDP_AXI_CLK>;
+		clock-names = "smmu_pclk", "iommu_clk";
+		#iommu-cells = <1>;
+		qcom,ncb = <2>;
+	};
+
+	mdp_port1: iommu@7600000 {
+		compatible = "qcom,msm8660-iommu", "qcom,apq8064-iommu";
+		reg = <0x07600000 0x00100000>;
+		interrupts = <GIC_SPI 61 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 62 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&mmcc SMMU_AHB_CLK>, <&mmcc MDP_AXI_CLK>;
+		clock-names = "smmu_pclk", "iommu_clk";
+		#iommu-cells = <1>;
+		qcom,ncb = <2>;
+	};
+
 	mdp: display-controller@5100000 {
 		compatible = "qcom,mdp4";
 		reg = <0x05100000 0x000f0000>;
@@ -196,6 +225,8 @@
 		clock-names = "core_clk", "iface_clk", "bus_clk", "lut_clk",
 			      "hdmi_clk", "tv_clk";
 		power-domains = <&mmcc MDP_GDSC>;
+		iommus = <&mdp_port0 0>, <&mdp_port0 2>,
+			 <&mdp_port1 0>, <&mdp_port1 2>;
 		/*
 		 * The Sony MSM8x60 BSP powers mdp.0 through footswitch FS_MDP (4).
 		 * MMCC's MDP_GDSC is its genpd representation; the platform core

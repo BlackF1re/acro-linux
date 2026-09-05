@@ -24,6 +24,7 @@ command -v fdtget >/dev/null || { echo 'fdtget is required' >&2; exit 1; }
 for symbol in \
 	CONFIG_QCOM_SCM=y CONFIG_MSM_MMCC_8660=y CONFIG_INTERCONNECT_QCOM_MSM8660=y \
 	CONFIG_DRM=y CONFIG_DRM_MSM=y CONFIG_DRM_MSM_MDP4=y CONFIG_DRM_MSM_DSI=y \
+	CONFIG_MSM_IOMMU=y \
 	CONFIG_DRM_MSM_DSI_45NM_PHY=y \
 	CONFIG_DRM_PANEL_RENESAS_R63306_TMD_MDV22=y \
 	CONFIG_BACKLIGHT_AS3676=y CONFIG_VT=y CONFIG_VT_CONSOLE=y \
@@ -67,9 +68,37 @@ expect_string /display-controller@5100000 clock-names iface_clk
 expect_string /display-controller@5100000 clock-names bus_clk
 expect_string /display-controller@5100000 clock-names lut_clk
 
+# Sony MSM8x60 and upstream APQ8064 agree on the two MDP IOMMU apertures,
+# context-bank count, clocks and MIDs.  The IRQ numbers below are GIC SPI
+# numbers: Sony's legacy Linux IRQ 95/96 and 93/94 minus GIC_SPI_START (32).
+mmcc_phandle=$(fdtget -t x "$dtb" /clock-controller@4000000 phandle)
+for spec in \
+	'/iommu@7500000 7500000 3f 40' \
+	'/iommu@7600000 7600000 3d 3e'; do
+	read -r node base secure_irq nonsecure_irq <<<"$spec"
+	expect_string "$node" compatible qcom,msm8660-iommu
+	expect_string "$node" compatible qcom,apq8064-iommu
+	expect_hex "$node" reg "$base 100000"
+	expect_hex "$node" qcom,ncb 2
+	expect_hex "$node" interrupts "0 $secure_irq 4 0 $nonsecure_irq 4"
+	clocks=$(fdtget -t x "$dtb" "$node" clocks | tr -s ' ' | sed 's/^ //;s/ $//')
+	[[ $clocks == "$mmcc_phandle b $mmcc_phandle 1e" ]] || {
+		echo "$node clocks must resolve to SMMU_AHB_CLK (11) and MDP_AXI_CLK (30), got '$clocks'" >&2
+		exit 1
+	}
+done
+
+mdp0_phandle=$(fdtget -t x "$dtb" /iommu@7500000 phandle)
+mdp1_phandle=$(fdtget -t x "$dtb" /iommu@7600000 phandle)
+mdp_iommus=$(fdtget -t x "$dtb" /display-controller@5100000 iommus |
+	tr -s ' ' | sed 's/^ //;s/ $//')
+[[ $mdp_iommus == "$mdp0_phandle 0 $mdp0_phandle 2 $mdp1_phandle 0 $mdp1_phandle 2" ]] || {
+	echo "MDP4 IOMMU mapping must be port0 MIDs 0/2 and port1 MIDs 0/2, got '$mdp_iommus'" >&2
+	exit 1
+}
+
 # Sony's MSM8x60 BSP supplies mdp.0 through footswitch FS_MDP (ID 4).  A
 # clock-only MDP description can hang the CPU on its first 0x05100000 read.
-mmcc_phandle=$(fdtget -t x "$dtb" /clock-controller@4000000 phandle)
 mdp_domain=$(fdtget -t x "$dtb" /display-controller@5100000 power-domains |
 	tr -s ' ' | sed 's/^ //;s/ $//')
 [[ $mdp_domain == "$mmcc_phandle 4" ]] || {
