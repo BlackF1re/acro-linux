@@ -41,3 +41,4 @@
 0037-arm-dts-qcom-select-Hikari-BQ27520-G1-register-map.patch
 0038-clk-qcom-fix-MSM8x60-TV-halt-status-map.patch
 0039-dt-bindings-iommu-add-MSM8660-compatible.patch
+0040-iommu-msm-enable-clocks-during-hardware-probe.patch

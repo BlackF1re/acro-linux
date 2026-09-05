@@ -19,8 +19,10 @@ def main() -> int:
     root = Path(sys.argv[1])
     host_path = root / "drivers/gpu/drm/msm/dsi/dsi_host.c"
     panel_path = root / "drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c"
+    iommu_path = root / "drivers/iommu/msm_iommu.c"
     host = host_path.read_text()
     panel = panel_path.read_text()
+    iommu = iommu_path.read_text()
 
     require(host, "enum dsi_rgb_swap rgb_swap;", "DSI RGB-swap state")
     require(host, "DSI_VID_CFG1_RGB_SWAP(msm_host->rgb_swap)", "video RGB swap")
@@ -68,6 +70,20 @@ def main() -> int:
         '"failed to get backlight\\n"',
         "MDV22 deferred backlight probe diagnostic",
     )
+
+    # devm_clk_get_prepared() does not enable either MSM8x60 IOMMU clock.
+    # The hardware reset and PAR presence transaction must therefore be
+    # bracketed by the driver's runtime clock helpers, matching Sony/CAF.
+    probe_start = iommu.index("static int msm_iommu_probe(struct platform_device *pdev)")
+    probe = iommu[probe_start:]
+    enabled = probe.index("ret = __enable_clocks(iommu);")
+    reset = probe.index("msm_iommu_reset(iommu->base, iommu->ncb);")
+    request = probe.index("SET_V2PPR(iommu->base, 0, 0);")
+    barrier = probe.index("mb();", request)
+    read_par = probe.index("par = GET_PAR(iommu->base, 0);")
+    disabled = probe.index("__disable_clocks(iommu);", read_par)
+    if not enabled < reset < request < barrier < read_par < disabled:
+        raise SystemExit("MSM8x60 IOMMU probe lost its clocked PAR transaction")
 
     print("HIKARI_DISPLAY_SOURCE_GATE=PASS")
     return 0
