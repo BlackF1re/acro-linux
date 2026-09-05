@@ -1,20 +1,22 @@
 From 1111111111111111111111111111111111111111 Mon Sep 17 00:00:00 2001
-From: BlackF1re <plevickij57@gmail.com>
-Date: Sat, 5 Sep 2026 12:00:00 +0700
+From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+Date: Sat, 5 Sep 2026 21:45:00 +0700
 Subject: [PATCH] dt-bindings: iommu: qcom: add MSM8660 compatible
 
-MSM8660 uses the same two-context-bank Qualcomm IOMMU hardware and DT
-interface as APQ8064.  Allow an SoC-specific compatible followed by the
-existing APQ8064 fallback.  Clarify the interrupt ordering to match the
-driver and the existing example.
+MSM8660 uses the same first-generation Qualcomm IOMMU DT interface as
+APQ8064. Allow an SoC-specific compatible followed by the existing
+APQ8064 fallback.
 
-Signed-off-by: BlackF1re <plevickij57@gmail.com>
+Keep the existing binding interrupt order unchanged: non-secure first,
+secure second. Sony's MSM8x60 resources use that same ordering.
+
+Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
 ---
- .../bindings/iommu/qcom,apq8064-iommu.yaml    | 13 +++++++++----
- 1 file changed, 9 insertions(+), 4 deletions(-)
+ .../bindings/iommu/qcom,apq8064-iommu.yaml | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
 
 diff --git a/Documentation/devicetree/bindings/iommu/qcom,apq8064-iommu.yaml b/Documentation/devicetree/bindings/iommu/qcom,apq8064-iommu.yaml
-index dc45a2356f06..6abf91d98bea 100644
+index dc45a2356f06..123456789abc 100644
 --- a/Documentation/devicetree/bindings/iommu/qcom,apq8064-iommu.yaml
 +++ b/Documentation/devicetree/bindings/iommu/qcom,apq8064-iommu.yaml
 @@ -5,7 +5,7 @@
@@ -41,16 +43,5 @@ index dc45a2356f06..6abf91d98bea 100644
  
    clocks:
      items:
-@@ -36,8 +42,8 @@ properties:
-     description: Specifiers for the MMU fault interrupts.
-     minItems: 1
-     items:
--      - description: non-secure mode interrupt
--      - description: secure mode interrupt (for instances which supports it)
-+      - description: secure mode interrupt
-+      - description: non-secure mode interrupt
- 
-   "#iommu-cells":
-     const: 1
 -- 
 2.51.0
