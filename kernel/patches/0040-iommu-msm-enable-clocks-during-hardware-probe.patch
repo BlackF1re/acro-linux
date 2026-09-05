@@ -31,7 +31,6 @@ License: GPL-2.0-only
  2 files changed, 24 insertions(+), 18 deletions(-)
 
 diff --git a/drivers/iommu/msm_iommu.h b/drivers/iommu/msm_iommu.h
-index ddae37809eef..123456789abc 100644
 --- a/drivers/iommu/msm_iommu.h
 +++ b/drivers/iommu/msm_iommu.h
 @@ -63,4 +63,10 @@ struct msm_iommu_dev {
@@ -45,9 +44,7 @@ index ddae37809eef..123456789abc 100644
 +	 */
 +	bool reset_done;
  };
-
 diff --git a/drivers/iommu/msm_iommu.c b/drivers/iommu/msm_iommu.c
-index 4ef1e8c8244b..123456789abc 100644
 --- a/drivers/iommu/msm_iommu.c
 +++ b/drivers/iommu/msm_iommu.c
 @@ -414,4 +414,14 @@ static int msm_iommu_attach_dev(struct iommu_domain *domain, struct device *dev,
@@ -65,7 +62,7 @@ index 4ef1e8c8244b..123456789abc 100644
 +			}
 +
  			list_for_each_entry(master, &iommu->ctx_list, list) {
-@@ -678,4 +688,14 @@ irqreturn_t msm_iommu_fault_handler(int irq, void *dev_id)
+@@ -678,6 +688,15 @@ irqreturn_t msm_iommu_fault_handler(int irq, void *dev_id)
  	return 0;
  }
  
