@@ -40,3 +40,4 @@
 0036-fix-match-MSM8x60-secure-MMCC-access-ABI.patch
 0037-arm-dts-qcom-select-Hikari-BQ27520-G1-register-map.patch
 0038-clk-qcom-fix-MSM8x60-TV-halt-status-map.patch
+0039-dt-bindings-iommu-add-MSM8660-compatible.patch
