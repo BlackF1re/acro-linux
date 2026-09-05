@@ -95,7 +95,7 @@ diff --git a/drivers/iommu/msm_iommu.c b/drivers/iommu/msm_iommu.c
  
  	iommu = devm_kzalloc(&pdev->dev, sizeof(*iommu), GFP_KERNEL);
  	if (!iommu)
-@@ -757,17 +778,3 @@ static int msm_iommu_probe(struct platform_device *pdev)
+@@ -757,18 +778,4 @@ static int msm_iommu_probe(struct platform_device *pdev)
  	}
  	iommu->ncb = val;
  
