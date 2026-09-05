@@ -13,6 +13,7 @@ out=${1:-/home/paul/xperia/src/linux-hikari-materialized}
 # shellcheck disable=SC1090
 source "$lock"
 series="$repo_root/$PATCH_SERIES"
+linux_source=${LINUX_SOURCE_CACHE:-$LINUX_REMOTE}
 
 command -v git >/dev/null || { echo 'git is required' >&2; exit 1; }
 [[ -r $series ]] || { echo "missing patch series: $series" >&2; exit 1; }
@@ -40,7 +41,7 @@ fi
 
 mkdir -p "$(dirname -- "$out")"
 git init "$out" >/dev/null
-git -C "$out" remote add upstream "$LINUX_REMOTE"
+git -C "$out" remote add upstream "$linux_source"
 git -C "$out" fetch --no-tags --depth=1 upstream "$LINUX_BASE"
 git -C "$out" checkout --detach FETCH_HEAD >/dev/null
 git -C "$out" switch -c hikari >/dev/null
