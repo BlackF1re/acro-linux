@@ -182,9 +182,23 @@ Sony MSM8x60 source exposed two concrete implementation errors: legacy atomic
 `SCM_IO_READ` returns its register value directly in `r0`, not SMCCC-style
 `r1`, and MMCC `SAXI_EN` is register offset `0x0030` with value `0x000001d8`
 (not offset `0x01d8`). The current local kernel corrects both, restores the
-exact Sony AHB/MAXI masks, and adds post-operation stage markers. The g36 ELF
-passes all local gates but remains undeployed; display/fbcon are still
+exact Sony AHB/MAXI masks, and adds post-operation stage markers. At that
+checkpoint the g36 ELF passed all local gates; display/fbcon were still
 `NOT_VERIFIED`. See [the sanitized g35 diagnosis](../research/device/current/boot/g35-display-secure-mmcc-init-hang.md).
+
+The latest retained physical log proves that those secure-MMCC corrections
+worked: AHB/AXI setup completed, MMFAB unhalted, the MDP footswitch latched
+`GFS=0x11f`, and the first MDP IOMMU provider registered. Deferred MDP probing
+then hit a reproducible null dereference in `qcom_iommu_of_xlate()`. The
+generic driver kept one client pointer even though MDP spans two independent
+IOMMU providers; a failed first probe left a provider-local master behind but
+the retry had a null per-device pointer. Exact Sony context-bank/MID data and
+the current working Tenderloin MSM8x60 implementation agree that the client
+must be tracked independently within each provider. Signed kernel commit
+`fb48685d80a0` implements that model, and the successor ELF passes the complete
+local display/DT/build/memory validation suite. This removes the observed
+pre-DRM crash; pixels and fbcon still require physical verification. See
+[the sanitized IOMMU post-mortem](../research/device/current/boot/display-mdp-iommu-multiprovider-oops.md).
 
 ## Status domains
 

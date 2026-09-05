@@ -79,9 +79,9 @@ artifact and code-derived range checks are recorded in
 [FIRST_BOOT_MEMORY.md](FIRST_BOOT_MEMORY.md).  Deployment remains a separate,
 owner-approved operation.
 
-## Latest locally validated artifact
+## Earlier secure-MMCC artifact
 
-The current locally validated, **not deployed** artifact is:
+The locally validated artifact at that earlier checkpoint was:
 
 ```text
 /home/paul/xperia/build/hikari-artifacts-current/hikari-current.elf
@@ -134,3 +134,48 @@ segment 0: offset 0x001000, paddr 0x40208000, size 0xb911fa
 segment 1: offset 0xb921fa, paddr 0x42c10000, size 0x10dc5f
 segment 2: offset 0xc9fe59, paddr 0x00020000, size 0x01d3e8
 ```
+
+## Current MDP-IOMMU-corrected display artifact
+
+The latest physical post-mortem reached secure MMCC setup, MMFAB unhalt, the
+MDP footswitch, and the first MDP IOMMU provider before an Oops in
+`qcom_iommu_of_xlate()`. Signed kernel commit
+`fb48685d80a0bfb4b55b67afc5ec1463d2833d0f` replaces the driver's invalid
+single-client-pointer model with one matching client master per IOMMU
+provider. The correction is preserved as project patch 0041 and guarded by
+both kernel-source validation tools.
+
+The new locally validated, **not deployed** display artifact is:
+
+```text
+/home/paul/xperia/build/hikari-artifacts-20260906T020500Z/display/hikari-display-fastboot.elf
+size:   13,382,214 bytes
+SHA-256 2922e71f51365ca75e6274544d25e281dc997bebcc6957e22598e0250a44182e
+entry:  0x40208000
+```
+
+It was built from project artifact commit
+`12f21b39fe84dd460f86c4c8909f7ff9317b232d` and signed external kernel commit
+`fb48685d80a0bfb4b55b67afc5ec1463d2833d0f`. Its components are:
+
+```text
+zImage:     12,126,696 bytes, f1aa56e3722cf4df438a811959bf5eb2552e0a9ee799edf4d1d581d89d1b2bc1
+zImage+DTB: 12,148,434 bytes, 83f9a9502fb1eb50758f4d473292cc5c0c22f4c3b91632bb795ad0c98cfc2df4
+DTB:            21,738 bytes, ed42cb9341d65cc0b4a086df73bf1fc836365362b201e40212c4755a7e0bfdc0
+initramfs:   1,109,900 bytes, 3228c3a81460b406ba0dba2d55f8c1e2ab83a011cd9d4ca8f200e01f4543d279
+```
+
+Sony ELF segments:
+
+```text
+segment 0: offset 0x001000, paddr 0x40208000, size 0xb95ed2
+segment 1: offset 0xb96ed2, paddr 0x42c10000, size 0x10ef8c
+segment 2: offset 0xca5e5e, paddr 0x00020000, size 0x01d3e8
+```
+
+The target IOMMU object and full kernel built successfully. Kernel source,
+display source, display DT, focused binding, Sony ELF, appended-DTB, SMEM,
+ramoops, initramfs, USB regression, charging, board-hardware, partition-size,
+and ARM decompressor relocation/overlap gates pass. The final Hikari DTB
+retains both MDP providers and exact Sony non-secure MIDs 0 and 2 on each.
+Physical display acceptance remains separate and owner-approved.
