@@ -1,24 +1,81 @@
 From d6ef3f7bd15c64065c71df568972d63e37041503 Mon Sep 17 00:00:00 2001
 From: Hikari Patch Materializer <hikari-materializer@localhost>
 Date: Sat, 5 Sep 2026 11:34:10 +0700
-Subject: [PATCH] iommu/msm: enable clocks during hardware probe
+Subject: [PATCH] iommu/msm: restore MSM8x60 clock sequencing for hardware probe
+
+The MSM8x60 IOMMU cannot perform its V2P/PAR presence test with an
+unconfigured core clock.  The original Code Aurora Forum/Sony driver
+first enabled iface_clk, then selected the lowest non-zero core_clk rate
+with clk_round_rate(..., 1) / clk_set_rate(), and only then enabled the
+core clock and touched the IOMMU.
+
+Modern msm_iommu uses devm_clk_get_prepared(), which prepares clocks but
+does not enable them, and the core clock may still report a zero rate on
+Hikari.  Reproduce the legacy ordering in __enable_clocks() so the same
+rule also applies to later attach/TLB operations, then keep the probe
+self-test bracketed by clock enable/disable.
+
+Source: Code Aurora Forum / Sony MSM8x60 iommu_dev.c, GPL-2.0-only
+Original author: Stepan Moskovchenko <stepanm@codeaurora.org>
+Reference: LineageOS/sony-kernel-msm8660 commit 7bf57176a3deb1c2315780917c1b35ce31441252
 
 ---
- drivers/iommu/msm_iommu.c | 13 +++++++++++++
- 1 file changed, 13 insertions(+)
+ drivers/iommu/msm_iommu.c | 35 +++++++++++++++++++++++++++++++----
+ 1 file changed, 31 insertions(+), 4 deletions(-)
 
 diff --git a/drivers/iommu/msm_iommu.c b/drivers/iommu/msm_iommu.c
-index 4ef1e8c82..100b3a15c 100644
+index 4ef1e8c82..d58e9bc91 100644
 --- a/drivers/iommu/msm_iommu.c
 +++ b/drivers/iommu/msm_iommu.c
-@@ -757,14 +757,27 @@ static int msm_iommu_probe(struct platform_device *pdev)
+@@ -50,17 +50,36 @@ static struct iommu_ops msm_iommu_ops;
+ static int __enable_clocks(struct msm_iommu_dev *iommu)
+ {
+ 	int ret;
++	long rate;
+ 
+ 	ret = clk_enable(iommu->pclk);
+ 	if (ret)
+ 		goto fail;
+ 
+ 	if (iommu->clk) {
++		/*
++		 * MSM8x60 requires the IOMMU core clock to have a programmed
++		 * non-zero rate before it is enabled.  Preserve the ordering of
++		 * the original CAF/Sony driver: iface on, rate set, core on.
++		 */
++		if (!clk_get_rate(iommu->clk)) {
++			rate = clk_round_rate(iommu->clk, 1);
++			if (rate <= 0) {
++				ret = rate < 0 ? rate : -EINVAL;
++				goto fail_pclk;
++			}
++
++			ret = clk_set_rate(iommu->clk, rate);
++			if (ret)
++				goto fail_pclk;
++		}
++
+ 		ret = clk_enable(iommu->clk);
+ 		if (ret)
+-			clk_disable(iommu->pclk);
++			goto fail_pclk;
+ 	}
++
++	return 0;
++
++fail_pclk:
++	clk_disable(iommu->pclk);
+ fail:
+ 	return ret;
+ }
+@@ -757,14 +776,22 @@ static int msm_iommu_probe(struct platform_device *pdev)
  	}
  	iommu->ncb = val;
  
 +	/*
 +	 * The reset and V2P presence test below access both the interface and
 +	 * IOMMU core.  devm_clk_get_prepared() deliberately leaves those clocks
-+	 * disabled; enable them just as the original MSM8x60 driver did.
++	 * disabled; __enable_clocks() also restores the MSM8x60 core rate first.
 +	 */
 +	ret = __enable_clocks(iommu);
 +	if (ret)
@@ -41,4 +98,3 @@ index 4ef1e8c82..100b3a15c 100644
  		pr_err("Invalid PAR value detected\n");
 -- 
 2.53.0
-
