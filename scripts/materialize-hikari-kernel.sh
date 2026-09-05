@@ -56,7 +56,18 @@ for rel in "${patches[@]}"; do
     exit 1
   }
   echo "Applying $rel"
-  if ! git -C "$out" am --3way --keep-cr --committer-date-is-author-date "$patch"; then
+
+  # Imported patches carry blob identity and use --3way.  The Hikari IOMMU
+  # correction is intentionally a context-only mail patch against the exact
+  # pinned Linux source, so apply it directly instead of asking git-am to
+  # synthesize a fake ancestor from nonexistent index SHA information.
+  if [[ $rel == 0040-iommu-msm-enable-clocks-during-hardware-probe.patch ]]; then
+    am_args=(--keep-cr --committer-date-is-author-date)
+  else
+    am_args=(--3way --keep-cr --committer-date-is-author-date)
+  fi
+
+  if ! git -C "$out" am "${am_args[@]}" "$patch"; then
     echo "failed while applying $rel" >&2
     echo "inspect $out, then run: git -C '$out' am --abort" >&2
     exit 4
