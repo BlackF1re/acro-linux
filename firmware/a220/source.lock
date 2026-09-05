@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# The A220 PM4/PFP microcode is distributed by the upstream linux-firmware
+# project under its WHENCE-recorded redistributable terms.  Do not commit the
+# binary payloads to this project: materialize only these two files at build
+# time from the pinned release tag.
+LINUX_FIRMWARE_RAW=https://gitlab.com/kernel-firmware/linux-firmware/-/raw
+LINUX_FIRMWARE_REF=20260622
+A220_FIRMWARE_FILES="qcom/leia_pm4_470.fw qcom/leia_pfp_470.fw"
