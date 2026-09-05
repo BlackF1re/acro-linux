@@ -45,7 +45,7 @@ index ddae37809eef..123456789abc 100644
 +	 */
 +	bool reset_done;
  };
- 
+
 diff --git a/drivers/iommu/msm_iommu.c b/drivers/iommu/msm_iommu.c
 index 4ef1e8c8244b..123456789abc 100644
 --- a/drivers/iommu/msm_iommu.c
