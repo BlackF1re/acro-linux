@@ -1,0 +1,43 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Sony Xperia acro S (Hikari) Adreno A220 hardware description.
+ *
+ * Keep the node disabled in the common/display profile.  The dedicated GPU
+ * profile enables it after the MMCC/MDP test boundary, so a GPU failure cannot
+ * obscure the current display bring-up result.
+ *
+ * Hardware facts come from Sony/CAF MSM8x60 board data: GFX3D is at
+ * 0x04300000..0x0431ffff, GIC SPI 80, and the five legacy operating points are
+ * 266.667, 228.571, 200, 177.778 and 27 MHz.  The clock topology follows the
+ * working MSM8x60/Tenderloin Freedreno port but explicitly supplies GFX3D AXI
+ * as the DRM/MSM "bus" clock instead of depending on bootloader clock state.
+ */
+
+/ {
+	gpu: gpu@4300000 {
+		compatible = "qcom,adreno-220.0", "qcom,adreno";
+		reg = <0x04300000 0x00020000>;
+		reg-names = "kgsl_3d0_reg_memory";
+		interrupts = <GIC_SPI 80 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "kgsl_3d0_irq";
+
+		clocks = <&mmcc GFX3D_CLK>,
+			 <&mmcc GFX3D_AHB_CLK>,
+			 <&mmcc GMEM_AXI_CLK>,
+			 <&mmcc GFX3D_AXI_CLK>;
+		clock-names = "core", "iface", "mem_iface", "bus";
+		power-domains = <&mmcc GFX3D_GDSC>;
+		operating-points-v2 = <&gpu_opp_table>;
+		status = "disabled";
+
+		gpu_opp_table: opp-table {
+			compatible = "operating-points-v2";
+
+			opp-266667000 { opp-hz = /bits/ 64 <266667000>; };
+			opp-228571000 { opp-hz = /bits/ 64 <228571000>; };
+			opp-200000000 { opp-hz = /bits/ 64 <200000000>; };
+			opp-177778000 { opp-hz = /bits/ 64 <177778000>; };
+			opp-27000000  { opp-hz = /bits/ 64 <27000000>; };
+		};
+	};
+};

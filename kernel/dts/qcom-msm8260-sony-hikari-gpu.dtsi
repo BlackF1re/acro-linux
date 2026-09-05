@@ -1,0 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
+/* Dedicated Hikari Adreno A220 bring-up profile. */
+
+&gpu {
+	status = "okay";
+};

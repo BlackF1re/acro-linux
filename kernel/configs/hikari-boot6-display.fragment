@@ -63,6 +63,16 @@ CONFIG_MSM_IOMMU=y
 CONFIG_DRM_PANEL_RENESAS_R63306_TMD_MDV22=y
 CONFIG_DRM_FBDEV_EMULATION=y
 
+# Adreno A220 is part of DRM/MSM.  Keep the driver and its diagnostics ready in
+# every kernel, while the GPU DT node remains disabled except in the dedicated
+# GPU profile.  The exact Sony MSM8x60 OPP table is supplied by that profile.
+CONFIG_FW_LOADER=y
+CONFIG_PM_OPP=y
+CONFIG_PM_DEVFREQ=y
+CONFIG_DEVFREQ_GOV_SIMPLE_ONDEMAND=y
+CONFIG_DEV_COREDUMP=y
+CONFIG_DEBUG_FS=y
+
 # Make a successful DRM/fbdev bind visibly useful on first boot. tty0 is the
 # first preferred console in CONFIG_CMDLINE; do not defer fbcon takeover, so
 # the console binds as soon as DRM creates fb0 instead of waiting for later
