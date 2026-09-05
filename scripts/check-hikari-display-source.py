@@ -17,11 +17,12 @@ def main() -> int:
         raise SystemExit(f"usage: {sys.argv[0]} KERNEL_TREE")
 
     root = Path(sys.argv[1])
+    repo_root = Path(__file__).resolve().parents[1]
     host_path = root / "drivers/gpu/drm/msm/dsi/dsi_host.c"
     panel_path = root / "drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c"
     iommu_path = root / "drivers/iommu/msm_iommu.c"
     iommu_header_path = root / "drivers/iommu/msm_iommu.h"
-    dts_path = root / "arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts"
+    dts_path = repo_root / "kernel/dts/qcom-msm8260-sony-hikari.dts"
     host = host_path.read_text()
     panel = panel_path.read_text()
     iommu = iommu_path.read_text()
