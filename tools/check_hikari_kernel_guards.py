@@ -180,6 +180,46 @@ def check_usb_phy(kernel: Path) -> None:
             fail(f"Qualcomm HS PHY fixed-rail handling lacks: {fragment}")
 
 
+def check_iommu(kernel: Path) -> None:
+    source = (kernel / "drivers/iommu/msm_iommu.c").read_text()
+    header = (kernel / "drivers/iommu/msm_iommu.h").read_text()
+
+    required_header = "bool reset_done;"
+    if required_header not in header:
+        fail("MSM8x60 IOMMU lacks deferred-reset state")
+
+    for fragment in (
+        "static int msm_iommu_def_domain_type(struct device *dev)",
+        "return IOMMU_DOMAIN_IDENTITY;",
+        ".def_domain_type = msm_iommu_def_domain_type,",
+        "if (!iommu->reset_done)",
+        "iommu->reset_done = true;",
+    ):
+        if fragment not in source:
+            fail(f"MSM8x60 IOMMU deferred-reset fix lacks: {fragment}")
+
+    attach_start = source.index("static int msm_iommu_attach_dev(")
+    identity_start = source.index("static int msm_iommu_identity_attach(", attach_start)
+    attach = source[attach_start:identity_start]
+    enabled = attach.index("ret = __enable_clocks(iommu);")
+    deferred = attach.index("if (!iommu->reset_done)")
+    reset = attach.index("msm_iommu_reset(iommu->base, iommu->ncb);", deferred)
+    contexts = attach.index("list_for_each_entry(master, &iommu->ctx_list, list)", reset)
+    if not enabled < deferred < reset < contexts:
+        fail("MSM8x60 IOMMU reset is not deferred until paging attach")
+
+    probe_start = source.index("static int msm_iommu_probe(struct platform_device *pdev)")
+    probe = source[probe_start:]
+    for forbidden in (
+        "msm_iommu_reset(iommu->base, iommu->ncb);",
+        "SET_V2PPR(iommu->base, 0, 0);",
+        "GET_PAR(iommu->base, 0)",
+        "Invalid PAR value detected",
+    ):
+        if forbidden in probe:
+            fail(f"destructive MSM8x60 IOMMU probe test remains: {forbidden}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--kernel-src", type=Path, required=True)
@@ -190,6 +230,7 @@ def main() -> None:
     check_panel(args.kernel_src)
     check_charger(args.kernel_src)
     check_usb_phy(args.kernel_src)
+    check_iommu(args.kernel_src)
     print("HIKARI_KERNEL_SOURCE_GUARDS=PASS")
 
 

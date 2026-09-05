@@ -186,17 +186,17 @@
 	};
 
 	/*
-	 * MSM8x60 has two MDP IOMMU ports, each with two context banks.  Sony's
+	 * MSM8x60 has two MDP IOMMU ports, each with two context banks. Sony's
 	 * devices-iommu.c gives these exact apertures and interrupt assignments;
-	 * the context/MID wiring is shared by MSM8x60 and APQ8064.  Keep the
+	 * the binding orders them non-secure first, secure second. Keep the
 	 * APQ8064 fallback because the upstream msm_iommu driver represents this
 	 * common first-generation Qualcomm IOMMU implementation.
 	 */
 	mdp_port0: iommu@7500000 {
 		compatible = "qcom,msm8660-iommu", "qcom,apq8064-iommu";
 		reg = <0x07500000 0x00100000>;
-		interrupts = <GIC_SPI 63 IRQ_TYPE_LEVEL_HIGH>,
-			     <GIC_SPI 64 IRQ_TYPE_LEVEL_HIGH>;
+		interrupts = <GIC_SPI 64 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 63 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&mmcc SMMU_AHB_CLK>, <&mmcc MDP_AXI_CLK>;
 		clock-names = "smmu_pclk", "iommu_clk";
 		#iommu-cells = <1>;
@@ -206,8 +206,8 @@
 	mdp_port1: iommu@7600000 {
 		compatible = "qcom,msm8660-iommu", "qcom,apq8064-iommu";
 		reg = <0x07600000 0x00100000>;
-		interrupts = <GIC_SPI 61 IRQ_TYPE_LEVEL_HIGH>,
-			     <GIC_SPI 62 IRQ_TYPE_LEVEL_HIGH>;
+		interrupts = <GIC_SPI 62 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 61 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&mmcc SMMU_AHB_CLK>, <&mmcc MDP_AXI_CLK>;
 		clock-names = "smmu_pclk", "iommu_clk";
 		#iommu-cells = <1>;
@@ -238,7 +238,7 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			/*
-			 * MDP4 port 0 is the internal LCDC/LVDS path.  The DRM/MSM
+			 * MDP4 port 0 is the internal LCDC/LVDS path. The DRM/MSM
 			 * component walker deliberately skips it; DSI1 is port 1.
 			 */
 			port@1 {

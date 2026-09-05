@@ -69,18 +69,19 @@ expect_string /display-controller@5100000 clock-names bus_clk
 expect_string /display-controller@5100000 clock-names lut_clk
 
 # Sony MSM8x60 and upstream APQ8064 agree on the two MDP IOMMU apertures,
-# context-bank count, clocks and MIDs.  The IRQ numbers below are GIC SPI
-# numbers: Sony's legacy Linux IRQ 95/96 and 93/94 minus GIC_SPI_START (32).
+# context-bank count, clocks and MIDs.  The binding orders interrupts as
+# non-secure first, secure second.  Sony's legacy resources are IRQ 96/95 for
+# MDP0 and 94/93 for MDP1; subtract GIC_SPI_START (32) for the DT SPI numbers.
 mmcc_phandle=$(fdtget -t x "$dtb" /clock-controller@4000000 phandle)
 for spec in \
-	'/iommu@7500000 7500000 3f 40' \
-	'/iommu@7600000 7600000 3d 3e'; do
-	read -r node base secure_irq nonsecure_irq <<<"$spec"
+	'/iommu@7500000 7500000 40 3f' \
+	'/iommu@7600000 7600000 3e 3d'; do
+	read -r node base nonsecure_irq secure_irq <<<"$spec"
 	expect_string "$node" compatible qcom,msm8660-iommu
 	expect_string "$node" compatible qcom,apq8064-iommu
 	expect_hex "$node" reg "$base 100000"
 	expect_hex "$node" qcom,ncb 2
-	expect_hex "$node" interrupts "0 $secure_irq 4 0 $nonsecure_irq 4"
+	expect_hex "$node" interrupts "0 $nonsecure_irq 4 0 $secure_irq 4"
 	clocks=$(fdtget -t x "$dtb" "$node" clocks | tr -s ' ' | sed 's/^ //;s/ $//')
 	[[ $clocks == "$mmcc_phandle b $mmcc_phandle 1e" ]] || {
 		echo "$node clocks must resolve to SMMU_AHB_CLK (11) and MDP_AXI_CLK (30), got '$clocks'" >&2

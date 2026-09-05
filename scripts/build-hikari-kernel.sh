@@ -154,6 +154,11 @@ fi
 read -r -a build_targets <<<"$targets"
 make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" \
   -j"$jobs" "${build_targets[@]}"
+if [[ -f "$build_dir/vmlinux" ]] && \
+   strings "$build_dir/vmlinux" | grep -F 'Invalid PAR value detected' >/dev/null; then
+  echo 'built vmlinux contains the rejected MSM8x60 probe-time PAR test' >&2
+  exit 1
+fi
 if [[ " $targets " == *" zImage "* ]]; then
   echo "zImage: $build_dir/arch/arm/boot/zImage"
 fi
