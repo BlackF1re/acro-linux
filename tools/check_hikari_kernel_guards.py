@@ -192,6 +192,8 @@ def check_iommu(kernel: Path) -> None:
         "static int msm_iommu_def_domain_type(struct device *dev)",
         "return IOMMU_DOMAIN_IDENTITY;",
         ".def_domain_type = msm_iommu_def_domain_type,",
+        "find_master_for_dev(struct msm_iommu_dev *iommu, struct device *dev)",
+        "master = find_master_for_dev(*iommu, dev);",
         "if (!iommu->reset_done)",
         "iommu->reset_done = true;",
     ):
@@ -204,9 +206,22 @@ def check_iommu(kernel: Path) -> None:
     enabled = attach.index("ret = __enable_clocks(iommu);")
     deferred = attach.index("if (!iommu->reset_done)")
     reset = attach.index("msm_iommu_reset(iommu->base, iommu->ncb);", deferred)
-    contexts = attach.index("list_for_each_entry(master, &iommu->ctx_list, list)", reset)
+    contexts = attach.index("config_mids(iommu, master);", reset)
     if not enabled < deferred < reset < contexts:
         fail("MSM8x60 IOMMU reset is not deferred until paging attach")
+    if "master = find_master_for_dev(iommu, dev);" not in attach:
+        fail("MSM8x60 IOMMU attach does not select this device's provider-local master")
+    if "list_first_entry(&iommu->ctx_list" in attach:
+        fail("MSM8x60 IOMMU attach still assumes the first provider master")
+
+    insert_start = source.index("static int insert_iommu_master(")
+    xlate_start = source.index("static int qcom_iommu_of_xlate(", insert_start)
+    insert = source[insert_start:xlate_start]
+    if "master = find_master_for_dev(*iommu, dev);" not in insert:
+        fail("MSM8x60 IOMMU xlate does not retain one master per provider")
+    for forbidden in ("dev_iommu_priv_get(dev)", "dev_iommu_priv_set(dev"):
+        if forbidden in insert:
+            fail(f"MSM8x60 multi-provider xlate still uses single device private state: {forbidden}")
 
     probe_start = source.index("static int msm_iommu_probe(struct platform_device *pdev)")
     probe = source[probe_start:]

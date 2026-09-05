@@ -83,6 +83,11 @@ def main() -> int:
     require(iommu_header, "bool reset_done;", "deferred IOMMU reset state")
     require(iommu, ".def_domain_type = msm_iommu_def_domain_type,", "IOMMU identity default")
     require(iommu, "return IOMMU_DOMAIN_IDENTITY;", "IOMMU identity policy")
+    require(
+        iommu,
+        "find_master_for_dev(struct msm_iommu_dev *iommu, struct device *dev)",
+        "provider-local IOMMU master lookup",
+    )
 
     attach_start = iommu.index("static int msm_iommu_attach_dev(")
     identity_start = iommu.index("static int msm_iommu_identity_attach(", attach_start)
@@ -91,9 +96,30 @@ def main() -> int:
     deferred = attach.index("if (!iommu->reset_done)")
     reset = attach.index("msm_iommu_reset(iommu->base, iommu->ncb);", deferred)
     marked = attach.index("iommu->reset_done = true;", reset)
-    contexts = attach.index("list_for_each_entry(master, &iommu->ctx_list, list)", marked)
+    contexts = attach.index("config_mids(iommu, master);", marked)
     if not enabled < deferred < reset < marked < contexts:
         raise SystemExit("MSM8x60 IOMMU reset is not deferred until paging attach")
+    require(
+        attach,
+        "master = find_master_for_dev(iommu, dev);",
+        "provider-local IOMMU attach",
+    )
+    if "list_first_entry(&iommu->ctx_list" in attach:
+        raise SystemExit("MSM8x60 IOMMU attach still assumes the first provider master")
+
+    insert_start = iommu.index("static int insert_iommu_master(")
+    xlate_start = iommu.index("static int qcom_iommu_of_xlate(", insert_start)
+    insert = iommu[insert_start:xlate_start]
+    require(
+        insert,
+        "master = find_master_for_dev(*iommu, dev);",
+        "one IOMMU master per provider",
+    )
+    for forbidden in ("dev_iommu_priv_get(dev)", "dev_iommu_priv_set(dev"):
+        if forbidden in insert:
+            raise SystemExit(
+                f"multi-provider IOMMU xlate still uses single device private state: {forbidden!r}"
+            )
 
     probe_start = iommu.index("static int msm_iommu_probe(struct platform_device *pdev)")
     probe = iommu[probe_start:]
