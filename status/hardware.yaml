@@ -76,9 +76,9 @@ target_linux:
     physical_reader: VERIFIED_DEVICE
     writer: VERIFIED_DEVICE
     region: "0x7ffe0000-0x7fffffff"
-    format: "legacy TWRP ram_console / current mainline ramoops console, DBGC, zero ECC"
-    compatibility: VERIFIED_COMPATIBLE
-    notes: Boot #4 mainline ramoops registered at the exact region and, after reset/direct TWRP entry, TWRP reported found existing buffer and exported the prior mainline log through /proc/last_kmsg.
+    format: "legacy TWRP ram_console / current mainline ramoops console, DBGC, ECC block 128/parity 16/symbol 8/poly 0x11d"
+    compatibility: COMPATIBLE_WITH_MATCHING_ECC
+    notes: Boot #4 verified the address and TWRP /proc/last_kmsg export path with a short log. A later full zero-ECC mainline ring exceeded TWRP's 116468-byte ECC data capacity and was rejected; the DT and gate now require matching 16-byte ECC, pending a new physical capture.
 boot_chain:
   fastboot:
     physical:

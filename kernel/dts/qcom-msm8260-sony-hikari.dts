@@ -32,8 +32,9 @@
 	/*
 	 * The legacy Fuji/TWRP kernel and a physical TWRP /proc/iomem capture
 	 * both identify this as the 128 KiB persistent ram_console region.
-	 * Keep it mapped: ramoops writes the console itself.  Its zero ECC layout
-	 * is deliberately compatible with the legacy TWRP ram_console reader.
+	 * Keep it mapped: ramoops writes the console itself.  The legacy recovery
+	 * enables Reed-Solomon ECC with its persistent_ram defaults, so mainline
+	 * must use the same 16-byte parity blocks for reliable full-ring capture.
 	 */
 	reserved-memory {
 		#address-cells = <1>;
@@ -44,7 +45,7 @@
 			compatible = "ramoops";
 			reg = <0x7ffe0000 0x00020000>;
 			console-size = <0x00020000>;
-			ecc-size = <0>;
+			ecc-size = <16>;
 		};
 	};
 

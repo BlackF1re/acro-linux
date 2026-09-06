@@ -26,7 +26,7 @@ persistent region directly.
 | Legacy owner | `ram_console` in `/proc/iomem` |
 | Access path | TWRP exposes `/dev/mem`; ordinary `dd` reads are rejected, while read-only 32-bit `busybox devmem` accesses succeed. |
 | Captured header | little-endian `DBGC`, `start=0x11f3a`, `size=0x11f3a` |
-| ECC | TWRP dmesg reports `Memory policy: ECC disabled`; recovery board data sets every persistent-RAM ECC parameter to zero. |
+| ECC | Exact recovery `ram_console_probe()` passes `use_ecc=true`. Zero board-data fields select the legacy defaults: 128-byte blocks, 16 parity bytes, 8-bit symbols and polynomial `0x11d`. |
 | Current capture | 131,072-byte private baseline, SHA-256 `77ece199020ac0a6aa5e25493416740c113ff972307819bcbfa7da3ed8c6d9c1` |
 
 The baseline was a later legacy TWRP log, not a mainline attempt.  It proves
@@ -35,29 +35,36 @@ the reader location and format, not prior target-kernel execution.
 ## Exact binary compatibility
 
 The Fuji legacy source defines `MSM_RAM_CONSOLE_START` as `0x80000000 - 128
-KiB`, gives its persistent-RAM descriptor all-zero ECC fields, and uses this
-header on ARM32:
+KiB`. Its board-data ECC fields are zero, but the exact recovery driver calls
+`persistent_ram_init_ringbuffer(..., true)`, so `persistent_ram_init_ecc()`
+uses its nonzero defaults. The ARM32 layout is:
 
 | Offset | Width | Meaning |
 | ---: | ---: | --- |
 | `0x00` | 4 | `sig`, little-endian `0x43474244` (`DBGC`) |
 | `0x04` | 4 | `atomic_t start`, first byte when the data ring wraps |
 | `0x08` | 4 | `atomic_t size`, valid byte count |
-| `0x0c` | 131,060 | circular console bytes |
+| `0x0c` | 116,468 | circular console bytes |
+| `0x1c70c` | 14,576 | 911 Reed-Solomon data parity blocks, 16 bytes each |
+| `0x1fff0` | 16 | Reed-Solomon parity for the 12-byte header |
 
-No header-ECC, data-ECC or parity area is present.  The TWRP runtime header
-matches this exact layout.
+The defaults are data block 128, parity 16, symbol size 8 and polynomial
+`0x11d`. For the 128 KiB allocation, both legacy and current algorithms
+calculate 911 data blocks, 14,592 total parity bytes including header parity,
+and a 116,468-byte data ring.
 
 For the project’s pinned upstream Linux revision, `fs/pstore/ram_core.c` uses
 the same ARM32 `persistent_ram_buffer` layout and `DBGC` base signature.
 `fs/pstore/ram.c` initializes its console zone with signature zero; the core
 XOR gives `DBGC`.  The Hikari DT supplies one full-size `console-size` zone
-and `ecc-size = <0>`.  Consequently:
+and `ecc-size = <16>`. Current mainline uses the same ECC block, symbol and
+polynomial defaults. Consequently:
 
-`RAMOOPS_TWRP_BINARY_COMPATIBILITY = VERIFIED_COMPATIBLE`.
+`RAMOOPS_TWRP_BINARY_COMPATIBILITY = COMPATIBLE_WITH_MATCHING_ECC`.
 
-This classification is deliberately limited to the console-zone header/ring
-format and zero ECC.  It does not claim that boot #4 has written a log yet.
+This classification covers the console-zone header, ring capacity and ECC
+placement. A new physical capture remains required to verify the corrected
+full-ring handoff end to end.
 
 ### Exact legacy TWRP export order
 
@@ -86,10 +93,12 @@ content unless independently tied to a pre-reinitialization capture.
 ## Host-side independent decoder
 
 [`tools/hikari-persistent-ram.py`](../tools/hikari-persistent-ram.py) accepts
-only a host-side raw dump, checks the expected `DBGC` header and bounds, and
-reconstructs the ring in chronological order.  Its fixtures are synthetic;
-private device RAM is never committed.  It intentionally rejects an unknown
-or ECC-enabled layout instead of pretending to decode it.
+only a host-side raw dump, checks the expected `DBGC` header, calculates the
+exact legacy ECC geometry, checks bounds, excludes parity storage, and
+reconstructs the ring in chronological order. Its fixtures are synthetic;
+private device RAM is never committed. The parser does not perform
+Reed-Solomon correction, so it reports this limitation instead of claiming
+that raw parity was authenticated.
 
 [`scripts/capture-hikari-ramconsole.sh`](../scripts/capture-hikari-ramconsole.sh)
 is a read-only TWRP capture helper. It accepts both Android's `device` and
@@ -125,13 +134,13 @@ CONFIG_PSTORE_CONSOLE=y
 ```
 
 The DT node is under `/reserved-memory`, has `reg = <0x7ffe0000 0x20000>`,
-`console-size = <0x20000>`, and `ecc-size = <0>`.  It does **not** use
+`console-size = <0x20000>`, and `ecc-size = <16>`.  It does **not** use
 `no-map`, because the console writer must map the storage.  There are no
 record, ftrace or pmsg zones competing for the 128 KiB.
 
 `scripts/check-hikari-persistent-ram.sh` is a build gate: it checks all three
 built-in Kconfig options plus the exact DTB node, range, console allocation,
-zero ECC and absence of `no-map`.
+16-byte ECC and absence of `no-map`.
 
 ## Local validation
 
@@ -146,9 +155,13 @@ therefore the relevant clean result; no warning was suppressed or disabled.
 
 ## Limits
 
-Boot #4 completed the intended handoff: the mainline console registered
-standard ramoops at `0x7ffe0000/0x20000` with zero ECC; after reset and direct
+Boot #4 completed the intended handoff for a short log: the mainline console
+registered standard ramoops at `0x7ffe0000/0x20000`; after reset and direct
 TWRP entry, TWRP reported `found existing buffer` and exported a mainline log
 through `/proc/last_kmsg`. See the sanitized
 [boot #4 post-mortem](../research/device/current/boot/boot4-postmortem.md).
-`PERSISTENT_LOG_WRITER = VERIFIED_DEVICE` for this exact writer/reader path.
+`PERSISTENT_LOG_WRITER = VERIFIED_DEVICE` for the address and export path.
+The later long display log exposed the former zero-ECC capacity mismatch:
+TWRP saw `size=131060`, above its ECC ring capacity 116468, and rejected the
+otherwise recognizable DBGC buffer as invalid. The corrected matching-ECC
+writer is locally validated and awaits the next physical post-mortem test.

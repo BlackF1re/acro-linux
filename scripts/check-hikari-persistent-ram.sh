@@ -46,8 +46,8 @@ node=/reserved-memory/ramoops@7ffe0000
   echo "ramoops console-size must consume the full 0x20000 region" >&2
   exit 1
 }
-[[ "$(fdtget -t x "$dtb" "$node" ecc-size)" == 0 ]] || {
-  echo "ramoops ecc-size must remain zero for legacy TWRP compatibility" >&2
+[[ "$(fdtget -t x "$dtb" "$node" ecc-size)" == 10 ]] || {
+  echo "ramoops ecc-size must be 16 bytes for the legacy TWRP reader" >&2
   exit 1
 }
 if fdtget "$dtb" "$node" no-map >/dev/null 2>&1; then
@@ -56,4 +56,4 @@ if fdtget "$dtb" "$node" no-map >/dev/null 2>&1; then
 fi
 
 echo "HIKARI_PERSISTENT_RAM=PASS"
-echo "ramoops=0x7ffe0000+0x20000 console-only ecc=0"
+echo "ramoops=0x7ffe0000+0x20000 console-only ecc=16"
