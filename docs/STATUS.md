@@ -200,6 +200,18 @@ local display/DT/build/memory validation suite. This removes the observed
 pre-DRM crash; pixels and fbcon still require physical verification. See
 [the sanitized IOMMU post-mortem](../research/device/current/boot/display-mdp-iommu-multiprovider-oops.md).
 
+The physical successor passed that correction: both MDP IOMMU providers
+registered, DSI V2 initialized, MDP4 bound to DSI, and MDP4 version v4.1 was
+read. It then crashed while ARM32 detached its automatic DMA domain before DRM
+created the display IOVA domain. The legacy driver used the MDP client itself
+for ARMv7s page-table DMA cache maintenance, so freeing a page table recursively
+entered the same domain's DMA-unmap path and failed in `__bitmap_clear()`.
+Signed kernel commit `96651e282822` assigns the physical IOMMU provider as the
+page-table DMA owner and corrects page-table/context lifetime across both
+providers. A fresh successor ELF passed the full clean build and local gates;
+it remains physically untested. See
+[the sanitized page-table DMA post-mortem](../research/device/current/boot/display-mdp-iommu-pgtable-dma-oops.md).
+
 ## Status domains
 
 status/hardware.yaml deliberately separates physical hardware evidence, the

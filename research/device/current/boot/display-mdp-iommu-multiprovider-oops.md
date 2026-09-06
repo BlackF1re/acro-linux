@@ -1,9 +1,8 @@
 # Hikari MDP multi-provider IOMMU Oops
 
-Status: sanitized `VERIFIED_DEVICE` post-mortem evidence. The fault is fixed
-and a successor artifact is locally validated. Display scanout, panel pixels,
-physical backlight output, and fbcon remain `NOT_VERIFIED` until another
-physical acceptance test.
+Status: sanitized `VERIFIED_DEVICE` post-mortem evidence. The fault was fixed
+and its successor physically passed this boundary. Display scanout, panel
+pixels, physical backlight output, and fbcon remain `NOT_VERIFIED`.
 
 ## Capture and provenance
 
@@ -117,5 +116,9 @@ and board-hardware gates passed. Targeted full-DTB validation emitted only the
 already tracked non-display pin-state naming and experimental A220-compatible
 warnings; it emitted no MDP/IOMMU/MMCC/DSI/panel/backlight error.
 
-This artifact is ready for a controlled physical display retry, but has not
-been sent to the phone.
+This artifact was later deployed in a controlled physical display retry. It
+passed the multi-provider translation boundary, registered both IOMMUs,
+initialized DSI V2, bound MDP4 to DSI, and read MDP4 version v4.1 before a
+separate ARMv7s page-table DMA ownership fault. That successor fault is
+documented in
+[display-mdp-iommu-pgtable-dma-oops.md](display-mdp-iommu-pgtable-dma-oops.md).

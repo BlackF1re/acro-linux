@@ -135,7 +135,7 @@ segment 1: offset 0xb921fa, paddr 0x42c10000, size 0x10dc5f
 segment 2: offset 0xc9fe59, paddr 0x00020000, size 0x01d3e8
 ```
 
-## Current MDP-IOMMU-corrected display artifact
+## Earlier MDP multi-provider display artifact
 
 The latest physical post-mortem reached secure MMCC setup, MMFAB unhalt, the
 MDP footswitch, and the first MDP IOMMU provider before an Oops in
@@ -145,7 +145,7 @@ single-client-pointer model with one matching client master per IOMMU
 provider. The correction is preserved as project patch 0041 and guarded by
 both kernel-source validation tools.
 
-The new locally validated, **not deployed** display artifact is:
+The historical, physically tested successor artifact was:
 
 ```text
 /home/paul/xperia/build/hikari-artifacts-20260906T020500Z/display/hikari-display-fastboot.elf
@@ -177,5 +177,57 @@ The target IOMMU object and full kernel built successfully. Kernel source,
 display source, display DT, focused binding, Sony ELF, appended-DTB, SMEM,
 ramoops, initramfs, USB regression, charging, board-hardware, partition-size,
 and ARM decompressor relocation/overlap gates pass. The final Hikari DTB
-retains both MDP providers and exact Sony non-secure MIDs 0 and 2 on each.
-Physical display acceptance remains separate and owner-approved.
+retains both MDP providers and exact Sony non-secure MIDs 0 and 2 on each. Its
+physical run passed the corrected translation path, initialized DSI V2, bound
+MDP4 to DSI, and read MDP4 version v4.1 before revealing the separate
+page-table DMA recursion documented below.
+
+## Current MDP-IOMMU page-table-ownership artifact
+
+The preceding physical artifact passed both Hikari MDP IOMMU providers,
+selected the MSM8x60 DSI V2 host, bound MDP4 to DSI, and read MDP4 version
+v4.1. It then crashed while ARM32 detached its automatic DMA domain before
+DRM attached the display domain. The legacy IOMMU driver incorrectly used the
+MDP client as `io_pgtable_cfg.iommu_dev`; freeing ARMv7s page tables therefore
+recursed through that same client's IOMMU-backed DMA-unmap path.
+
+Signed kernel commit `96651e282822a6b587b43dc3c4767a1f27581933`
+assigns page-table DMA ownership to an actual IOMMU provider, retains the
+provider for the domain lifetime, and fixes multi-provider context attach,
+detach, unwind and TLB handling. Project patch 0042 and the display source
+gate preserve those invariants.
+
+The new locally validated, **not deployed** display artifact is:
+
+```text
+/home/paul/xperia/build/hikari-artifacts-iommu-fix-20260906/display/hikari-display-fastboot.elf
+size:   13,381,798 bytes
+SHA-256 47a34d7c1b2ccf0cebf1a36ad06182a360fbd15423e18898c90d42db1782f4aa
+entry:  0x40208000
+```
+
+It was built from project artifact commit
+`f519c40a936401c680bfbbd59d7107ffeba39847` and signed external kernel commit
+`96651e282822a6b587b43dc3c4767a1f27581933`. Its components are:
+
+```text
+zImage:     12,126,280 bytes, 1516a1974486c85c9dd01067855a955e5f758c9e4ef7d9148fb90bcf5a0d4968
+zImage+DTB: 12,148,018 bytes, 9c2e944ba7d43247bf44bdfc0af0245de786e5470ef69f0b1018709b5326faab
+DTB:            21,738 bytes, ed42cb9341d65cc0b4a086df73bf1fc836365362b201e40212c4755a7e0bfdc0
+initramfs:   1,109,900 bytes, 3228c3a81460b406ba0dba2d55f8c1e2ab83a011cd9d4ca8f200e01f4543d279
+```
+
+Sony ELF segments:
+
+```text
+segment 0: offset 0x001000, paddr 0x40208000, size 0xb95d32
+segment 1: offset 0xb96d32, paddr 0x42c10000, size 0x10ef8c
+segment 2: offset 0xca5cbe, paddr 0x00020000, size 0x01d3e8
+```
+
+The complete clean kernel/bundle build and independent artifact rerun passed.
+The verified memory model still uses SMEM at
+`0x40000000-0x401fffff`, kernel load `0x40208000`, initramfs
+`0x42c10000`, and ramoops `0x7ffe0000+0x20000`. Physical display acceptance
+remains separate and owner-approved. The post-mortem is documented in
+[display-mdp-iommu-pgtable-dma-oops.md](../research/device/current/boot/display-mdp-iommu-pgtable-dma-oops.md).
