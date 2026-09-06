@@ -209,8 +209,19 @@ entered the same domain's DMA-unmap path and failed in `__bitmap_clear()`.
 Signed kernel commit `96651e282822` assigns the physical IOMMU provider as the
 page-table DMA owner and corrects page-table/context lifetime across both
 providers. A fresh successor ELF passed the full clean build and local gates;
-it remains physically untested. See
-[the sanitized page-table DMA post-mortem](../research/device/current/boot/display-mdp-iommu-pgtable-dma-oops.md).
+the physical successor passed both IOMMU attachments and remained alive for at
+least 895 seconds without an Oops. Its fbdev damage worker instead timed out
+waiting for every vblank. Exact Sony DSI-video code separates primary-DMA
+completion from `PRIMARY_VSYNC`, while current MDP4 had used the DMA-complete
+interrupt for both commit completion and vblank accounting. The current kernel
+now keeps those IRQs separate and uses `PRIMARY_VSYNC` for DSI video. That run
+also exposed a diagnostic-format bug: a full 131,060-byte zero-ECC mainline
+ring exceeds TWRP's 116,468-byte ECC-enabled ring capacity. Ramoops now uses
+the exact recovery defaults (`128/16/8/0x11d`). Both corrections are built-time
+guarded but still need this physical run for display and full-ring acceptance.
+See the sanitized
+[page-table DMA post-mortem](../research/device/current/boot/display-mdp-iommu-pgtable-dma-oops.md)
+and [vblank-timeout diagnosis](../research/device/current/boot/display-mdp-vblank-timeout.md).
 
 ## Status domains
 
