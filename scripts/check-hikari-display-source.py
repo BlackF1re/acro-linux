@@ -22,11 +22,13 @@ def main() -> int:
     panel_path = root / "drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c"
     iommu_path = root / "drivers/iommu/msm_iommu.c"
     iommu_header_path = root / "drivers/iommu/msm_iommu.h"
+    crtc_path = root / "drivers/gpu/drm/msm/disp/mdp4/mdp4_crtc.c"
     dts_path = repo_root / "kernel/dts/qcom-msm8260-sony-hikari.dts"
     host = host_path.read_text()
     panel = panel_path.read_text()
     iommu = iommu_path.read_text()
     iommu_header = iommu_header_path.read_text()
+    crtc = crtc_path.read_text()
     dts = dts_path.read_text()
 
     require(host, "enum dsi_rgb_swap rgb_swap;", "DSI RGB-swap state")
@@ -83,17 +85,71 @@ def main() -> int:
     require(iommu_header, "bool reset_done;", "deferred IOMMU reset state")
     require(iommu, ".def_domain_type = msm_iommu_def_domain_type,", "IOMMU identity default")
     require(iommu, "return IOMMU_DOMAIN_IDENTITY;", "IOMMU identity policy")
+    require(
+        iommu,
+        "find_master_for_dev(struct msm_iommu_dev *iommu, struct device *dev)",
+        "provider-local IOMMU master lookup",
+    )
+    require(
+        iommu,
+        "priv->iommu_dev = get_device(iommu->dev);",
+        "IOMMU provider lifetime for page-table DMA",
+    )
+    require(
+        iommu,
+        ".iommu_dev = priv->iommu_dev,",
+        "provider-owned io-pgtable DMA mapping",
+    )
+    if ".iommu_dev = priv->client," in iommu or ".iommu_dev = priv->dev," in iommu:
+        raise SystemExit("io-pgtable DMA ownership regressed to the translated client")
+    require(iommu_header, "struct msm_iommu_dev *iommu;", "master provider pointer")
+    require(iommu_header, "struct list_head domain_node;", "per-master domain link")
 
     attach_start = iommu.index("static int msm_iommu_attach_dev(")
     identity_start = iommu.index("static int msm_iommu_identity_attach(", attach_start)
+    map_start = iommu.index("static int msm_iommu_map(", identity_start)
     attach = iommu[attach_start:identity_start]
+    identity_attach = iommu[identity_start:map_start]
     enabled = attach.index("ret = __enable_clocks(iommu);")
     deferred = attach.index("if (!iommu->reset_done)")
     reset = attach.index("msm_iommu_reset(iommu->base, iommu->ncb);", deferred)
     marked = attach.index("iommu->reset_done = true;", reset)
-    contexts = attach.index("list_for_each_entry(master, &iommu->ctx_list, list)", marked)
+    contexts = attach.index("config_mids(iommu, master);", marked)
     if not enabled < deferred < reset < marked < contexts:
         raise SystemExit("MSM8x60 IOMMU reset is not deferred until paging attach")
+    require(
+        attach,
+        "master = find_master_for_dev(iommu, dev);",
+        "provider-local IOMMU attach",
+    )
+    if "list_first_entry(&iommu->ctx_list" in attach:
+        raise SystemExit("MSM8x60 IOMMU attach still assumes the first provider master")
+    require(
+        identity_attach,
+        "list_del_init(&master->domain_node);",
+        "detached master domain-list removal",
+    )
+    if "free_io_pgtable_ops" in identity_attach:
+        raise SystemExit("identity attach still frees io-pgtable before DMA detach")
+
+    domain_free_start = iommu.index("static void msm_iommu_domain_free(")
+    domain_config_start = iommu.index("static int msm_iommu_domain_config(", domain_free_start)
+    domain_free = iommu[domain_free_start:domain_config_start]
+    require(domain_free, "free_io_pgtable_ops(priv->iop);", "domain-owned io-pgtable free")
+
+    insert_start = iommu.index("static int insert_iommu_master(")
+    xlate_start = iommu.index("static int qcom_iommu_of_xlate(", insert_start)
+    insert = iommu[insert_start:xlate_start]
+    require(
+        insert,
+        "master = find_master_for_dev(*iommu, dev);",
+        "one IOMMU master per provider",
+    )
+    for forbidden in ("dev_iommu_priv_get(dev)", "dev_iommu_priv_set(dev"):
+        if forbidden in insert:
+            raise SystemExit(
+                f"multi-provider IOMMU xlate still uses single device private state: {forbidden!r}"
+            )
 
     probe_start = iommu.index("static int msm_iommu_probe(struct platform_device *pdev)")
     probe = iommu[probe_start:]
@@ -118,6 +174,17 @@ def main() -> int:
         dts,
         "interrupts = <GIC_SPI 62 IRQ_TYPE_LEVEL_HIGH>,\n\t\t\t     <GIC_SPI 61 IRQ_TYPE_LEVEL_HIGH>;",
         "MDP1 non-secure/secure IRQ order",
+    )
+
+    # Sony's DSI-video path uses DMA_P_DONE for commit completion and
+    # PRIMARY_VSYNC for scanout vblank.  Keeping those as one mdp_irq made
+    # drm_fb_helper wait forever even after the framebuffer commit completed.
+    require(crtc, "struct mdp_irq commit;", "MDP4 commit IRQ")
+    require(crtc, "u32 vblank_irqmask;", "MDP4 scanout vblank mask")
+    require(
+        crtc,
+        "mdp4_crtc->vblank_irqmask = MDP4_IRQ_PRIMARY_VSYNC;",
+        "DSI-video primary VSYNC selection",
     )
 
     print("HIKARI_DISPLAY_SOURCE_GATE=PASS")

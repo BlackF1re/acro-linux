@@ -298,3 +298,54 @@ Signed kernel commits are `678b7e106c20` and `18f656abb9fb`; the full sanitized
 post-mortem is
 [g30-display-mdp-register-hang.md](../research/device/current/boot/g30-display-mdp-register-hang.md).
 Physical pixels, scanout and fbcon remain `NOT_VERIFIED`.
+
+## MDP multi-provider IOMMU deferred-probe correction
+
+The next retained physical log proved that secure MMCC AHB/AXI initialization,
+MMFAB unhalt, and the source-derived MDP footswitch sequence all completed.
+The first MDP IOMMU registered, then deferred probing faulted in
+`qcom_iommu_of_xlate()` at a null pointer plus offset `0x88`. This is before
+DRM scanout or any panel transaction and therefore is not a panel verdict.
+
+Hikari MDP uses both Sony MSM8x60 MDP IOMMU ports. Each port owns a separate
+context-bank/MID list, while the generic driver stored only one master pointer
+for the whole client device. A deferred-probe unwind could clear that pointer
+without deleting the provider-local list entry, making the next translation
+dereference null. The driver also assumed the first provider list entry was
+the requested client during attach and detach.
+
+Signed kernel commit `fb48685d80a0` now finds or creates one client master in
+each provider and programs only the matching provider/client pair. This is
+consistent with exact Sony `devices-iommu.c` (`mdp_port0` and `mdp_port1`,
+non-secure MIDs 0 and 2) and with the modern multi-provider handling in the
+working Tenderloin MSM8x60 port. Project source gates make the single-pointer
+and first-entry patterns build failures.
+
+The successor display ELF is documented in [BUILD.md](BUILD.md) and passed
+the full kernel, final-DTB, focused-binding, Sony ELF, memory, USB-regression,
+charging, and display gates. Its later physical run passed this correction
+and exposed the page-table DMA ownership fault documented below; physical
+pixels and fbcon remain `NOT_VERIFIED`. The full sanitized diagnosis is in
+[display-mdp-iommu-multiprovider-oops.md](../research/device/current/boot/display-mdp-iommu-multiprovider-oops.md).
+
+## MDP IOMMU page-table DMA ownership correction
+
+The physical successor passed the corrected multi-provider translation path:
+both MDP IOMMU instances registered, the client joined its IOMMU group, DSI V2
+initialized, MDP4 bound to DSI, and MDP4 version v4.1 was read. It then crashed
+inside `__bitmap_clear()` while DRM/MSM detached ARM32's automatic DMA domain
+to create its display IOVA domain.
+
+The page-table configuration used the MDP client as its DMA owner. ARMv7s
+page-table teardown consequently invoked that client's IOMMU-backed
+`dma_unmap_phys()`, recursively unmapped through the same domain, and corrupted
+the IOVA-release path. Signed kernel commit `96651e282822` makes an actual IOMMU
+provider the page-table DMA owner, moves page-table destruction to domain
+destruction, and corrects per-context attach/detach/unwind/TLB lifetime across
+both providers.
+
+The fresh successor artifact and full validation results are in
+[BUILD.md](BUILD.md). It removes the exact post-MDP-revision crash found in the
+retained log; it has not been physically deployed, so panel transactions,
+pixels, and fbcon remain `NOT_VERIFIED`. Full sanitized evidence is in
+[display-mdp-iommu-pgtable-dma-oops.md](../research/device/current/boot/display-mdp-iommu-pgtable-dma-oops.md).

@@ -182,9 +182,35 @@ Sony MSM8x60 source exposed two concrete implementation errors: legacy atomic
 `SCM_IO_READ` returns its register value directly in `r0`, not SMCCC-style
 `r1`, and MMCC `SAXI_EN` is register offset `0x0030` with value `0x000001d8`
 (not offset `0x01d8`). The current local kernel corrects both, restores the
-exact Sony AHB/MAXI masks, and adds post-operation stage markers. The g36 ELF
-passes all local gates but remains undeployed; display/fbcon are still
+exact Sony AHB/MAXI masks, and adds post-operation stage markers. At that
+checkpoint the g36 ELF passed all local gates; display/fbcon were still
 `NOT_VERIFIED`. See [the sanitized g35 diagnosis](../research/device/current/boot/g35-display-secure-mmcc-init-hang.md).
+
+The latest retained physical log proves that those secure-MMCC corrections
+worked: AHB/AXI setup completed, MMFAB unhalted, the MDP footswitch latched
+`GFS=0x11f`, and the first MDP IOMMU provider registered. Deferred MDP probing
+then hit a reproducible null dereference in `qcom_iommu_of_xlate()`. The
+generic driver kept one client pointer even though MDP spans two independent
+IOMMU providers; a failed first probe left a provider-local master behind but
+the retry had a null per-device pointer. Exact Sony context-bank/MID data and
+the current working Tenderloin MSM8x60 implementation agree that the client
+must be tracked independently within each provider. Signed kernel commit
+`fb48685d80a0` implements that model, and the successor ELF passes the complete
+local display/DT/build/memory validation suite. This removes the observed
+pre-DRM crash; pixels and fbcon still require physical verification. See
+[the sanitized IOMMU post-mortem](../research/device/current/boot/display-mdp-iommu-multiprovider-oops.md).
+
+The physical successor passed that correction: both MDP IOMMU providers
+registered, DSI V2 initialized, MDP4 bound to DSI, and MDP4 version v4.1 was
+read. It then crashed while ARM32 detached its automatic DMA domain before DRM
+created the display IOVA domain. The legacy driver used the MDP client itself
+for ARMv7s page-table DMA cache maintenance, so freeing a page table recursively
+entered the same domain's DMA-unmap path and failed in `__bitmap_clear()`.
+Signed kernel commit `96651e282822` assigns the physical IOMMU provider as the
+page-table DMA owner and corrects page-table/context lifetime across both
+providers. A fresh successor ELF passed the full clean build and local gates;
+it remains physically untested. See
+[the sanitized page-table DMA post-mortem](../research/device/current/boot/display-mdp-iommu-pgtable-dma-oops.md).
 
 ## Status domains
 

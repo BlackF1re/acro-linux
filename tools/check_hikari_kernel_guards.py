@@ -192,6 +192,8 @@ def check_iommu(kernel: Path) -> None:
         "static int msm_iommu_def_domain_type(struct device *dev)",
         "return IOMMU_DOMAIN_IDENTITY;",
         ".def_domain_type = msm_iommu_def_domain_type,",
+        "find_master_for_dev(struct msm_iommu_dev *iommu, struct device *dev)",
+        "master = find_master_for_dev(*iommu, dev);",
         "if (!iommu->reset_done)",
         "iommu->reset_done = true;",
     ):
@@ -204,9 +206,22 @@ def check_iommu(kernel: Path) -> None:
     enabled = attach.index("ret = __enable_clocks(iommu);")
     deferred = attach.index("if (!iommu->reset_done)")
     reset = attach.index("msm_iommu_reset(iommu->base, iommu->ncb);", deferred)
-    contexts = attach.index("list_for_each_entry(master, &iommu->ctx_list, list)", reset)
+    contexts = attach.index("config_mids(iommu, master);", reset)
     if not enabled < deferred < reset < contexts:
         fail("MSM8x60 IOMMU reset is not deferred until paging attach")
+    if "master = find_master_for_dev(iommu, dev);" not in attach:
+        fail("MSM8x60 IOMMU attach does not select this device's provider-local master")
+    if "list_first_entry(&iommu->ctx_list" in attach:
+        fail("MSM8x60 IOMMU attach still assumes the first provider master")
+
+    insert_start = source.index("static int insert_iommu_master(")
+    xlate_start = source.index("static int qcom_iommu_of_xlate(", insert_start)
+    insert = source[insert_start:xlate_start]
+    if "master = find_master_for_dev(*iommu, dev);" not in insert:
+        fail("MSM8x60 IOMMU xlate does not retain one master per provider")
+    for forbidden in ("dev_iommu_priv_get(dev)", "dev_iommu_priv_set(dev"):
+        if forbidden in insert:
+            fail(f"MSM8x60 multi-provider xlate still uses single device private state: {forbidden}")
 
     probe_start = source.index("static int msm_iommu_probe(struct platform_device *pdev)")
     probe = source[probe_start:]
@@ -220,6 +235,23 @@ def check_iommu(kernel: Path) -> None:
             fail(f"destructive MSM8x60 IOMMU probe test remains: {forbidden}")
 
 
+def check_mdp4_vblank(kernel: Path) -> None:
+    source = (
+        kernel / "drivers/gpu/drm/msm/disp/mdp4/mdp4_crtc.c"
+    ).read_text()
+    for fragment in (
+        "struct mdp_irq commit;",
+        "u32 vblank_irqmask;",
+        "mdp_irq_register(&get_kms(crtc)->base, &mdp4_crtc->commit);",
+        "mdp4_crtc->vblank_irqmask = MDP4_IRQ_PRIMARY_VSYNC;",
+        "return mdp4_crtc->vblank_irqmask;",
+    ):
+        if fragment not in source:
+            fail(f"MDP4 DSI-video vblank separation lacks: {fragment}")
+    if "mdp4_crtc->vblank.irqmask = dma2irq" in source:
+        fail("MDP4 still treats DMA completion as DSI-video vblank")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--kernel-src", type=Path, required=True)
@@ -231,6 +263,7 @@ def main() -> None:
     check_charger(args.kernel_src)
     check_usb_phy(args.kernel_src)
     check_iommu(args.kernel_src)
+    check_mdp4_vblank(args.kernel_src)
     print("HIKARI_KERNEL_SOURCE_GUARDS=PASS")
 
 
