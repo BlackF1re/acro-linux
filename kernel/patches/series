@@ -43,3 +43,4 @@
 0039-dt-bindings-iommu-add-MSM8660-compatible.patch
 0040-iommu-msm-enable-clocks-during-hardware-probe.patch
 0041-iommu-msm-track-client-masters-per-provider.patch
+0042-iommu-msm-fix-page-table-DMA-ownership.patch

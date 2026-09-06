@@ -88,10 +88,26 @@ def main() -> int:
         "find_master_for_dev(struct msm_iommu_dev *iommu, struct device *dev)",
         "provider-local IOMMU master lookup",
     )
+    require(
+        iommu,
+        "priv->iommu_dev = get_device(iommu->dev);",
+        "IOMMU provider lifetime for page-table DMA",
+    )
+    require(
+        iommu,
+        ".iommu_dev = priv->iommu_dev,",
+        "provider-owned io-pgtable DMA mapping",
+    )
+    if ".iommu_dev = priv->client," in iommu or ".iommu_dev = priv->dev," in iommu:
+        raise SystemExit("io-pgtable DMA ownership regressed to the translated client")
+    require(iommu_header, "struct msm_iommu_dev *iommu;", "master provider pointer")
+    require(iommu_header, "struct list_head domain_node;", "per-master domain link")
 
     attach_start = iommu.index("static int msm_iommu_attach_dev(")
     identity_start = iommu.index("static int msm_iommu_identity_attach(", attach_start)
+    map_start = iommu.index("static int msm_iommu_map(", identity_start)
     attach = iommu[attach_start:identity_start]
+    identity_attach = iommu[identity_start:map_start]
     enabled = attach.index("ret = __enable_clocks(iommu);")
     deferred = attach.index("if (!iommu->reset_done)")
     reset = attach.index("msm_iommu_reset(iommu->base, iommu->ncb);", deferred)
@@ -106,6 +122,18 @@ def main() -> int:
     )
     if "list_first_entry(&iommu->ctx_list" in attach:
         raise SystemExit("MSM8x60 IOMMU attach still assumes the first provider master")
+    require(
+        identity_attach,
+        "list_del_init(&master->domain_node);",
+        "detached master domain-list removal",
+    )
+    if "free_io_pgtable_ops" in identity_attach:
+        raise SystemExit("identity attach still frees io-pgtable before DMA detach")
+
+    domain_free_start = iommu.index("static void msm_iommu_domain_free(")
+    domain_config_start = iommu.index("static int msm_iommu_domain_config(", domain_free_start)
+    domain_free = iommu[domain_free_start:domain_config_start]
+    require(domain_free, "free_io_pgtable_ops(priv->iop);", "domain-owned io-pgtable free")
 
     insert_start = iommu.index("static int insert_iommu_master(")
     xlate_start = iommu.index("static int qcom_iommu_of_xlate(", insert_start)
