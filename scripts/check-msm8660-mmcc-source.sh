@@ -39,6 +39,21 @@ def require(name: str, *patterns: str, forbid_critical: bool = False) -> None:
     if forbid_critical and "CLK_IS_CRITICAL" in body:
         raise SystemExit(f"{name}: must not be CLK_IS_CRITICAL on MSM8x60")
 
+
+# DRM stores the exact 69,672,960 Hz MDV22 mode as 69,673 kHz and therefore
+# asks the clock framework for 69,673,000 Hz. qcom_find_freq() selects the
+# first table rate greater than or equal to the request. The table label must
+# use the rounded request while retaining Sony's exact 567/3125 M/N values;
+# otherwise live hardware selects the next 76.8 MHz entry and produces no
+# DSI-video VSYNC.
+if not re.search(
+    r"\{\s*69673000\s*,\s*P_PLL8\s*,\s*1\s*,\s*567\s*,\s*3125\s*\}",
+    text,
+):
+    raise SystemExit("missing rounded Hikari 69,673,000 Hz MDP pixel-clock entry")
+if re.search(r"\{\s*69672960\s*,\s*P_PLL8\s*,\s*1\s*,\s*567\s*,\s*3125\s*\}", text):
+    raise SystemExit("unselectable exact-Hz Hikari MDP pixel-clock label returned")
+
 # Exact Sony MSM8x60 clock-8x60.c:
 #   vpe_axi: MAXI_EN2 (0x0020), bit 26, normal consumer-owned branch.
 require(

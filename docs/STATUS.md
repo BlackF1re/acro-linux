@@ -223,6 +223,18 @@ See the sanitized
 [page-table DMA post-mortem](../research/device/current/boot/display-mdp-iommu-pgtable-dma-oops.md)
 and [vblank-timeout diagnosis](../research/device/current/boot/display-mdp-vblank-timeout.md).
 
+That physical run reached an active DRM `720x1280@60` mode, `msmdrmfb`, and a
+bound fbcon. A standard backlight-class unblank produced visible LCD
+illumination, so the target AS3676 backlight path is now `VERIFIED_DEVICE`.
+There were still no pixels or MDP/DSI interrupts. Live `clk_summary` showed the
+MDP pixel clock at 76.8 MHz: DRM requests 69,673,000 Hz for its rounded
+69,673 kHz mode, while the MMCC table had labelled the exact Hikari M/N row
+69,672,960 Hz. The generic ceiling selector skipped that row. Kernel commit
+`7da01ebc48fe` retains the exact `567/3125` divider but labels it with the
+rounded request. Visible pixels and fbcon remain `NOT_VERIFIED` pending the
+next physical run. See the
+[live clock diagnosis](../research/device/current/boot/display-pixel-clock-mismatch.md).
+
 ## Status domains
 
 status/hardware.yaml deliberately separates physical hardware evidence, the

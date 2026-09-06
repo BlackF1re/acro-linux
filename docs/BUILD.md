@@ -231,3 +231,50 @@ The verified memory model still uses SMEM at
 `0x42c10000`, and ramoops `0x7ffe0000+0x20000`. Physical display acceptance
 remains separate and owner-approved. The post-mortem is documented in
 [display-mdp-iommu-pgtable-dma-oops.md](../research/device/current/boot/display-mdp-iommu-pgtable-dma-oops.md).
+
+## Hikari rounded pixel-clock artifact
+
+The live predecessor reached an active 720x1280 DRM CRTC, `msmdrmfb`, bound
+fbcon, and visible AS3676 backlight illumination, but produced no pixels or
+MDP/DSI interrupts. Its clock tree proved that the 69,673,000 Hz request made
+from DRM's integer-kHz mode skipped the MMCC table row labelled 69,672,960 Hz
+and selected 76.8 MHz. Signed kernel commit
+`7da01ebc48fea5db687cb64dedbe5e2f7a4df312` retains the source-derived
+`567/3125` PLL8 divider while labelling the row with the rounded request.
+
+The locally validated, **not deployed** successor is:
+
+```text
+/home/paul/xperia/build/hikari-artifacts-pixelclock-20260906/display/hikari-display-fastboot.elf
+size:   13,380,894 bytes
+SHA-256 2dd8da13418ecbea5156b361e1622c18f7a55056225c90de62a829792258aa03
+entry:  0x40208000
+```
+
+It was built from project commit
+`15fdbc43a3bdac175a446a813be785449726d6ab` and the signed kernel commit above.
+Its components are:
+
+```text
+zImage:     12,125,376 bytes, d8a0a0a2163439b7e440d73d2d1df0131ba2a4d8dd14513797d389c66f87f344
+DTB:            21,738 bytes, 6984d204fb57a6a5c07df9dd190d99798ca91f21cb77a45f73d860a600cb2b01
+zImage+DTB: 12,147,114 bytes, 06477a45f7e00df89112516db14fd70e6179b34f79897b338624d087538c7327
+initramfs:   1,109,900 bytes, 3228c3a81460b406ba0dba2d55f8c1e2ab83a011cd9d4ca8f200e01f4543d279
+```
+
+Sony ELF segments:
+
+```text
+segment 0: offset 0x001000, paddr 0x40208000, size 0xb959aa
+segment 1: offset 0xb969aa, paddr 0x42c10000, size 0x10ef8c
+segment 2: offset 0xca5936, paddr 0x00020000, size 0x01d3e8
+```
+
+The kernel, three DTBs, initramfs, source guards, display, charging,
+board-hardware, USB-regression, safe-profile, GPU-profile, Sony ELF,
+appended-DTB, p3-size, SMEM, ramoops and decompressor-overlap gates pass.
+Direct validation against the complete DT schema also finishes successfully
+but reports existing non-display warnings for five pinctrl child-node names
+and the disabled A220 compatible; they are not introduced by this narrow
+pixel-clock correction. Visible pixels, advancing VSYNC interrupts and fbcon
+remain a physical acceptance test rather than a build claim.

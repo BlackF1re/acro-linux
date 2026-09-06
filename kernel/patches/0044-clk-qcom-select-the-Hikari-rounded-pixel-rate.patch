@@ -1,0 +1,28 @@
+From 7da01ebc48fea5db687cb64dedbe5e2f7a4df312 Mon Sep 17 00:00:00 2001
+From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+Date: Sun, 6 Sep 2026 18:30:00 +0700
+Subject: [PATCH] clk: qcom: select the Hikari rounded pixel rate
+
+DRM's kHz mode clock rounds 69,672,960 Hz to a 69,673,000 Hz request.
+Label the existing exact M/N entry with that rounded request so
+qcom_find_freq does not skip it and select 76.8 MHz.
+
+Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+---
+ drivers/clk/qcom/mmcc-msm8660.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+index f3b243930..b80177d51 100644
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -1202,7 +1202,8 @@ static const struct freq_tbl clk_tbl_mdp_pixel[] = {
+ 	{  53990000, P_PLL8, 2, 169,  601 },	/* 384 / 2 * 169/601 =  53.99 MHz */
+ 	{  64000000, P_PLL8, 3,   1,    2 },	/* 384 / 3 * 1/2     =  64 MHz */
+ 	{  69300000, P_PLL8, 1, 231, 1280 },	/* 384 * 231/1280    =  69.3 MHz - HP TouchPad panel */
+-	{  69672960, P_PLL8, 1, 567, 3125 },	/* Hikari MDV22: 384 * 567/3125 */
++	/* DRM represents 69,672,960 Hz as the rounded 69,673 kHz mode clock. */
++	{  69673000, P_PLL8, 1, 567, 3125 },	/* Hikari MDV22: 384 * 567/3125 */
+ 	{  76800000, P_PLL8, 1,   1,    5 },	/* 384 * 1/5         =  76.8 MHz */
+ 	{  85333000, P_PLL8, 1,   2,    9 },	/* 384 * 2/9         =  85.333 MHz */
+ 	{  96000000, P_PLL8, 4,   0,    0 },	/* 384 / 4           =  96 MHz */
