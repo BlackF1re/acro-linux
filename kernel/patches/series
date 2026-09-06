@@ -44,3 +44,4 @@
 0040-iommu-msm-enable-clocks-during-hardware-probe.patch
 0041-iommu-msm-track-client-masters-per-provider.patch
 0042-iommu-msm-fix-page-table-DMA-ownership.patch
+0043-drm-msm-mdp4-separate-DSI-video-vblank-from-commit-I.patch

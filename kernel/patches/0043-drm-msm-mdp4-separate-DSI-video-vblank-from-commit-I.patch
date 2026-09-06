@@ -1,0 +1,85 @@
+From efae8bd73882339f2f6a8a394479d6c0eeeeedfa Mon Sep 17 00:00:00 2001
+From: Hikari Patch Materializer <hikari-materializer@localhost>
+Date: Sun, 6 Sep 2026 18:02:47 +0700
+Subject: [PATCH] drm/msm/mdp4: separate DSI video vblank from commit IRQ
+
+---
+ drivers/gpu/drm/msm/disp/mdp4/mdp4_crtc.c | 25 +++++++++++++++--------
+ 1 file changed, 17 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/disp/mdp4/mdp4_crtc.c b/drivers/gpu/drm/msm/disp/mdp4/mdp4_crtc.c
+index 57dfce58450b3298c8070fc5b43eb2c0966a832a..96a8edeb082331ac2fab5aebdfbd13a1965d076b 100644
+--- a/drivers/gpu/drm/msm/disp/mdp4/mdp4_crtc.c
++++ b/drivers/gpu/drm/msm/disp/mdp4/mdp4_crtc.c
+@@ -54,7 +54,14 @@ struct mdp4_crtc {
+ 	/* for unref'ing cursor bo's after scanout completes: */
+ 	struct drm_flip_work unref_cursor_work;
+ 
+-	struct mdp_irq vblank;
++	/*
++	 * A DMA done interrupt completes register updates, while video-mode
++	 * interfaces have a distinct scanout vblank interrupt.  These happened
++	 * to share one mdp_irq in the original driver, which made DRM wait for
++	 * DMA_P_DONE instead of PRIMARY_VSYNC on MSM8x60 DSI video panels.
++	 */
++	struct mdp_irq commit;
++	u32 vblank_irqmask;
+ 	struct mdp_irq err;
+ };
+ #define to_mdp4_crtc(x) container_of(x, struct mdp4_crtc, base)
+@@ -70,7 +77,7 @@ static void request_pending(struct drm_crtc *crtc, uint32_t pending)
+ 	struct mdp4_crtc *mdp4_crtc = to_mdp4_crtc(crtc);
+ 
+ 	atomic_or(pending, &mdp4_crtc->pending);
+-	mdp_irq_register(&get_kms(crtc)->base, &mdp4_crtc->vblank);
++	mdp_irq_register(&get_kms(crtc)->base, &mdp4_crtc->commit);
+ }
+ 
+ static void crtc_flush(struct drm_crtc *crtc)
+@@ -493,14 +500,14 @@ static const struct drm_crtc_helper_funcs mdp4_crtc_helper_funcs = {
+ 	.atomic_disable = mdp4_crtc_atomic_disable,
+ };
+ 
+-static void mdp4_crtc_vblank_irq(struct mdp_irq *irq, uint32_t irqstatus)
++static void mdp4_crtc_commit_irq(struct mdp_irq *irq, uint32_t irqstatus)
+ {
+-	struct mdp4_crtc *mdp4_crtc = container_of(irq, struct mdp4_crtc, vblank);
++	struct mdp4_crtc *mdp4_crtc = container_of(irq, struct mdp4_crtc, commit);
+ 	struct drm_crtc *crtc = &mdp4_crtc->base;
+ 	struct msm_drm_private *priv = crtc->dev->dev_private;
+ 	unsigned pending;
+ 
+-	mdp_irq_unregister(&get_kms(crtc)->base, &mdp4_crtc->vblank);
++	mdp_irq_unregister(&get_kms(crtc)->base, &mdp4_crtc->commit);
+ 
+ 	pending = atomic_xchg(&mdp4_crtc->pending, 0);
+ 
+@@ -549,7 +556,7 @@ static void mdp4_crtc_wait_for_flush_done(struct drm_crtc *crtc)
+ uint32_t mdp4_crtc_vblank(struct drm_crtc *crtc)
+ {
+ 	struct mdp4_crtc *mdp4_crtc = to_mdp4_crtc(crtc);
+-	return mdp4_crtc->vblank.irqmask;
++	return mdp4_crtc->vblank_irqmask;
+ }
+ 
+ /* set dma config, ie. the format the encoder wants. */
+@@ -588,6 +595,7 @@ void mdp4_crtc_set_intf(struct drm_crtc *crtc, enum mdp4_intf intf, int mixer)
+ 	if (intf == INTF_DSI_VIDEO) {
+ 		intf_sel &= ~MDP4_DISP_INTF_SEL_DSI_CMD;
+ 		intf_sel |= MDP4_DISP_INTF_SEL_DSI_VIDEO;
++		mdp4_crtc->vblank_irqmask = MDP4_IRQ_PRIMARY_VSYNC;
+ 	} else if (intf == INTF_DSI_CMD) {
+ 		intf_sel &= ~MDP4_DISP_INTF_SEL_DSI_VIDEO;
+ 		intf_sel |= MDP4_DISP_INTF_SEL_DSI_CMD;
+@@ -642,8 +650,9 @@ struct drm_crtc *mdp4_crtc_init(struct drm_device *dev,
+ 	mdp4_crtc->ovlp = ovlp_id;
+ 	mdp4_crtc->dma = dma_id;
+ 
+-	mdp4_crtc->vblank.irqmask = dma2irq(mdp4_crtc->dma);
+-	mdp4_crtc->vblank.irq = mdp4_crtc_vblank_irq;
++	mdp4_crtc->commit.irqmask = dma2irq(mdp4_crtc->dma);
++	mdp4_crtc->commit.irq = mdp4_crtc_commit_irq;
++	mdp4_crtc->vblank_irqmask = dma2irq(mdp4_crtc->dma);
+ 
+ 	mdp4_crtc->err.irqmask = dma2err(mdp4_crtc->dma);
+ 	mdp4_crtc->err.irq = mdp4_crtc_err_irq;

@@ -22,11 +22,13 @@ def main() -> int:
     panel_path = root / "drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c"
     iommu_path = root / "drivers/iommu/msm_iommu.c"
     iommu_header_path = root / "drivers/iommu/msm_iommu.h"
+    crtc_path = root / "drivers/gpu/drm/msm/disp/mdp4/mdp4_crtc.c"
     dts_path = repo_root / "kernel/dts/qcom-msm8260-sony-hikari.dts"
     host = host_path.read_text()
     panel = panel_path.read_text()
     iommu = iommu_path.read_text()
     iommu_header = iommu_header_path.read_text()
+    crtc = crtc_path.read_text()
     dts = dts_path.read_text()
 
     require(host, "enum dsi_rgb_swap rgb_swap;", "DSI RGB-swap state")
@@ -172,6 +174,17 @@ def main() -> int:
         dts,
         "interrupts = <GIC_SPI 62 IRQ_TYPE_LEVEL_HIGH>,\n\t\t\t     <GIC_SPI 61 IRQ_TYPE_LEVEL_HIGH>;",
         "MDP1 non-secure/secure IRQ order",
+    )
+
+    # Sony's DSI-video path uses DMA_P_DONE for commit completion and
+    # PRIMARY_VSYNC for scanout vblank.  Keeping those as one mdp_irq made
+    # drm_fb_helper wait forever even after the framebuffer commit completed.
+    require(crtc, "struct mdp_irq commit;", "MDP4 commit IRQ")
+    require(crtc, "u32 vblank_irqmask;", "MDP4 scanout vblank mask")
+    require(
+        crtc,
+        "mdp4_crtc->vblank_irqmask = MDP4_IRQ_PRIMARY_VSYNC;",
+        "DSI-video primary VSYNC selection",
     )
 
     print("HIKARI_DISPLAY_SOURCE_GATE=PASS")

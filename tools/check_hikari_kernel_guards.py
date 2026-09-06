@@ -235,6 +235,23 @@ def check_iommu(kernel: Path) -> None:
             fail(f"destructive MSM8x60 IOMMU probe test remains: {forbidden}")
 
 
+def check_mdp4_vblank(kernel: Path) -> None:
+    source = (
+        kernel / "drivers/gpu/drm/msm/disp/mdp4/mdp4_crtc.c"
+    ).read_text()
+    for fragment in (
+        "struct mdp_irq commit;",
+        "u32 vblank_irqmask;",
+        "mdp_irq_register(&get_kms(crtc)->base, &mdp4_crtc->commit);",
+        "mdp4_crtc->vblank_irqmask = MDP4_IRQ_PRIMARY_VSYNC;",
+        "return mdp4_crtc->vblank_irqmask;",
+    ):
+        if fragment not in source:
+            fail(f"MDP4 DSI-video vblank separation lacks: {fragment}")
+    if "mdp4_crtc->vblank.irqmask = dma2irq" in source:
+        fail("MDP4 still treats DMA completion as DSI-video vblank")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--kernel-src", type=Path, required=True)
@@ -246,6 +263,7 @@ def main() -> None:
     check_charger(args.kernel_src)
     check_usb_phy(args.kernel_src)
     check_iommu(args.kernel_src)
+    check_mdp4_vblank(args.kernel_src)
     print("HIKARI_KERNEL_SOURCE_GUARDS=PASS")
 
 
