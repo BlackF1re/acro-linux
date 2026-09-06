@@ -1,8 +1,8 @@
 # Hikari DSI-video vblank timeout
 
-Status: sanitized `VERIFIED_DEVICE` post-mortem evidence.  The fault is
-corrected in source, but visible scanout and fbcon still require a physical
-acceptance test.
+Status: sanitized `VERIFIED_DEVICE` post-mortem evidence. The separate-vblank
+correction was physically exercised, but a second independently observed
+pixel-clock selection fault still prevented VSYNC and visible scanout.
 
 ## Capture
 
@@ -44,6 +44,8 @@ selects `MDP4_IRQ_PRIMARY_VSYNC`; other interfaces retain the existing DMA
 interrupt fallback.  The display source and kernel-source build gates reject
 a return to the coupled model.
 
-This correction is narrowly scoped.  It does not explain the absent USB
-console bytes in this capture and does not claim that DSI PHY, panel commands,
-backlight, or fbcon are physically verified.
+This correction is narrowly scoped. In its physical successor, DRM reached an
+active `720x1280` CRTC and fbcon, but MMCC selected 76.8 MHz instead of the
+69.673 MHz MDV22 pixel clock and no VSYNC interrupt arrived. The AS3676
+backlight was physically illuminated while pixels remained absent. See
+[display-pixel-clock-mismatch.md](display-pixel-clock-mismatch.md).

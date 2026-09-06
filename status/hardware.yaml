@@ -46,12 +46,13 @@ target_linux:
       otg_host: NOT_VERIFIED
       ecm: NOT_IMPLEMENTED
     display:
-      mdp4: IMPLEMENTING
-      dsi: IMPLEMENTING
-      panel: IMPLEMENTING
-      backlight: IMPLEMENTING
-      fbcon: IMPLEMENTING
-      verification: NOT_YET_TESTED
+      mdp4: PROBES
+      dsi: PROBES
+      panel: PROBES
+      backlight: VERIFIED
+      fbcon: PARTIAL
+      verification: PHYSICAL_PARTIAL
+      notes: "The current physical run created an active 720x1280 DRM CRTC, framebuffer and bound fbcon; a standard class unblank visibly illuminated the AS3676 LCD backlight. No pixels appeared and MDP/DSI interrupt counts remained zero. Live clk_summary proved that the rounded 69,673,000 Hz DRM request skipped the table's 69,672,960 Hz Hikari row and selected 76.8 MHz. The corrected clock selector is not yet physically tested."
   first_mainline_execution:
     evidence: VERIFIED_DEVICE
     result: VERIFIED
@@ -127,7 +128,7 @@ subsystems:
   cpu_smp: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: VERIFIED, evidence: VERIFIED_DEVICE, notes: "BOOT #4 post-mortem identified two CPU bring-up; BOOT #5.1 remains live on both CPUs." } }
   storage_emmc: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   storage_microsd: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: WORKING, notes: Separate mmcblk1/mmcblk1p1 SD path was mounted, wrote the C2 raw-backup stream, and its parts passed hash validation. }, target_linux: { implementation: UNKNOWN } }
-  display: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: IMPLEMENTING, notes: "The latest retained mainline log proves secure MMCC AHB/AXI initialization, MMFAB unhalt, MDP footswitch GFS=0x11f, both MDP IOMMU providers, MSM8x60 DSI V2 binding, and MDP4 version v4.1. DRM display-domain creation then crashed because the legacy MSM IOMMU used the MDP client's IOMMU-backed DMA ops to free ARMv7s page tables, recursively entering the same domain's DMA-unmap path. Signed kernel commit 96651e282822 assigns page-table DMA ownership to a physical IOMMU provider and corrects multi-provider page-table/context lifetime. The fresh successor ELF passes clean kernel/DT/display/memory/USB/ELF gates but is not physically tested. Panel commands, scanout, pixels, fbcon and physical backlight remain NOT_VERIFIED." } }
+  display: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: PARTIAL, evidence: VERIFIED_DEVICE, notes: "Physical mainline created DRM card0, a connected/enabled DSI-1, active 720x1280 CRTC, msmdrmfb and bound fbcon. AS3676 class unblank visibly illuminated the LCD backlight, so backlight is VERIFIED_DEVICE. Pixels remain absent: MDP/DSI IRQ counters stayed zero and vblank timed out because the MMCC ceiling selector chose 76.8 MHz after the rounded 69,673,000 Hz DRM request exceeded the table label by 40 Hz. The new exact-M/N rounded-label fix is built-time guarded but awaits physical acceptance." } }
   touchscreen: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   gpu: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   wifi: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }

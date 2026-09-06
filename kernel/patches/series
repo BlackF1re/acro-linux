@@ -45,3 +45,4 @@
 0041-iommu-msm-track-client-masters-per-provider.patch
 0042-iommu-msm-fix-page-table-DMA-ownership.patch
 0043-drm-msm-mdp4-separate-DSI-video-vblank-from-commit-I.patch
+0044-clk-qcom-select-the-Hikari-rounded-pixel-rate.patch
