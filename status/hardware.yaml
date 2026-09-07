@@ -52,7 +52,7 @@ target_linux:
       backlight: VERIFIED
       fbcon: PARTIAL
       verification: PHYSICAL_PARTIAL
-      notes: "The current physical run created an active 720x1280 DRM CRTC, framebuffer and bound fbcon; a standard class unblank visibly illuminated the AS3676 LCD backlight. No pixels appeared and MDP/DSI interrupt counts remained zero. Live clk_summary proved that the rounded 69,673,000 Hz DRM request skipped the table's 69,672,960 Hz Hikari row and selected 76.8 MHz. The corrected clock selector is not yet physically tested."
+      notes: "Physical mainline has an active 720x1280 DRM CRTC, changing framebuffer, bound fbcon and verified AS3676 backlight, but no visible pixels. Clock-parent and halt-poll fixes reached the first MDV22 command. It timed out because V2 DSI command DMA was programmed with MDP-domain IOVA 0x7bc41000, outside physical RAM; the DSI trigger remained asserted and IRQ 114 stayed zero. A DSI-device DMA allocation fix is built and statically validated but awaits physical acceptance."
   first_mainline_execution:
     evidence: VERIFIED_DEVICE
     result: VERIFIED
@@ -128,7 +128,7 @@ subsystems:
   cpu_smp: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: VERIFIED, evidence: VERIFIED_DEVICE, notes: "BOOT #4 post-mortem identified two CPU bring-up; BOOT #5.1 remains live on both CPUs." } }
   storage_emmc: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   storage_microsd: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: WORKING, notes: Separate mmcblk1/mmcblk1p1 SD path was mounted, wrote the C2 raw-backup stream, and its parts passed hash validation. }, target_linux: { implementation: UNKNOWN } }
-  display: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: PARTIAL, evidence: VERIFIED_DEVICE, notes: "Physical mainline created DRM card0, a connected/enabled DSI-1, active 720x1280 CRTC, msmdrmfb and bound fbcon. AS3676 class unblank visibly illuminated the LCD backlight, so backlight is VERIFIED_DEVICE. Pixels remain absent: MDP/DSI IRQ counters stayed zero and vblank timed out because the MMCC ceiling selector chose 76.8 MHz after the rounded 69,673,000 Hz DRM request exceeded the table label by 40 Hz. The new exact-M/N rounded-label fix is built-time guarded but awaits physical acceptance." } }
+  display: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: PARTIAL, evidence: VERIFIED_DEVICE, notes: "Physical mainline has DRM card0, connected/enabled DSI-1, active 720x1280 CRTC, changing msmdrmfb, bound fbcon and verified AS3676 backlight. Clock fixes reached the first MDV22 command, which timed out because V2 DSI command DMA used MDP-IOMMU IOVA 0x7bc41000 rather than an address usable by the separate DSI DMA master. The DSI-device allocation fix is built and validated but not physically accepted." } }
   touchscreen: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   gpu: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   wifi: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }

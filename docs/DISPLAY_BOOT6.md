@@ -90,6 +90,40 @@ The physical success criterion is a lit internal panel with native fbcon.
 The minimum useful result is a live USB shell showing MDP4/DSI/DRM connector
 and modeset diagnostics without destabilizing USB.
 
+## Live DSI core-parent diagnosis
+
+The latest live system rules out both proposed high-level explanations.  The
+Adreno GPU is not required for MDP4 dumb-buffer scanout, and `/dev/fb0` was
+present, non-empty and changing.  DRM had an active native-mode CRTC, but no
+MDP/DSI vblank ever advanced.
+
+Read-only clock and MMCC inspection found `dsi1_src` at 27 MHz and `DSI_NS`
+source zero even while the Hikari PHY provided its required 209.018880 MHz
+core output.  Exact Sony MSM8x60 code selects source 3 for this clock.  The
+cause was the bootstrap MMCC driver's empty DSI frequency table combined with
+`clk_rcg_bypass_ops`, which silently selected parent enum zero (PXO).
+
+The parent-corrected artifact proved that the core source can be selected, but
+exposed the immediately preceding CCF gate failure: physical Hikari leaves
+the `dsi1_clk` halt readback at `off` even after the core gate is asserted.
+The current source uses `BRANCH_HALT_SKIP` for that proven unreliable status
+bit, parent-aware `clk_rcg_bypass2_ops`, and the board DT
+assigns only `DSI_SRC` to the DSI1 PHY pixel/core PLL.  It intentionally does
+not restore the unrelated APQ8064 four-clock topology that previously failed
+on Hikari.  Source and final-DTB gates reject the old parent selection.  This
+is the complete currently known pre-video clock boundary and a locally
+implemented correction, not yet a physical visible-display result. See
+[the sanitized live diagnosis](../research/device/current/boot/display-dsi-core-clock-parent.md).
+
+The following physical run cleared that clock boundary and reached the first
+MDV22 command. It exposed a distinct DMA-domain error: the V2 DSI command
+buffer was allocated through the IOMMU-attached DRM/MDP device and programmed
+as IOVA `0x7bc41000`, which the separate DSI DMA master cannot access. The
+trigger remained asserted, DSI IRQ 114 never fired, and command `0xb0` timed
+out. The next artifact allocates the V2 command buffer from the DSI platform
+device, matching the hardware bus master. This correction is built and
+validated but still requires physical display acceptance.
+
 ## BOOT #7 component-graph correction
 
 BOOT #7's TWRP-exported persistent log narrowed a pre-`/init` crash to
