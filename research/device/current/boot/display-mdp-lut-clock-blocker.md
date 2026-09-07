@@ -27,12 +27,17 @@ MSM8960 LUT gate registers (`0x016c`, halt status `0x01e8` bit 13).  Physical
 polling showed that this supposed gate cannot be controlled on MSM8260.
 
 Signed kernel commit `b776ddafcde9eba1f5c81b34f54c533605c880ca`
-removes that false branch clock and aliases the binding's `MDP_LUT_CLK` ID to
-the real MDP core clock.  This keeps the common MDP4 DT clock ABI intact while
-matching the Sony hardware model.  The common-clock framework refcounts the
-duplicate core-clock handle, so the MDP4 enable/disable sequence remains
-balanced.
+removed that false branch clock.  Its first implementation placed the same
+clock object at both `MDP_CLK` and `MDP_LUT_CLK`; the physical test captured a
+NULL dereference in `__clk_register()` because the Qualcomm provider attempted
+to register that object twice.
+
+Signed corrective kernel commit
+`38317cc790d4b53562d80423d203f7e4a1afad27` gives `MDP_LUT_CLK` a distinct,
+gate-less CCF child of the real MDP core clock.  This keeps the common MDP4 DT
+clock ABI intact, registers each clock object exactly once, and propagates LUT
+enable and rate requests to the source-verified MDP core clock without
+inventing MSM8960 registers.
 
 Visible scanout remains `NOT_VERIFIED` until this successor is physically
 tested.
-

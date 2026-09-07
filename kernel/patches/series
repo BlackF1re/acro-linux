@@ -49,3 +49,4 @@
 0045-drm-msm-dsi-enable-MSM8x60-core-clock.patch
 0046-drm-msm-dsi-start-the-MSM8x60-45nm-PLL.patch
 0047-clk-qcom-alias-the-MSM8x60-MDP-LUT-clock.patch
+0048-clk-qcom-model-the-MSM8x60-MDP-LUT-clock-safely.patch

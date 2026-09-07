@@ -40,8 +40,21 @@ def check_mmcc(kernel: Path) -> None:
         fail("MSM8x60 MDP legacy footswitch must remain powered after init")
     if "static struct clk_branch mdp_lut_clk" in source:
         fail("MSM8x60 must not use the unrelated MSM8960 MDP LUT gate")
-    if "[MDP_LUT_CLK] = &mdp_clk.clkr," not in source:
-        fail("MSM8x60 MDP LUT binding ID must alias the MDP core clock")
+    if "[MDP_LUT_CLK] = &mdp_clk.clkr," in source:
+        fail("MSM8x60 MDP LUT ID must not register the MDP core clk_hw twice")
+    if "static struct clk_regmap mdp_lut_clk" not in source:
+        fail("MSM8x60 MDP LUT binding ID needs a distinct CCF object")
+    if "[MDP_LUT_CLK] = &mdp_lut_clk," not in source:
+        fail("MSM8x60 MDP LUT binding ID must use its distinct CCF object")
+    lut = re.search(
+        r"static struct clk_regmap mdp_lut_clk = \{(?P<body>.*?)\n\};",
+        source,
+        re.S,
+    )
+    if not lut or "&mdp_clk.clkr.hw" not in lut.group("body"):
+        fail("MSM8x60 MDP LUT CCF object must parent to the real MDP clock")
+    if "CLK_SET_RATE_PARENT" not in lut.group("body"):
+        fail("MSM8x60 MDP LUT clock must propagate rates to the MDP clock")
     for fragment in (
         "msm8660_mmcc_scm_map",
         "qcom_scm_io_readl",
