@@ -278,3 +278,43 @@ but reports existing non-display warnings for five pinctrl child-node names
 and the disabled A220 compatible; they are not introduced by this narrow
 pixel-clock correction. Visible pixels, advancing VSYNC interrupts and fbcon
 remain a physical acceptance test rather than a build claim.
+
+## Hikari DSI-PLL-start artifact
+
+Exact Sony MSM8x60 code starts the programmed 45 nm DSI PLL by setting bit 0
+of `DSIPHY_PLL_CTRL_0`; the predecessor left the register at disabled value
+`0x40`. Signed kernel commit `825085ffdeb71af31431455927df68561406d86e`
+implements the source-backed `0x40 -> 0x41` transition and logs its readback.
+The compiled object was disassembled and contains the final immediate `0x41`
+MMIO store. The locally validated, **not deployed** successor is:
+
+```text
+/home/paul/xperia/build/hikari-artifacts-dsi-pll-20260907/display/hikari-display-fastboot.elf
+size:   13,382,122 bytes
+SHA-256 a9bc6ff21e6311a0a26330e82b1626c6cb88d88de8682f44475f65f1eca74aa1
+entry:  0x40208000
+```
+
+It was built from project commit
+`05a05c2686d516000721b896c0a1c6b0b1ef974f` and the signed kernel commit
+above. Its components are:
+
+```text
+zImage:     12,126,592 bytes, 705e286ef0560dd9cae5ea5f9bf2e538b6964ff6ae70bc585a124d90c098cd74
+DTB:            21,750 bytes, ffdcc2fd3412b4a82fa22d783e9596d1ec007ceeb473204f24f086576ce4954d
+zImage+DTB: 12,148,342 bytes, 035069410902f6a4881474f2d8e759e95c0bdd2d61001e780d2240baedfa7342
+initramfs:   1,109,900 bytes, 3228c3a81460b406ba0dba2d55f8c1e2ab83a011cd9d4ca8f200e01f4543d279
+```
+
+Sony ELF segments:
+
+```text
+segment 0: offset 0x001000, paddr 0x40208000, size 0xb95e76
+segment 1: offset 0xb96e76, paddr 0x42c10000, size 0x10ef8c
+segment 2: offset 0xca5e02, paddr 0x00020000, size 0x01d3e8
+```
+
+Kernel and all three DTBs built. The kernel-source, display, charging,
+board-hardware, USB-regression, safe-profile, GPU-profile, persistent-RAM,
+Sony-ELF, appended-DTB, p3-size, SMEM and decompressor-overlap gates pass.
+Visible pixels and advancing VSYNC remain a physical acceptance test.

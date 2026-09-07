@@ -299,6 +299,22 @@ post-mortem is
 [g30-display-mdp-register-hang.md](../research/device/current/boot/g30-display-mdp-register-hang.md).
 Physical pixels, scanout and fbcon remain `NOT_VERIFIED`.
 
+## DSI PLL start correction
+
+The latest physical log reached MDP4 v4.1, native `720x1280`, the Hikari PHY
+profile, `msmdrmfb`, and fbcon, but received no `PRIMARY_VSYNC`. The kernel and
+PID 1 remained alive. Exact Sony MSM8x60 source then exposed a missing step:
+after programming `DSIPHY_PLL_CTRL_0 = 0x40`, Sony separately sets bit 0 before
+enabling the DSI clocks and restores `0x40` on disable. The project fixed-rate
+clock providers could not perform this hardware operation, so the PLL had
+remained off despite the successful PHY log.
+
+Signed kernel commit `825085ffdeb71af31431455927df68561406d86e` now performs
+the source-backed `0x40 -> 0x41` start transition, reports the readback, and
+stops the PLL during teardown. See the sanitized
+[diagnosis](../research/device/current/boot/display-dsi-pll-disabled.md).
+Visible scanout remains `NOT_VERIFIED` until the successor is physically run.
+
 ## MDP multi-provider IOMMU deferred-probe correction
 
 The next retained physical log proved that secure MMCC AHB/AXI initialization,

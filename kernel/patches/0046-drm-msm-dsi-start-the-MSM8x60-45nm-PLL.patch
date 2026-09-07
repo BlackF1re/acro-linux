@@ -1,0 +1,56 @@
+From 825085ffdeb71af31431455927df68561406d86e Mon Sep 17 00:00:00 2001
+From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+Date: Mon, 7 Sep 2026 14:26:54 +0700
+Subject: [PATCH] drm/msm/dsi: start the MSM8x60 45nm PLL
+
+Sony enables PLL_CTRL_0 after programming the MSM8x60 PHY table and stops it
+before powering the PHY down. The Hikari driver only registered fixed-rate CCF
+outputs and left the underlying PLL disabled, so MDP4 could bind and the panel
+backlight could turn on while DSI produced no video timing or VSYNC.
+
+Mirror the source-backed enable and disable writes and report the resulting
+control register for physical diagnosis.
+
+Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+---
+ drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c | 15 ++++++++++++---
+ 1 file changed, 12 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c b/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
+index db7ca5f31..507ace2c6 100644
+--- a/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
++++ b/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
+@@ -132,14 +132,21 @@ static int dsi_45nm_enable(struct msm_dsi_phy *phy,
+ 	/* Legacy hardware requires PLL_CTRL_0 to be committed last. */
+ 	write_table(base, PHY_REG(0x204), &hikari_pll[1], ARRAY_SIZE(hikari_pll) - 1);
+ 	dsi_45nm_program_hikari_dividers(base);
+-	writel(hikari_pll[0], base + PHY_REG(0x200));
+ 	writel(0x050, base + PHY_REG(0x214));
+ 	writel(0x00f, base + PHY_REG(0x258));
+ 	writel(0, base + PHY_REG(0x25c));
++	/*
++	 * Sony enables the 45 nm PLL separately from programming its table.
++	 * Fixed-rate CCF providers describe the two outputs but cannot turn the
++	 * underlying hardware on, so commit PLL_CTRL_0 with ENABLE set only after
++	 * every other PHY/PLL register is configured.
++	 */
++	writel(hikari_pll[0] | BIT(0), base + PHY_REG(0x200));
+ 	wmb();
+ 	dev_info(&phy->pdev->dev,
+-		 "Hikari 45nm DSI PHY enabled: bit %lu, byte %lu, source %lu Hz\n",
+-		 HIKARI_BITCLK, HIKARI_BYTECLK, HIKARI_DSI_SRC_CLK);
++		 "Hikari 45nm DSI PHY enabled: bit %lu, byte %lu, source %lu Hz, PLL_CTRL_0 %#x\n",
++		 HIKARI_BITCLK, HIKARI_BYTECLK, HIKARI_DSI_SRC_CLK,
++		 readl(base + PHY_REG(0x200)));
+ 	return 0;
+ }
+ 
+@@ -147,6 +154,8 @@ static void dsi_45nm_disable(struct msm_dsi_phy *phy)
+ {
+ 	void __iomem *base = phy->base;
+ 
++	/* Match Sony's clock-disable path before powering down the PHY. */
++	writel(hikari_pll[0], base + PHY_REG(0x200));
+ 	writel(0x05f, base + PHY_REG(0x214));
+ 	writel(0x08f, base + PHY_REG(0x258));
+ 	writel(1, base + PHY_REG(0x25c));
