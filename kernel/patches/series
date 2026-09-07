@@ -51,3 +51,6 @@
 0047-clk-qcom-alias-the-MSM8x60-MDP-LUT-clock.patch
 0048-clk-qcom-model-the-MSM8x60-MDP-LUT-clock-safely.patch
 0049-clk-qcom-select-the-MSM8x60-DSI-PLL-parent.patch
+0050-clk-qcom-skip-unreliable-MSM8x60-DSI-halt-poll.patch
+0051-drm-panel-fix-Hikari-MDV22-enable-order.patch
+0052-drm-msm-dsi-use-the-V2-controller-for-command-DMA.patch

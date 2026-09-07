@@ -33,7 +33,33 @@ def main() -> int:
     crtc = crtc_path.read_text()
     dts = dts_path.read_text()
 
+    # The MSM8x60 DSI core branch writes MMCC 0x004c bit 0 correctly, but its
+    # 0x01d0/bit-2 halt readback is false on physical Hikari.  The historical
+    # Sony clock path enables this gate without polling a status register.
+    # Preserve the common-clock equivalent: retain the gate but skip its
+    # unreliable transition poll rather than failing host power-on with -EBUSY.
+    mmcc_path = root / "drivers/clk/qcom/mmcc-msm8660.c"
+    mmcc = mmcc_path.read_text()
+    dsi_branch = re.search(
+        r"static\s+struct\s+clk_branch\s+dsi1_clk\s*=\s*\{(.*?)\n\};",
+        mmcc,
+        re.S,
+    )
+    if not dsi_branch:
+        raise SystemExit("missing MSM8x60 dsi1_clk branch")
+    require(dsi_branch.group(1), ".halt_check = BRANCH_HALT_SKIP,", "MSM8x60 DSI halt-poll workaround")
+
     require(host, "enum dsi_rgb_swap rgb_swap;", "DSI RGB-swap state")
+    require(
+        host,
+        "struct device *dev = &msm_host->pdev->dev;",
+        "MSM8x60 V2 command DMA allocated from the DSI device",
+    )
+    require(
+        host,
+        "dma_alloc_coherent(dev, size,",
+        "MSM8x60 V2 command DMA physical-domain allocation",
+    )
     require(host, "DSI_VID_CFG1_RGB_SWAP(msm_host->rgb_swap)", "video RGB swap")
     require(host, "DSI_CMD_CFG0_RGB_SWAP(msm_host->rgb_swap)", "command RGB swap")
     require(host, '"sony,hikari-r63306-tmd-mdv22"', "Hikari panel quirk")
@@ -78,6 +104,28 @@ def main() -> int:
         "\tmsleep(50);"
     )
     require(panel, on_sequence, "Sony MDV22 reset/power-on order")
+
+    # Sony sends Sleep Out and Display On while the DSI link is in its command
+    # phase, before enabling video scanout.  The panel must also request the
+    # DRM bridge ordering which powers the MSM8x60 host/PHY before prepare.
+    require(
+        panel,
+        "m->panel.prepare_prev_first = true;",
+        "MDV22 host-before-panel prepare order",
+    )
+    prepare_start = panel.index("static int mdv22_prepare(")
+    unprepare_start = panel.index("static int mdv22_unprepare(", prepare_start)
+    enable_start = panel.index("static int mdv22_enable(", unprepare_start)
+    disable_start = panel.index("static int mdv22_disable(", enable_start)
+    prepare = panel[prepare_start:unprepare_start]
+    enable = panel[enable_start:disable_start]
+    require(
+        prepare,
+        "mipi_dsi_dcs_set_display_on(m->dsi)",
+        "MDV22 pre-scanout Display On command",
+    )
+    if "mipi_dsi_dcs_set_display_on" in enable:
+        raise SystemExit("MDV22 Display On regressed to the post-scanout enable callback")
 
     off_sequence = (
         "mipi_dsi_dcs_enter_sleep_mode(m->dsi);\n"

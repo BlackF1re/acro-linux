@@ -78,6 +78,16 @@ if ".freq_tbl" in dsi_src:
 if re.search(r"static\s+const\s+struct\s+freq_tbl\s+clk_tbl_dsi", text):
     raise SystemExit("obsolete empty DSI frequency table returned")
 
+# Sony's MSM8x60 DSI core gate is enabled directly from the vendor driver;
+# it has no status-poll equivalent.  Physical Hikari testing showed that the
+# MMCC 0x01d0 bit 2 readback remains "off" after enabling dsi1_clk, making
+# clk_branch_toggle() return -EBUSY before the DSI host can start video.
+# Keep the real gate write, but do not treat this unreliable status bit as a
+# failed enable operation.
+dsi_core = branch("dsi1_clk")
+if "BRANCH_HALT_SKIP" not in dsi_core:
+    raise SystemExit("dsi1_clk must skip unreliable MSM8x60 halt polling")
+
 # MDP4 asks for both MDP_CLK and MDP_LUT_CLK.  MSM8x60 has no separate LUT
 # gate, but two provider IDs must still point at two distinct clk_hw objects:
 # qcom_cc_really_probe() registers every populated array entry.  Registering
