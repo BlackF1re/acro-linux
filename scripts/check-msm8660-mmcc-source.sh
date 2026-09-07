@@ -31,6 +31,17 @@ def branch(name: str) -> str:
     return m.group(1)
 
 
+def rcg(name: str) -> str:
+    pat = re.compile(
+        rf"static\s+struct\s+clk_rcg\s+{re.escape(name)}\s*=\s*\{{(.*?)\n\}};",
+        re.S,
+    )
+    m = pat.search(text)
+    if not m:
+        raise SystemExit(f"missing clk_rcg {name}")
+    return m.group(1)
+
+
 def require(name: str, *patterns: str, forbid_critical: bool = False) -> None:
     body = branch(name)
     for pattern in patterns:
@@ -53,6 +64,19 @@ if not re.search(
     raise SystemExit("missing rounded Hikari 69,673,000 Hz MDP pixel-clock entry")
 if re.search(r"\{\s*69672960\s*,\s*P_PLL8\s*,\s*1\s*,\s*567\s*,\s*3125\s*\}", text):
     raise SystemExit("unselectable exact-Hz Hikari MDP pixel-clock label returned")
+
+# The MSM8x60 DSI core clock is a bypass mux.  The public MMCC v1 carried an
+# empty frequency table and clk_rcg_bypass_ops, which silently forced parent
+# enum zero (PXO).  The Hikari runtime then showed DSI_NS=0 even though Sony's
+# downstream code selects source value 3 (DSI1 PLL).  The bypass2 operations
+# preserve the parent selected through assigned-clock-parents.
+dsi_src = rcg("dsi1_src")
+if "clk_rcg_bypass2_ops" not in dsi_src:
+    raise SystemExit("dsi1_src must use parent-aware clk_rcg_bypass2_ops")
+if ".freq_tbl" in dsi_src:
+    raise SystemExit("dsi1_src must not use an empty/fixed frequency table")
+if re.search(r"static\s+const\s+struct\s+freq_tbl\s+clk_tbl_dsi", text):
+    raise SystemExit("obsolete empty DSI frequency table returned")
 
 # MDP4 asks for both MDP_CLK and MDP_LUT_CLK.  MSM8x60 has no separate LUT
 # gate, but two provider IDs must still point at two distinct clk_hw objects:
