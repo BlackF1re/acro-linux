@@ -47,3 +47,4 @@
 0043-drm-msm-mdp4-separate-DSI-video-vblank-from-commit-I.patch
 0044-clk-qcom-select-the-Hikari-rounded-pixel-rate.patch
 0045-drm-msm-dsi-enable-MSM8x60-core-clock.patch
+0046-drm-msm-dsi-start-the-MSM8x60-45nm-PLL.patch

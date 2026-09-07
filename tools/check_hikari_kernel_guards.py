@@ -120,6 +120,10 @@ def check_mmcc(kernel: Path) -> None:
             fail(f"MSM8x60 retained DSI clock teardown lacks: {fragment}")
     if "writel(0, phy->pll_base);" not in phy:
         fail("MSM8x60 45nm PHY quiesce must clear PLL_CTRL_0")
+    if "writel(hikari_pll[0] | BIT(0), base + PHY_REG(0x200));" not in phy:
+        fail("MSM8x60 45nm PHY must explicitly enable PLL_CTRL_0")
+    if "writel(hikari_pll[0], base + PHY_REG(0x200));" not in phy:
+        fail("MSM8x60 45nm PHY disable must stop PLL_CTRL_0")
 
 
 def check_panel(kernel: Path) -> None:

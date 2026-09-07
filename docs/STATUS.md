@@ -265,3 +265,18 @@ provide a complete charge-current observation.
 Cradle/IN and suspend charging remain blocked pending dedicated physical
 evidence. See
 [CHARGING.md](CHARGING.md).
+
+## Current display boundary: DSI PLL start
+
+The latest retained physical run did not crash: DRM registered a native
+`720x1280` framebuffer and fbcon, backlight illumination worked, `/init` and
+the USB-shell supervisor ran, and PID 1 continued emitting alive markers. The
+failure began at the first vblank wait because no DSI video interrupt arrived.
+
+Exact Sony MSM8x60 code starts the 45 nm DSI PLL by changing
+`DSIPHY_PLL_CTRL_0` from programmed value `0x40` to `0x41`. The project driver
+had omitted that separate enable operation. Kernel commit `825085ffdeb71af3`
+implements the transition and a build guard enforces it. This is the first
+source-exact explanation consistent with backlight plus initialized DRM but
+zero VSYNC. It is implemented and locally testable, but display output remains
+`NOT_VERIFIED` until a later owner-approved physical boot.
