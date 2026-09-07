@@ -38,6 +38,10 @@ def check_mmcc(kernel: Path) -> None:
     )
     if not mdp_gdsc or "RPM_ALWAYS_ON" not in mdp_gdsc.group("body"):
         fail("MSM8x60 MDP legacy footswitch must remain powered after init")
+    if "static struct clk_branch mdp_lut_clk" in source:
+        fail("MSM8x60 must not use the unrelated MSM8960 MDP LUT gate")
+    if "[MDP_LUT_CLK] = &mdp_clk.clkr," not in source:
+        fail("MSM8x60 MDP LUT binding ID must alias the MDP core clock")
     for fragment in (
         "msm8660_mmcc_scm_map",
         "qcom_scm_io_readl",
