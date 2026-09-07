@@ -1,0 +1,54 @@
+From d9dc247f4500fc986cae785ab7d293dc2fecfbc8 Mon Sep 17 00:00:00 2001
+From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+Date: Mon, 7 Sep 2026 20:15:57 +0700
+Subject: [PATCH] clk: qcom: select the MSM8x60 DSI PLL parent
+
+The public MSM8x60 MMCC driver described dsi1_src with an empty frequency
+table and clk_rcg_bypass_ops.  That operation uses the table's source field
+when determining a rate, so the empty entry silently selects parent zero,
+PXO.  A live Hikari consequently left DSI_NS at source zero and ran the DSI
+core at 27 MHz while the PHY generated the required 209.01888 MHz core PLL.
+
+Use the parent-aware bypass2 operations, matching the modern MSM8960 model.
+The board DT can then select DSI1 PLL explicitly, reproducing Sony's source
+value 3 without hard-coding a Hikari rate in the shared clock driver.
+
+Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+---
+ drivers/clk/qcom/mmcc-msm8660.c | 7 +------
+ 1 file changed, 1 insertion(+), 6 deletions(-)
+
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+index 884010145..224ff0990 100644
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -564,10 +564,6 @@ static struct clk_branch csiphy1_timer_clk = {
+ 	},
+ };
+ 
+-static const struct freq_tbl clk_tbl_dsi[] = {
+-	{ }
+-};
+-
+ static struct clk_rcg dsi1_src = {
+ 	.ns_reg = 0x0054,
+ 	.md_reg = 0x0050,
+@@ -587,7 +583,6 @@ static struct clk_rcg dsi1_src = {
+ 		.src_sel_shift = 0,
+ 		.parent_map = mmcc_pxo_dsi2_dsi1_map,
+ 	},
+-	.freq_tbl = clk_tbl_dsi,
+ 	.clkr = {
+ 		.enable_reg = 0x004c,
+ 		.enable_mask = BIT(2),
+@@ -595,7 +590,7 @@ static struct clk_rcg dsi1_src = {
+ 			.name = "dsi1_src",
+ 			.parent_data = mmcc_pxo_dsi2_dsi1,
+ 			.num_parents = ARRAY_SIZE(mmcc_pxo_dsi2_dsi1),
+-			.ops = &clk_rcg_bypass_ops,
++			.ops = &clk_rcg_bypass2_ops,
+ 			.flags = CLK_SET_RATE_PARENT,
+ 		},
+ 	},
+-- 
+2.53.0

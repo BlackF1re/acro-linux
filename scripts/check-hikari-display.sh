@@ -138,19 +138,29 @@ scm_clock=$(fdtget -t x "$dtb" /firmware/scm clocks |
 }
 
 # Sony's MSM8x60 DSI path explicitly programs and enables the DSI core clock.
-# Model its MMCC DSI_CLK branch as src, while still forbidding the unsupported
-# APQ8064-style assigned-parent setup which previously prevented /init.
+# The live Hikari MMCC register showed source value 0 (PXO), while Sony selects
+# source value 3 (DSI1 PLL).  Require the single source-parent assignment; do
+# not restore the earlier APQ8064 four-clock assignment that prevented /init.
 expected_names='iface bus core_mmss src byte pixel core'
 actual_names=$(fdtget -t s "$dtb" /dsi@4700000 clock-names | tr -s ' ' | sed 's/^ //;s/ $//')
 [[ $actual_names == "$expected_names" ]] || {
 	echo "incorrect MSM8x60 DSI clock input list: $actual_names" >&2
 	exit 1
 }
-if fdtget "$dtb" /dsi@4700000 assigned-clock-parents >/dev/null 2>&1 ||
-   fdtget "$dtb" /dsi@4700000 assigned-clocks >/dev/null 2>&1; then
-	echo 'MSM8x60 DSI must not carry APQ8064-style assigned clock parents' >&2
+mmcc_phandle=$(fdtget -t x "$dtb" /clock-controller@4000000 phandle)
+dsi_phy_phandle=$(fdtget -t x "$dtb" /dsi-phy@47000f0 phandle)
+assigned_clock=$(fdtget -t x "$dtb" /dsi@4700000 assigned-clocks |
+	tr -s ' ' | sed 's/^ //;s/ $//')
+assigned_parent=$(fdtget -t x "$dtb" /dsi@4700000 assigned-clock-parents |
+	tr -s ' ' | sed 's/^ //;s/ $//')
+[[ $assigned_clock == "$mmcc_phandle 38" ]] || {
+	echo "DSI source assignment must resolve to MMCC DSI_SRC (56/0x38), got '$assigned_clock'" >&2
 	exit 1
-fi
+}
+[[ $assigned_parent == "$dsi_phy_phandle 1" ]] || {
+	echo "DSI source parent must resolve to DSI1 pixel/core PLL output 1, got '$assigned_parent'" >&2
+	exit 1
+}
 
 # The panel must drive the physical AS3676 LCD backlight through the DRM panel
 # helper.  A standalone backlight node can probe while leaving the LCD dark.

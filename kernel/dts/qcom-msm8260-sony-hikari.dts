@@ -271,6 +271,9 @@
 			 <&mmcc MDP_PIXEL_CLK>,
 			 <&mmcc DSI1_ESC_CLK>;
 		clock-names = "iface", "bus", "core_mmss", "src", "byte", "pixel", "core";
+		/* Sony's MSM8x60 DSI core mux selects DSI1 PLL with source value 3. */
+		assigned-clocks = <&mmcc DSI_SRC>;
+		assigned-clock-parents = <&dsi_phy DSI_PIXEL_PLL_CLK>;
 		phys = <&dsi_phy>;
 		phy-names = "dsi";
 		syscon-sfpb = <&mmss_sfpb>;
