@@ -318,3 +318,27 @@ Kernel and all three DTBs built. The kernel-source, display, charging,
 board-hardware, USB-regression, safe-profile, GPU-profile, persistent-RAM,
 Sony-ELF, appended-DTB, p3-size, SMEM and decompressor-overlap gates pass.
 Visible pixels and advancing VSYNC remain a physical acceptance test.
+
+## Hikari MDP-LUT-clock successor
+
+The DSI-PLL physical run exposed an earlier MDP4 clock failure. Exact Sony
+MSM8x60 source has no independently controlled MDP LUT clock, so signed
+kernel commit `b776ddafcde9eba1f5c81b34f54c533605c880ca` aliases the common
+driver's LUT clock ID to the real MDP core clock. The locally validated,
+**not deployed** display successor is:
+
+```text
+/home/paul/xperia/build/hikari-artifacts-mdp-lut-fix-20260907/display/hikari-display-fastboot.elf
+size:   13,382,386 bytes
+SHA-256 bca5f0844c90c964116eb5119a0c095aaa97ac0cf63b09b78ebba9d6e9ab4150
+entry:  0x40208000
+
+segment 0: offset 0x001000, paddr 0x40208000, size 0xb95f7e
+segment 1: offset 0xb96f7e, paddr 0x42c10000, size 0x10ef8c
+segment 2: offset 0xca5f0a, paddr 0x00020000, size 0x01d3e8
+```
+
+Kernel and all three DTBs built. Kernel-source, display, charging,
+board-hardware, USB-regression, safe-profile, GPU-profile, persistent-RAM,
+Sony-ELF, appended-DTB, p3-size, SMEM and decompressor-overlap gates pass.
+This build does not claim physical display success.
