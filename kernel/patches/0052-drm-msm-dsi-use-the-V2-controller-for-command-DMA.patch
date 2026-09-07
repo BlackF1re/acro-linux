@@ -1,0 +1,46 @@
+From: Xperia Hikari Linux Project <hikari-linux@localhost>
+Date: Tue, 8 Sep 2026 02:00:00 +0700
+Subject: [PATCH] drm/msm/dsi: use the V2 controller for command DMA
+
+The V2 DSI command DMA engine is the bus master consuming this buffer.  Using
+the DRM/MDP device for dma_alloc_coherent() can return an address translated
+through the MDP IOMMU.  That IOVA is not usable by the separate MSM8x60 DSI
+DMA master: on Hikari the programmed 0x7bc41000 address never completed a
+command, while the DSI trigger remained asserted and IRQ 114 stayed at zero.
+
+Allocate and free the V2 command buffer against the DSI platform device so
+the DMA API returns an address in the DSI controller's DMA domain.
+
+Signed-off-by: Xperia Hikari Linux Project <hikari-linux@localhost>
+---
+ drivers/gpu/drm/msm/dsi/dsi_host.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
+index 111111111111..222222222222 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -1381,9 +1381,9 @@ int dsi_tx_buf_alloc_6g(struct msm_dsi_host *msm_host, int size)
+ 
+ int dsi_tx_buf_alloc_v2(struct msm_dsi_host *msm_host, int size)
+ {
+-	struct drm_device *dev = msm_host->dev;
++	struct device *dev = &msm_host->pdev->dev;
+ 
+-	msm_host->tx_buf = dma_alloc_coherent(dev->dev, size,
++	msm_host->tx_buf = dma_alloc_coherent(dev, size,
+ 					&msm_host->tx_buf_paddr, GFP_KERNEL);
+ 	if (!msm_host->tx_buf)
+ 		return -ENOMEM;
+@@ -1415,7 +1415,7 @@ void msm_dsi_tx_buf_free(struct mipi_dsi_host *host)
+ 	}
+ 
+ 	if (msm_host->tx_buf)
+-		dma_free_coherent(dev->dev, msm_host->tx_size, msm_host->tx_buf,
+-			msm_host->tx_buf_paddr);
++		dma_free_coherent(&msm_host->pdev->dev, msm_host->tx_size,
++			msm_host->tx_buf,
+ 			msm_host->tx_buf_paddr);
+ }
+-- 
+2.43.0

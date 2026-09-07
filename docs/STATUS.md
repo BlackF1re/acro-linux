@@ -88,6 +88,25 @@ backlight, fbdev emulation and fbcon while preserving the verified USB and
 ramoops paths.  These are implementation/static-validation states, not
 display acceptance claims.  See [DISPLAY_BOOT6.md](DISPLAY_BOOT6.md).
 
+The latest live diagnosis rules out both a missing GPU and an empty
+framebuffer: MDP4 had a changing dumb framebuffer and does not need Adreno for
+scanout. The DSI parent correction was physically deployed and retained a
+working USB shell, but the next exact failure was `dsi1_clk status stuck at
+'off'`: the core gate write is accepted while MSM8x60 halt readback
+`0x01d0/bit2` falsely remains off, causing `msm_dsi_host_power_on()` to return
+`-EBUSY` before DSI video starts. Sony enables this gate without a status poll;
+the successor kernel uses `BRANCH_HALT_SKIP` for this proven unreliable branch
+while retaining the actual gate operation. Display remains `PARTIAL`, not
+`VERIFIED`, until visible stable pixels are observed.
+
+The successor physical run passed that clock boundary but timed out on the
+first MDV22 command (`0xb0`). The DSI DMA register contained MDP-domain IOVA
+`0x7bc41000`, outside physical RAM; the trigger remained asserted and DSI IRQ
+114 stayed at zero. The V2 host had allocated its command buffer against the
+IOMMU-attached DRM/MDP device rather than the DSI bus master. A narrow fix now
+allocates/frees the buffer through the DSI platform device. It is built and
+validated, not yet physically verified.
+
 BOOT #7 supplied the first display-path post-mortem: deferred DRM/MSM probing
 faulted before `/init` because the Hikari DTS connected DSI to MDP4 port 0,
 which current DRM/MSM deliberately excludes from component matching.  DSI1 is

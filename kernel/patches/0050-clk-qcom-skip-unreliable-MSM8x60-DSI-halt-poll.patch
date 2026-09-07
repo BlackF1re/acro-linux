@@ -1,0 +1,39 @@
+From 8ae3d6d2bd00645d4750fa1ad1cc760411e84d6e Mon Sep 17 00:00:00 2001
+From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+Date: Sun, 7 Sep 2026 22:45:00 +0700
+Subject: [PATCH] clk: qcom: skip unreliable MSM8x60 DSI core halt poll
+
+On the Hikari MSM8260, enabling MMCC DSI_CLK asserts the documented gate
+bit at 0x004c bit 0, but the corresponding 0x01d0 bit-2 halt readback stays
+at the off value.  clk_branch_toggle() consequently returns -EBUSY before
+the DRM DSI host can start video.
+
+Sony's MSM8x60 downstream DSI code enables the same core gate directly and
+does not use a halt-status poll.  Keep the common-clock gate operation, but
+model the proven unreliable readback as BRANCH_HALT_SKIP, matching the other
+MSM8x60 branches whose status is not trustworthy.
+
+Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+---
+ drivers/clk/qcom/mmcc-msm8660.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+index 224ff0990..b1fb04f5b 100644
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -598,6 +598,12 @@ static struct clk_rcg dsi1_src = {
+ static struct clk_branch dsi1_clk = {
+ 	.halt_reg = 0x01d0,
+ 	.halt_bit = 2,
++	/*
++	 * Sony's MSM8x60 DSI driver enables this core gate without a halt
++	 * readback.  On Hikari the 0x01d0 bit remains off after enabling
++	 * 0x004c bit 0, so polling it falsely rejects host power-on.
++	 */
++	.halt_check = BRANCH_HALT_SKIP,
+ 	.clkr = {
+ 		.enable_reg = 0x004c,
+ 		.enable_mask = BIT(0),
+-- 
+2.53.0

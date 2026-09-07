@@ -1,0 +1,56 @@
+From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+Date: Tue, 8 Sep 2026 23:45:00 +0700
+Subject: [PATCH] drm: panel: fix Hikari MDV22 enable order
+
+Sony's Hikari driver powers the panel, sends the complete R63306 command
+sequence (including Sleep Out and Display On) in DSI command mode, and only
+then switches the host to video mode.  Splitting Display On into the DRM panel
+enable callback sends it after the video pipeline has started.  On Hikari that
+leaves the first 0x29 DMA transfer waiting for an interrupt which never
+arrives, followed by MDP4 vblank timeouts.
+
+Request host-first panel preparation so the MSM8x60 PHY and DSI host are
+available for the initialization transfers.  Send Display On at the end of
+prepare, before scanout starts; keep enable as the backlight boundary handled
+by the DRM panel core.
+
+Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+---
+ .../panel/panel-renesas-r63306-tmd-mdv22.c    | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c b/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
+index 53e1c1b40e683c8e84c828d7b307e03b62b0fa20..1ea88eb6628fb3274802b529f33203806749a347 100644
+--- a/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
++++ b/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
+@@ -46,6 +46,9 @@ static int mdv22_prepare(struct drm_panel *panel)
+ 	ret=mdv22_send(m->dsi,mdv22_init,ARRAY_SIZE(mdv22_init)); if(ret) goto power_off;
+ 	ret=mipi_dsi_dcs_exit_sleep_mode(m->dsi); if(ret) goto power_off; msleep(100);
+ 	ret=mdv22_send(m->dsi,mdv22_post_sleep,ARRAY_SIZE(mdv22_post_sleep)); if(ret) goto power_off; msleep(20);
++	ret=mipi_dsi_dcs_set_display_on(m->dsi); if(ret) goto power_off;
++	dev_info(panel->dev, "MDV22 command sequence complete before video scanout\n");
++	msleep(20);
+ 	return 0;
+ power_off:
+ 	gpiod_set_value_cansleep(m->reset,0);
+@@ -56,7 +59,7 @@ static int mdv22_prepare(struct drm_panel *panel)
+ static int mdv22_unprepare(struct drm_panel *panel)
+ { struct mdv22 *m=to_mdv22(panel); mipi_dsi_dcs_enter_sleep_mode(m->dsi); msleep(80); gpiod_set_value_cansleep(m->reset,0); gpiod_set_value_cansleep(m->power,0); regulator_bulk_disable(2,m->supplies); return 0; }
+ static int mdv22_enable(struct drm_panel *panel)
+-{ struct mdv22 *m=to_mdv22(panel); return mipi_dsi_dcs_set_display_on(m->dsi); }
++{ return 0; }
+ static int mdv22_disable(struct drm_panel *panel)
+ { struct mdv22 *m=to_mdv22(panel); return mipi_dsi_dcs_set_display_off(m->dsi); }
+ static const struct drm_display_mode mdv22_mode = { .clock=69673,.hdisplay=720,.hsync_start=848,.hsync_end=851,.htotal=896,.vdisplay=1280,.vsync_start=1289,.vsync_end=1293,.vtotal=1296,.width_mm=53,.height_mm=95,.type=DRM_MODE_TYPE_DRIVER|DRM_MODE_TYPE_PREFERRED };
+@@ -72,6 +75,9 @@ static int mdv22_probe(struct mipi_dsi_device *dsi)
+ 	if (IS_ERR(m))
+ 		return PTR_ERR(m);
+ 
++	/* The MSM8x60 DSI host and PHY must be active before panel commands. */
++	m->panel.prepare_prev_first = true;
++
+ 	m->dsi = dsi;
+ 	m->supplies[0].supply = "vci";
+ 	m->supplies[1].supply = "vddio";
+-- 
+2.43.0
