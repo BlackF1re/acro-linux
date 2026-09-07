@@ -137,11 +137,10 @@ scm_clock=$(fdtget -t x "$dtb" /firmware/scm clocks |
 	exit 1
 }
 
-# The MSM8x60 V2 host exposes direct byte/pixel/escape inputs.  The source
-# divider is internal to the DSI PHY/host path; describing APQ8064-style src
-# clocks or assigned parents makes the clock core attempt unsupported runtime
-# reparent operations and prevented the physical Hikari from reaching /init.
-expected_names='iface bus core_mmss byte pixel core'
+# Sony's MSM8x60 DSI path explicitly programs and enables the DSI core clock.
+# Model its MMCC DSI_CLK branch as src, while still forbidding the unsupported
+# APQ8064-style assigned-parent setup which previously prevented /init.
+expected_names='iface bus core_mmss src byte pixel core'
 actual_names=$(fdtget -t s "$dtb" /dsi@4700000 clock-names | tr -s ' ' | sed 's/^ //;s/ $//')
 [[ $actual_names == "$expected_names" ]] || {
 	echo "incorrect MSM8x60 DSI clock input list: $actual_names" >&2

@@ -1,0 +1,91 @@
+From: BlackF1re <plevickij57@gmail.com>
+Date: Mon, 7 Sep 2026 12:00:00 +0700
+Subject: [PATCH] drm/msm/dsi: enable the MSM8x60 core clock
+
+Sony's MSM8x60 downstream DSI path programs and enables the DSI core
+clock together with the byte, escape and pixel clocks.  The corresponding
+common-clock branch is DSI_CLK, fed by dsi1_src.  Acquire it through the
+V2 clock initializer, program the calculated source rate and balance it in
+the MSM8x60 enable, unwind and disable paths.
+
+Without this clock the Hikari panel and backlight can be enabled while the
+DSI engine produces no video or interrupts.
+
+Signed-off-by: BlackF1re <plevickij57@gmail.com>
+---
+ drivers/gpu/drm/msm/dsi/dsi_cfg.c  |  1 +
+ drivers/gpu/drm/msm/dsi/dsi_host.c | 20 ++++++++++++++------
+ 2 files changed, 15 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_cfg.c b/drivers/gpu/drm/msm/dsi/dsi_cfg.c
+index ed5aa2b7b..03b3c9a5d 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_cfg.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_cfg.c
+@@ -257,6 +257,7 @@ static const struct msm_dsi_host_cfg_ops msm8x60_dsi_v2_host_ops = {
+ 	.link_clk_set_rate = dsi_link_clk_set_rate_msm8x60,
+ 	.link_clk_enable = dsi_link_clk_enable_msm8x60,
+ 	.link_clk_disable = dsi_link_clk_disable_msm8x60,
++	.clk_init_ver = dsi_clk_init_v2,
+ 	.tx_buf_alloc = dsi_tx_buf_alloc_v2,
+ 	.tx_buf_get = dsi_tx_buf_get_v2,
+ 	.dma_base_get = dsi_dma_base_get_v2,
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
+index 6e5793c28..96f551e67 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -564,10 +564,9 @@ int dsi_link_clk_set_rate_v2(struct msm_dsi_host *msm_host)
+ }
+ 
+ /*
+- * MSM8x60 predates the separate DSI source clock used by APQ8064.  Its
+- * escape clock is fixed to PXO/2 in MMCC and the pixel clock is the shared
+- * MDP pixel clock.  Only the PHY byte clock and MDP pixel clock are
+- * programmable link clocks.
++ * Sony's MSM8x60 downstream DSI path programs and enables the DSI core
++ * clock in addition to the byte, escape and pixel clocks.  In the common
++ * clock model this is the DSI_CLK branch fed by dsi1_src.
+  */
+ int dsi_link_clk_set_rate_msm8x60(struct msm_dsi_host *msm_host)
+ {
+@@ -578,6 +577,11 @@ int dsi_link_clk_set_rate_msm8x60(struct msm_dsi_host *msm_host)
+ 		return dev_err_probe(&msm_host->pdev->dev, ret,
+ 				     "failed to set DSI byte clock rate\n");
+ 
++	ret = clk_set_rate(msm_host->src_clk, msm_host->src_clk_rate);
++	if (ret)
++		return dev_err_probe(&msm_host->pdev->dev, ret,
++				     "failed to set DSI source clock rate\n");
++
+ 	ret = clk_set_rate(msm_host->pixel_clk, msm_host->pixel_clk_rate);
+ 	if (ret)
+ 		return dev_err_probe(&msm_host->pdev->dev, ret,
+@@ -638,12 +642,18 @@ int dsi_link_clk_enable_msm8x60(struct msm_dsi_host *msm_host)
+ 	if (ret)
+ 		goto disable_byte;
+ 
+-	ret = clk_prepare_enable(msm_host->pixel_clk);
++	ret = clk_prepare_enable(msm_host->src_clk);
+ 	if (ret)
+ 		goto disable_esc;
+ 
++	ret = clk_prepare_enable(msm_host->pixel_clk);
++	if (ret)
++		goto disable_src;
++
+ 	return 0;
+ 
++disable_src:
++	clk_disable_unprepare(msm_host->src_clk);
+ disable_esc:
+ 	clk_disable_unprepare(msm_host->esc_clk);
+ disable_byte:
+@@ -670,6 +680,7 @@ void dsi_link_clk_disable_v2(struct msm_dsi_host *msm_host)
+ void dsi_link_clk_disable_msm8x60(struct msm_dsi_host *msm_host)
+ {
+ 	clk_disable_unprepare(msm_host->pixel_clk);
++	clk_disable_unprepare(msm_host->src_clk);
+ 	clk_disable_unprepare(msm_host->esc_clk);
+ 	clk_disable_unprepare(msm_host->byte_clk);
+ }
+-- 
+2.43.0

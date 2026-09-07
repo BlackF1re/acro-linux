@@ -19,12 +19,14 @@ def main() -> int:
     root = Path(sys.argv[1])
     repo_root = Path(__file__).resolve().parents[1]
     host_path = root / "drivers/gpu/drm/msm/dsi/dsi_host.c"
+    cfg_path = root / "drivers/gpu/drm/msm/dsi/dsi_cfg.c"
     panel_path = root / "drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c"
     iommu_path = root / "drivers/iommu/msm_iommu.c"
     iommu_header_path = root / "drivers/iommu/msm_iommu.h"
     crtc_path = root / "drivers/gpu/drm/msm/disp/mdp4/mdp4_crtc.c"
     dts_path = repo_root / "kernel/dts/qcom-msm8260-sony-hikari.dts"
     host = host_path.read_text()
+    cfg = cfg_path.read_text()
     panel = panel_path.read_text()
     iommu = iommu_path.read_text()
     iommu_header = iommu_header_path.read_text()
@@ -36,6 +38,26 @@ def main() -> int:
     require(host, "DSI_CMD_CFG0_RGB_SWAP(msm_host->rgb_swap)", "command RGB swap")
     require(host, '"sony,hikari-r63306-tmd-mdv22"', "Hikari panel quirk")
     require(host, "msm_host->rgb_swap = SWAP_BGR;", "Hikari BGR order")
+
+    # Sony's MSM8x60 downstream path programs and enables MMCC DSI_CLK.  The
+    # V2 clock initializer obtains that DT input as src_clk; omitting it left
+    # the panel lit but the DSI engine unable to transmit video.
+    require(
+        cfg,
+        ".clk_init_ver = dsi_clk_init_v2,",
+        "MSM8x60 V2 DSI source-clock acquisition",
+    )
+    rate_start = host.index("int dsi_link_clk_set_rate_msm8x60(")
+    enable_start = host.index("int dsi_link_clk_enable_msm8x60(", rate_start)
+    disable_start = host.index("void dsi_link_clk_disable_6g(", enable_start)
+    msm_disable_start = host.index("void dsi_link_clk_disable_msm8x60(", disable_start)
+    rate = host[rate_start:enable_start]
+    enable = host[enable_start:disable_start]
+    disable = host[msm_disable_start:]
+    require(rate, "clk_set_rate(msm_host->src_clk, msm_host->src_clk_rate)", "MSM8x60 DSI source rate")
+    require(enable, "clk_prepare_enable(msm_host->src_clk)", "MSM8x60 DSI source enable")
+    require(enable, "clk_disable_unprepare(msm_host->src_clk)", "MSM8x60 DSI source unwind")
+    require(disable, "clk_disable_unprepare(msm_host->src_clk)", "MSM8x60 DSI source disable")
 
     # The Hikari path must keep Sony's exact non-burst sync-event mode. In
     # DRM/MSM this is VIDEO without VIDEO_SYNC_PULSE, plus HSE for HSA/HE.
