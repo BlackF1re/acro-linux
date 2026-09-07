@@ -54,6 +54,21 @@ if not re.search(
 if re.search(r"\{\s*69672960\s*,\s*P_PLL8\s*,\s*1\s*,\s*567\s*,\s*3125\s*\}", text):
     raise SystemExit("unselectable exact-Hz Hikari MDP pixel-clock label returned")
 
+# MDP4 asks for both MDP_CLK and MDP_LUT_CLK.  MSM8x60 has no separate LUT
+# gate, but two provider IDs must still point at two distinct clk_hw objects:
+# qcom_cc_really_probe() registers every populated array entry.  Registering
+# &mdp_clk.clkr twice caused a physical-device NULL dereference in
+# __clk_register() before DRM could probe.
+if re.search(r"\[MDP_LUT_CLK\]\s*=\s*&mdp_clk\.clkr", text):
+    raise SystemExit("MDP_LUT_CLK must not register the MDP core clk_hw twice")
+for pattern, message in (
+    (r"static\s+struct\s+clk_regmap\s+mdp_lut_clk\s*=", "missing distinct MDP LUT CCF object"),
+    (r"\[MDP_LUT_CLK\]\s*=\s*&mdp_lut_clk\b", "MDP_LUT_CLK does not use its distinct CCF object"),
+    (r"\.name\s*=\s*\"mdp_lut_clk\".*?&mdp_clk\.clkr\.hw.*?CLK_SET_RATE_PARENT", "MDP LUT clock does not propagate to the real MDP core clock"),
+):
+    if not re.search(pattern, text, re.S):
+        raise SystemExit(message)
+
 # Exact Sony MSM8x60 clock-8x60.c:
 #   vpe_axi: MAXI_EN2 (0x0020), bit 26, normal consumer-owned branch.
 require(

@@ -1,0 +1,58 @@
+From 38317cc790d4b53562d80423d203f7e4a1afad27 Mon Sep 17 00:00:00 2001
+From: Hikari Patch Materializer <hikari-materializer@localhost>
+Date: Mon, 7 Sep 2026 19:05:12 +0700
+Subject: [PATCH] clk: qcom: model the MSM8x60 MDP LUT clock safely
+
+---
+ drivers/clk/qcom/mmcc-msm8660.c | 28 ++++++++++++++++++++--------
+ 1 file changed, 20 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+index 2c4d26b89..884010145 100644
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -1147,6 +1147,25 @@ static struct clk_branch mdp_clk = {
+ 	},
+ };
+ 
++/*
++ * MSM8x60 has no independently gateable MDP LUT clock.  Give MDP4 a
++ * distinct CCF handle whose prepare/enable and rate propagation reach the
++ * real MDP core clock, without touching the unrelated MSM8960 LUT gate.
++ */
++static const struct clk_ops mdp_lut_clk_ops = { };
++
++static struct clk_regmap mdp_lut_clk = {
++	.hw.init = &(struct clk_init_data) {
++		.name = "mdp_lut_clk",
++		.parent_hws = (const struct clk_hw *[]) {
++			&mdp_clk.clkr.hw,
++		},
++		.num_parents = 1,
++		.ops = &mdp_lut_clk_ops,
++		.flags = CLK_SET_RATE_PARENT,
++	},
++};
++
+ static struct clk_branch mdp_vsync_clk = {
+ 	.halt_reg = 0x01cc,
+ 	.halt_bit = 22,
+@@ -2279,14 +2298,7 @@ static struct clk_regmap *mmcc_msm8660_clks[] = {
+ 	[JPEGD_CLK] = &jpegd_clk.clkr,
+ 	[MDP_SRC] = &mdp_src.clkr,
+ 	[MDP_CLK] = &mdp_clk.clkr,
+-	/*
+-	 * MSM8x60 has no independently gateable MDP LUT clock.  The Sony
+-	 * downstream clock description exposes only the MDP core clock, which
+-	 * also covers LUT accesses.  Keep the binding ID usable for the common
+-	 * MDP4 driver by aliasing it to that clock instead of touching the
+-	 * unrelated MSM8960 LUT gate registers.
+-	 */
+-	[MDP_LUT_CLK] = &mdp_clk.clkr,
++	[MDP_LUT_CLK] = &mdp_lut_clk,
+ 	[MDP_PIXEL_SRC] = &mdp_pixel_src.clkr,
+ 	[MDP_PIXEL_CLK] = &mdp_pixel_clk.clkr,
+ 	[MDP_LCDC_CLK] = &mdp_lcdc_clk.clkr,
+-- 
+2.53.0
+

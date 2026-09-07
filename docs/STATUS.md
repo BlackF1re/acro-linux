@@ -280,3 +280,10 @@ implements the transition and a build guard enforces it. This is the first
 source-exact explanation consistent with backlight plus initialized DRM but
 zero VSYNC. It is implemented and locally testable, but display output remains
 `NOT_VERIFIED` until a later owner-approved physical boot.
+
+The latest physical successor did not reach that PLL check: its fabricated
+MSM8960-style `mdp_lut_clk` gate stayed off and MDP4 rejected the clock enable
+before reading its revision. Exact Sony MSM8x60 clock source has no separate
+LUT gate. Kernel commit `b776ddafcde9` now aliases the LUT clock binding ID to
+the real MDP core clock. The corrected ELF passes all local gates, but display
+scanout and fbcon remain `NOT_VERIFIED` pending a physical run.

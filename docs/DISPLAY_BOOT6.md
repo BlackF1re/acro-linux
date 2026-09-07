@@ -315,6 +315,18 @@ stops the PLL during teardown. See the sanitized
 [diagnosis](../research/device/current/boot/display-dsi-pll-disabled.md).
 Visible scanout remains `NOT_VERIFIED` until the successor is physically run.
 
+## MSM8x60 MDP LUT clock correction
+
+The physical PLL-successor run stopped earlier than the PLL: the supposed
+`mdp_lut_clk` remained off, `mdp4_enable()` returned `-EBUSY`, and no DRM
+device was created. Exact Sony MSM8x60 clock source exposes no separate LUT
+gate for `mdp.0`; the project description had inherited unrelated MSM8960
+registers. Signed kernel commit `b776ddafcde9eba1f5c81b34f54c533605c880ca`
+removes the false branch and aliases the DT binding ID to the refcounted MDP
+core clock. The full diagnosis is in
+[display-mdp-lut-clock-blocker.md](../research/device/current/boot/display-mdp-lut-clock-blocker.md).
+The corrected artifact is locally validated; pixels remain `NOT_VERIFIED`.
+
 ## MDP multi-provider IOMMU deferred-probe correction
 
 The next retained physical log proved that secure MMCC AHB/AXI initialization,

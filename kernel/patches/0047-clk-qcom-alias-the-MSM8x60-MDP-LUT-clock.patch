@@ -1,0 +1,57 @@
+From b776ddafcde9eba1f5c81b34f54c533605c880ca Mon Sep 17 00:00:00 2001
+From: Hikari Patch Materializer <hikari-materializer@localhost>
+Date: Mon, 7 Sep 2026 14:46:05 +0700
+Subject: [PATCH] clk: qcom: alias the MSM8x60 MDP LUT clock
+
+---
+ drivers/clk/qcom/mmcc-msm8660.c | 27 ++++++++-------------------
+ 1 file changed, 8 insertions(+), 19 deletions(-)
+
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+index b80177d51..2c4d26b89 100644
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -1147,24 +1147,6 @@ static struct clk_branch mdp_clk = {
+ 	},
+ };
+ 
+-static struct clk_branch mdp_lut_clk = {
+-	.halt_reg = 0x01e8,
+-	.halt_bit = 13,
+-	.clkr = {
+-		.enable_reg = 0x016c,
+-		.enable_mask = BIT(0),
+-		.hw.init = &(struct clk_init_data){
+-			.parent_hws = (const struct clk_hw*[]){
+-				&mdp_src.clkr.hw
+-			},
+-			.num_parents = 1,
+-			.name = "mdp_lut_clk",
+-			.ops = &clk_branch_ops,
+-			.flags = CLK_SET_RATE_PARENT,
+-		},
+-	},
+-};
+-
+ static struct clk_branch mdp_vsync_clk = {
+ 	.halt_reg = 0x01cc,
+ 	.halt_bit = 22,
+@@ -2297,7 +2279,14 @@ static struct clk_regmap *mmcc_msm8660_clks[] = {
+ 	[JPEGD_CLK] = &jpegd_clk.clkr,
+ 	[MDP_SRC] = &mdp_src.clkr,
+ 	[MDP_CLK] = &mdp_clk.clkr,
+-	[MDP_LUT_CLK] = &mdp_lut_clk.clkr,
++	/*
++	 * MSM8x60 has no independently gateable MDP LUT clock.  The Sony
++	 * downstream clock description exposes only the MDP core clock, which
++	 * also covers LUT accesses.  Keep the binding ID usable for the common
++	 * MDP4 driver by aliasing it to that clock instead of touching the
++	 * unrelated MSM8960 LUT gate registers.
++	 */
++	[MDP_LUT_CLK] = &mdp_clk.clkr,
+ 	[MDP_PIXEL_SRC] = &mdp_pixel_src.clkr,
+ 	[MDP_PIXEL_CLK] = &mdp_pixel_clk.clkr,
+ 	[MDP_LCDC_CLK] = &mdp_lcdc_clk.clkr,
+-- 
+2.53.0
+
