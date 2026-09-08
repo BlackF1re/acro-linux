@@ -54,3 +54,5 @@
 0050-clk-qcom-skip-unreliable-MSM8x60-DSI-halt-poll.patch
 0051-drm-panel-fix-Hikari-MDV22-enable-order.patch
 0052-drm-msm-dsi-use-the-V2-controller-for-command-DMA.patch
+0053-clk-qcom-use-pixel-RCG-ops-for-MSM8x60-DSI.patch
+0054-drm-msm-dsi-tolerate-missed-MSM8x60-command-DMA-IRQ.patch
