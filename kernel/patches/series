@@ -56,3 +56,4 @@
 0052-drm-msm-dsi-use-the-V2-controller-for-command-DMA.patch
 0053-clk-qcom-use-pixel-RCG-ops-for-MSM8x60-DSI.patch
 0054-drm-msm-dsi-tolerate-missed-MSM8x60-command-DMA-IRQ.patch
+0055-drm-msm-dsi-match-Hikari-software-trigger.patch
