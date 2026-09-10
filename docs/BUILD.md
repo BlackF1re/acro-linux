@@ -160,6 +160,28 @@ MDP/DSI interrupts, and no underrun or kernel fault. This is a physical display
 acceptance result, not merely a successful build; the detailed evidence is in
 [display-physical-scanout-success.md](../research/device/current/boot/display-physical-scanout-success.md).
 
+## Display patch-cleanup candidate 0060 (2026-09-11)
+
+Five superseded MDP-IOMMU experiments were retired from the production series
+after physical 0066 proved that Hikari requires contiguous CMA scanout and does
+not use either MDP IOMMU provider. The DRM/MSM, panel and MMCC execution paths
+are unchanged; both unused IOMMU provider nodes are now explicitly disabled.
+
+The clean 60-patch tree materialized and built successfully with the exact
+accepted 0066 kernel configuration. Display, MMCC, USB recovery, ramoops,
+kernel-source, safe-profile, GPU-profile, charging, board-hardware, memory-map
+and Sony ELF gates passed. The boot-only candidate is:
+
+```text
+/home/paul/xperia/build/hikari-artifacts-display-cleanup-0060-20260911/display/hikari-display-fastboot.elf
+size:    13,382,219 bytes
+SHA-256: 0f08c2f67b6e210c0f45ebe9c228d5fff6e1e48bafe8313066be814764b015bf
+```
+
+This candidate is `NOT_VERIFIED` on physical hardware. The accepted 0066
+artifact above remains the rollback control. See
+[display-patch-cleanup.md](../research/device/current/boot/display-patch-cleanup.md).
+
 ## Earlier MDP multi-provider display artifact
 
 The latest physical post-mortem reached secure MMCC setup, MMFAB unhalt, the
@@ -167,8 +189,8 @@ MDP footswitch, and the first MDP IOMMU provider before an Oops in
 `qcom_iommu_of_xlate()`. Signed kernel commit
 `fb48685d80a0bfb4b55b67afc5ec1463d2833d0f` replaces the driver's invalid
 single-client-pointer model with one matching client master per IOMMU
-provider. The correction is preserved as project patch 0041 and guarded by
-both kernel-source validation tools.
+provider. This historical correction is archived with the other retired
+IOMMU experiments; it has no production consumer after MDP was detached.
 
 The historical, physically tested successor artifact was:
 
@@ -219,8 +241,8 @@ recursed through that same client's IOMMU-backed DMA-unmap path.
 Signed kernel commit `96651e282822a6b587b43dc3c4767a1f27581933`
 assigns page-table DMA ownership to an actual IOMMU provider, retains the
 provider for the domain lifetime, and fixes multi-provider context attach,
-detach, unwind and TLB handling. Project patch 0042 and the display source
-gate preserve those invariants.
+detach, unwind and TLB handling. This historical patch is archived for
+research and is no longer enforced by production source gates.
 
 The new locally validated, **not deployed** display artifact is:
 

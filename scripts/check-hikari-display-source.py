@@ -22,21 +22,15 @@ def main() -> int:
     cfg_path = root / "drivers/gpu/drm/msm/dsi/dsi_cfg.c"
     phy_path = root / "drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c"
     panel_path = root / "drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c"
-    iommu_path = root / "drivers/iommu/msm_iommu.c"
-    iommu_header_path = root / "drivers/iommu/msm_iommu.h"
     crtc_path = root / "drivers/gpu/drm/msm/disp/mdp4/mdp4_crtc.c"
     mdp4_kms_path = root / "drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c"
-    mdp4_binding_path = root / "Documentation/devicetree/bindings/display/msm/mdp4.yaml"
     dts_path = repo_root / "kernel/dts/qcom-msm8260-sony-hikari.dts"
     host = host_path.read_text()
     cfg = cfg_path.read_text()
     phy = phy_path.read_text()
     panel = panel_path.read_text()
-    iommu = iommu_path.read_text()
-    iommu_header = iommu_header_path.read_text()
     crtc = crtc_path.read_text()
     mdp4_kms = mdp4_kms_path.read_text()
-    mdp4_binding = mdp4_binding_path.read_text()
     dts = dts_path.read_text()
 
     # Physical Hikari readback proves that every attempted MDP IOMMU context
@@ -54,12 +48,11 @@ def main() -> int:
     require(gem, "dma_alloc_contiguous", "contiguous scanout allocation")
     require(gem, "msm_gem_get_and_pin_phys", "physical scanout address helper")
     require(gem, "if (!priv->kms || !priv->kms->vm)", "no-IOMMU VMA cleanup guard")
-    iommu_binding = re.search(
-        r"^  iommus:\n(?P<body>(?:    .*\n)+)", mdp4_binding, re.M
-    )
-    if not iommu_binding:
-        raise SystemExit("missing MDP4 iommus binding")
-    require(iommu_binding.group("body"), "maxItems: 22", "MSM8x60 MDP MID capacity")
+    for node in ("mdp_port0", "mdp_port1"):
+        match = re.search(rf"\n\s*{node}:\s+iommu@.*?\n\s*}};", dts, re.S)
+        if not match:
+            raise SystemExit(f"missing documented {node} hardware node")
+        require(match.group(0), 'status = "disabled";', f"disabled {node}")
 
     # The physical device reports PRIMARY_INTF_UNDERRUN on every frame when
     # the MSM8x60 fabric remains at a zero vote.  Preserve Sony's exact
@@ -250,129 +243,6 @@ def main() -> int:
         '"failed to get backlight\\n"',
         "MDV22 deferred backlight probe diagnostic",
     )
-
-    # A live Hikari proves that probe-time V2P/PAR detection rejects both MDP
-    # IOMMUs even with their gates enabled. Preserve the working MSM8x60 model:
-    # generic probing remains identity-mapped, while the destructive reset is
-    # deferred until DRM/MSM creates its paging domain and attaches.
-    require(iommu_header, "bool reset_done;", "deferred IOMMU reset state")
-    require(iommu, ".def_domain_type = msm_iommu_def_domain_type,", "IOMMU identity default")
-    require(iommu, "return IOMMU_DOMAIN_IDENTITY;", "IOMMU identity policy")
-    require(
-        iommu,
-        "find_master_for_dev(struct msm_iommu_dev *iommu, struct device *dev)",
-        "provider-local IOMMU master lookup",
-    )
-    require(
-        iommu,
-        "priv->iommu_dev = get_device(iommu->dev);",
-        "IOMMU provider lifetime for page-table DMA",
-    )
-    require(
-        iommu,
-        ".iommu_dev = priv->iommu_dev,",
-        "provider-owned io-pgtable DMA mapping",
-    )
-    if ".iommu_dev = priv->client," in iommu or ".iommu_dev = priv->dev," in iommu:
-        raise SystemExit("io-pgtable DMA ownership regressed to the translated client")
-    require(iommu_header, "struct msm_iommu_dev *iommu;", "master provider pointer")
-    require(iommu_header, "struct list_head domain_node;", "per-master domain link")
-
-    program_start = iommu.index("static void __program_context(")
-    domain_alloc_start = iommu.index(
-        "static struct iommu_domain *msm_iommu_domain_alloc_paging(", program_start
-    )
-    program_context = iommu[program_start:domain_alloc_start]
-    require(
-        program_context,
-        "SET_IRPTNDX(base, ctx, 1);",
-        "MSM8x60 non-secure context-fault route",
-    )
-    if "SET_IRPTNDX(base, ctx, 0);" in program_context:
-        raise SystemExit("MSM8x60 context faults regressed to the secure IRQ")
-    enabled_mmu = program_context.index("SET_M(base, ctx, 1);")
-    completed_context = program_context.index("mb();", enabled_mmu)
-    if completed_context < enabled_mmu:
-        raise SystemExit("MSM8x60 context programming lacks a completion barrier")
-    require(
-        iommu,
-        "msm_iommu_log_context(iommu, master);",
-        "MSM8x60 context and MID-route hardware readback",
-    )
-
-    flush_start = iommu.index("static void __flush_iotlb(void *cookie)")
-    flush_range_start = iommu.index("static void __flush_iotlb_range(", flush_start)
-    flush_all = iommu[flush_start:flush_range_start]
-    flush_walk_start = iommu.index("static void __flush_iotlb_walk(", flush_range_start)
-    flush_range = iommu[flush_range_start:flush_walk_start]
-    for name, body, command in (
-        ("full", flush_all, "SET_CTX_TLBIALL"),
-        ("range", flush_range, "SET_TLBIVA"),
-    ):
-        command_pos = body.index(command)
-        barrier_pos = body.index("mb();", command_pos)
-        clocks_off_pos = body.index("__disable_clocks(iommu);", barrier_pos)
-        if not command_pos < barrier_pos < clocks_off_pos:
-            raise SystemExit(
-                f"MSM8x60 {name} TLB invalidation is not completed before clock gating"
-            )
-
-    attach_start = iommu.index("static int msm_iommu_attach_dev(")
-    identity_start = iommu.index("static int msm_iommu_identity_attach(", attach_start)
-    map_start = iommu.index("static int msm_iommu_map(", identity_start)
-    attach = iommu[attach_start:identity_start]
-    identity_attach = iommu[identity_start:map_start]
-    enabled = attach.index("ret = __enable_clocks(iommu);")
-    deferred = attach.index("if (!iommu->reset_done)")
-    reset = attach.index("msm_iommu_reset(iommu->base, iommu->ncb);", deferred)
-    marked = attach.index("iommu->reset_done = true;", reset)
-    contexts = attach.index("config_mids(iommu, master);", marked)
-    if not enabled < deferred < reset < marked < contexts:
-        raise SystemExit("MSM8x60 IOMMU reset is not deferred until paging attach")
-    require(
-        attach,
-        "master = find_master_for_dev(iommu, dev);",
-        "provider-local IOMMU attach",
-    )
-    if "list_first_entry(&iommu->ctx_list" in attach:
-        raise SystemExit("MSM8x60 IOMMU attach still assumes the first provider master")
-    require(
-        identity_attach,
-        "list_del_init(&master->domain_node);",
-        "detached master domain-list removal",
-    )
-    if "free_io_pgtable_ops" in identity_attach:
-        raise SystemExit("identity attach still frees io-pgtable before DMA detach")
-
-    domain_free_start = iommu.index("static void msm_iommu_domain_free(")
-    domain_config_start = iommu.index("static int msm_iommu_domain_config(", domain_free_start)
-    domain_free = iommu[domain_free_start:domain_config_start]
-    require(domain_free, "free_io_pgtable_ops(priv->iop);", "domain-owned io-pgtable free")
-
-    insert_start = iommu.index("static int insert_iommu_master(")
-    xlate_start = iommu.index("static int qcom_iommu_of_xlate(", insert_start)
-    insert = iommu[insert_start:xlate_start]
-    require(
-        insert,
-        "master = find_master_for_dev(*iommu, dev);",
-        "one IOMMU master per provider",
-    )
-    for forbidden in ("dev_iommu_priv_get(dev)", "dev_iommu_priv_set(dev"):
-        if forbidden in insert:
-            raise SystemExit(
-                f"multi-provider IOMMU xlate still uses single device private state: {forbidden!r}"
-            )
-
-    probe_start = iommu.index("static int msm_iommu_probe(struct platform_device *pdev)")
-    probe = iommu[probe_start:]
-    for forbidden in (
-        "msm_iommu_reset(iommu->base, iommu->ncb);",
-        "SET_V2PPR(iommu->base, 0, 0);",
-        "GET_PAR(iommu->base, 0)",
-        "Invalid PAR value detected",
-    ):
-        if forbidden in probe:
-            raise SystemExit(f"destructive IOMMU probe-time test returned: {forbidden!r}")
 
     # qcom,apq8064-iommu.yaml defines non-secure IRQ first, secure second.
     # Sony devices-iommu.c gives Hikari/MSM8x60 exactly 96/95 and 94/93,

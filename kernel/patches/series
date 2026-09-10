@@ -41,9 +41,6 @@
 0037-arm-dts-qcom-select-Hikari-BQ27520-G1-register-map.patch
 0038-clk-qcom-fix-MSM8x60-TV-halt-status-map.patch
 0039-dt-bindings-iommu-add-MSM8660-compatible.patch
-0040-iommu-msm-enable-clocks-during-hardware-probe.patch
-0041-iommu-msm-track-client-masters-per-provider.patch
-0042-iommu-msm-fix-page-table-DMA-ownership.patch
 0043-drm-msm-mdp4-separate-DSI-video-vblank-from-commit-I.patch
 0044-clk-qcom-select-the-Hikari-rounded-pixel-rate.patch
 0045-drm-msm-dsi-enable-MSM8x60-core-clock.patch
@@ -64,6 +61,4 @@
 0060-drm-msm-dsi-match-Hikari-video-host-timing.patch
 0061-drm-msm-dsi-match-Hikari-PHY-start-order.patch
 0062-drm-msm-mdp4-vote-scanout-memory-bandwidth.patch
-0063-dt-bindings-display-msm-mdp4-allow-MSM8x60-MIDs.patch
-0064-iommu-msm-complete-MSM8x60-register-writes.patch
 0065-drm-msm-support-contiguous-physical-scanout.patch
