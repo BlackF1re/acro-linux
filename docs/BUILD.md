@@ -135,6 +135,31 @@ segment 1: offset 0xb921fa, paddr 0x42c10000, size 0x10dc5f
 segment 2: offset 0xc9fe59, paddr 0x00020000, size 0x01d3e8
 ```
 
+## Physically accepted display artifact 0066 (2026-09-10)
+
+The final no-IOMMU scanout artifact is retained at:
+
+```text
+/home/paul/xperia/build/hikari-artifacts-direct-scanout-0066-20260910/display/hikari-display-fastboot.elf
+size:   13,382,459 bytes
+SHA-256 561917ad4a123b0aa9a65c2d8b00111a5171c480e9b06d5b0395940c1e67f321
+```
+
+Inputs:
+
+```text
+zImage: 12,126,808 bytes, de5d9f37fcfa732c1d5812ea8c181719f7f6535042d3c130162b81864a7d1d32
+DTB:        21,871 bytes, f4ca61e33eb20761e4b4119c98dc477da57d015fa0a1fd277fe4c4abfa7caa2c
+```
+
+The package memory-layout validator, Sony ELF validator, display static gate,
+and materialized-source gate passed. The updated patch also applied cleanly to
+a detached pre-0065 worktree. S1Boot flashed only `boot` partID `0x00000003`.
+The physical device then produced readable native 720x1280 fbcon, advancing
+MDP/DSI interrupts, and no underrun or kernel fault. This is a physical display
+acceptance result, not merely a successful build; the detailed evidence is in
+[display-physical-scanout-success.md](../research/device/current/boot/display-physical-scanout-success.md).
+
 ## Earlier MDP multi-provider display artifact
 
 The latest physical post-mortem reached secure MMCC setup, MMFAB unhalt, the
@@ -342,3 +367,59 @@ Kernel and all three DTBs built. Kernel-source, display, charging,
 board-hardware, USB-regression, safe-profile, GPU-profile, persistent-RAM,
 Sony-ELF, appended-DTB, p3-size, SMEM and decompressor-overlap gates pass.
 This build does not claim physical display success.
+
+## Hikari MSM8x60 command-DMA-timeout successor
+
+The failed physical display run reached the first MDV22 `B0` command, but the
+mainline DSI host aborted after waiting for a command-DMA completion interrupt.
+The controller snapshot was idle and error-free, while `TRIG_DMA` remained
+set.  A register dump from the working Sony/TWRP stack proves that this trigger
+bit also remains set after successful display initialization.  The downstream
+MSM8x60 transmitter waits for the interrupt, logs a timeout if it is absent,
+and nevertheless returns the transmitted length.
+
+Patch 0056 reproduces that behavior only for the MSM8x60 configuration and
+only when the command engine is idle with no FIFO, ACK, timeout, contention or
+lane-0 PHY error.  Other platforms and genuine controller errors retain the
+strict `-ETIMEDOUT` path.  The locally validated, **not deployed** display
+artifact is:
+
+```text
+/home/paul/xperia/build/hikari-artifacts-cmd-dma-0056-20260910/display/hikari-display-fastboot.elf
+size:   13,381,525 bytes
+SHA-256 8ed95e4957dc2e8221c3ca7df3bde0b97f30449c25c5afd2d12c4f73ee7bfe44
+entry:  0x40208000
+```
+
+Its components are:
+
+```text
+zImage:     12,125,888 bytes, 0469bdd25df21d319eafa3c741d4c3705b97dfeabd2813c3d9187b6ad82cf3f1
+DTB:            21,857 bytes, 3a8416259349cf6ed7e10b55df6e3e9613f3fd03c3a91a3e4cd87d32121cf11b
+zImage+DTB: 12,147,745 bytes, c9929866cc1817bd2d674133e9bbc74a0124dfa66d83b1a805726647ee9cf2b2
+initramfs:   1,109,900 bytes, 3228c3a81460b406ba0dba2d55f8c1e2ab83a011cd9d4ca8f200e01f4543d279
+```
+
+Sony ELF segments:
+
+```text
+segment 0: offset 0x001000, paddr 0x40208000, size 0xb95c21
+segment 1: offset 0xb96c21, paddr 0x42c10000, size 0x10ef8c
+segment 2: offset 0xca5bad, paddr 0x00020000, size 0x01d3e8
+```
+
+The artifact was built from materialized kernel commit
+`460c1e3a76c05d4d83162142ce38201a2fa6b665`.  After the patch-mail metadata
+was cleaned up, a fresh 56-patch materialization produced commit
+`0a673b2063ecb8d94b7bd158fa4a3a7a5ff937ca`; both commits have the identical
+source tree `317a097f1e89a02639c860ae8766b3de6bb9959b`.
+
+Kernel and all three DTBs built.  Kernel-source, display, charging,
+board-hardware, USB-regression, diagnostic-survival, safe-profile,
+GPU-profile, persistent-RAM, initramfs-layout, Sony-ELF, appended-DTB, SMEM
+and decompressor-overlap gates pass.  `checkpatch.pl --strict` reports zero
+errors, warnings and checks for patch 0056.  The first build attempt failed
+because WSL inherited a Windows temporary directory; rebuilding with a native
+WSL temporary directory succeeded.  No device was flashed or rebooted.
+Visible pixels and advancing display interrupts remain the required physical
+acceptance test.

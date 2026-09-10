@@ -75,8 +75,27 @@ if "clk_rcg_bypass2_ops" not in dsi_src:
     raise SystemExit("dsi1_src must use parent-aware clk_rcg_bypass2_ops")
 if ".freq_tbl" in dsi_src:
     raise SystemExit("dsi1_src must not use an empty/fixed frequency table")
-if re.search(r"static\s+const\s+struct\s+freq_tbl\s+clk_tbl_dsi", text):
-    raise SystemExit("obsolete empty DSI frequency table returned")
+if re.search(r"static\s+const\s+struct\s+freq_tbl\s+clk_tbl_dsi\s*\[", text):
+    raise SystemExit("obsolete empty DSI core frequency table returned")
+
+# Unlike the core bypass mux, Sony programs the dedicated DSI pixel RCG with
+# the DSI1 PLL and a pure /3 pre-divider.  The M/N counter remains bypassed.
+dsi_pixel_src = rcg("dsi1_pixel_src")
+for pattern, message in (
+    (r"\.freq_tbl\s*=\s*clk_tbl_dsi1_pixel", "DSI pixel RCG lacks its vendor divider table"),
+    (r"\.ops\s*=\s*&clk_rcg_ops", "DSI pixel RCG must use table-driven bypass M/N operations"),
+):
+    if not re.search(pattern, dsi_pixel_src):
+        raise SystemExit(message)
+if "CLK_SET_RATE_PARENT" in dsi_pixel_src:
+    raise SystemExit("DSI pixel RCG must not retune its already configured PLL parent")
+if not re.search(
+    r"clk_tbl_dsi1_pixel\s*\[\]\s*=\s*\{.*?\.freq\s*=\s*69673000.*?"
+    r"\.src\s*=\s*P_DSI1_PLL_DSICLK.*?\.pre_div\s*=\s*3",
+    text,
+    re.S,
+):
+    raise SystemExit("missing Hikari DSI1 PLL /3 pixel-clock entry")
 
 # Sony's MSM8x60 DSI core gate is enabled directly from the vendor driver;
 # it has no status-poll equivalent.  Physical Hikari testing showed that the

@@ -1,0 +1,40 @@
+From: Xperia Hikari mainline project <xperia-hikari@localhost>
+Date: Thu, 10 Sep 2026 13:10:00 +0700
+Subject: [PATCH] clk: qcom: skip unreliable MSM8x60 DSI pixel halt status
+
+The MSM8x60 multimedia debug-bus vector does not reliably report the DSI
+pixel gate state on Hikari.  Physical boot testing shows bit 6 of register
+0x01d0 remains asserted after enabling the gate at 0x0130, causing the common
+clock framework to return -EBUSY and roll the whole DSI link-clock sequence
+back.  Sony's vendor DSI path programs 0x0130 directly and does not poll this
+debug-bus bit.
+
+Keep the real gate operation, but skip only the invalid halt readback.  This
+matches the existing treatment of the adjacent MSM8x60 DSI core clock.
+
+Signed-off-by: Xperia Hikari mainline project <xperia-hikari@localhost>
+---
+ drivers/clk/qcom/mmcc-msm8660.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+index 18404a81483a..a7da7300477c 100644
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -709,6 +709,14 @@ static struct clk_rcg dsi1_pixel_src = {
+ static struct clk_branch dsi1_pixel_clk = {
+ 	.halt_reg = 0x01d0,
+ 	.halt_bit = 6,
++	/*
++	 * Hikari physical boot evidence shows this debug-bus bit remains set
++	 * while the 0x0130 gate is enabled.  Polling it therefore rejects a
++	 * working vendor-defined clock sequence with -EBUSY.  Sony's MSM8x60
++	 * DSI code writes the gate directly without a halt-status readback,
++	 * as is already required for dsi1_clk above.
++	 */
++	.halt_check = BRANCH_HALT_SKIP,
+ 	.clkr = {
+ 		.enable_reg = 0x0130,
+ 		.enable_mask = BIT(0),
+-- 
+2.51.0

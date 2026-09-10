@@ -1,0 +1,52 @@
+From: Paul Levickij <plevickij57@gmail.com>
+Date: Thu, 10 Sep 2026 00:00:00 +0000
+Subject: [PATCH] drm/msm/dsi: match Hikari video host timing
+
+Sony's MDV22 profile uses software triggers for both MDP and command DMA and
+programs T_CLK_POST=4 and T_CLK_PRE=0x1b. The initial MSM8x60 support left
+the MDP trigger disabled and never initialized the shared PHY timing copied
+to the host, producing TRIG_CTRL=0x04 and CLKOUT_TIMING_CTRL=0 instead of the
+working downstream values 0x44 and 0x041b.
+
+Set the fixed, source-verified values only on the MSM8x60 path. Other DSI
+generations retain their existing trigger selection and calculated timing.
+
+Signed-off-by: Paul Levickij <plevickij57@gmail.com>
+---
+ drivers/gpu/drm/msm/dsi/dsi_host.c          | 5 ++++-
+ drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c | 6 ++++++
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -1003,7 +1003,10 @@ static void dsi_ctrl_enable(struct msm_dsi_host *msm_host,
+ 	 */
+ 	if (!cfg_hnd->cfg->quiesce_msm8x60_boot_state)
+ 		data |= DSI_TRIG_CTRL_TE;
+-	data |= DSI_TRIG_CTRL_MDP_TRIGGER(TRIGGER_NONE);
++	if (cfg_hnd->cfg->quiesce_msm8x60_boot_state)
++		data |= DSI_TRIG_CTRL_MDP_TRIGGER(TRIGGER_SW);
++	else
++		data |= DSI_TRIG_CTRL_MDP_TRIGGER(TRIGGER_NONE);
+ 	data |= DSI_TRIG_CTRL_DMA_TRIGGER(TRIGGER_SW);
+ 	data |= DSI_TRIG_CTRL_STREAM(msm_host->channel);
+ 	if ((cfg_hnd->major == MSM_DSI_VER_MAJOR_6G) &&
+diff --git a/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c b/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
+--- a/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
++++ b/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
+@@ -107,6 +107,12 @@ static int dsi_45nm_enable(struct msm_dsi_phy *phy,
+ 	if (!hikari_rate_is_supported(clk_req->bitclk_rate))
+ 		return -EINVAL;
+ 
++	/* Exact MDV22 host clock-lane timing from Sony's Hikari panel data. */
++	phy->timing.shared_timings.clk_post = 0x04;
++	phy->timing.shared_timings.clk_pre = 0x1b;
++	phy->timing.shared_timings.clk_pre_inc_by_2 = false;
++	phy->timing.shared_timings.byte_intf_clk_div_2 = false;
++
+ 	/* Same reset/calibration sequencing as the exact MSM8x60 BSP. */
+ 	writel(1, base + PHY_REG(0x128));
+ 	wmb();
+-- 
+2.51.0

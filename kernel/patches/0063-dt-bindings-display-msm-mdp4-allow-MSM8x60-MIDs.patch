@@ -1,0 +1,28 @@
+From: Paul Levickij <plevickij57@gmail.com>
+Date: Thu, 10 Sep 2026 00:00:00 +0000
+Subject: [PATCH] dt-bindings: display: msm: allow all MSM8x60 MDP MIDs
+
+Sony's MSM8x60 display topology assigns eleven AXI master IDs on each of
+the two MDP IOMMU ports to the common display read domain.  A single IOMMU
+specifier describes one master ID, so an accurate board description needs
+up to 22 entries rather than four.
+
+Raise the MDP4 binding limit to cover that hardware topology.
+
+Signed-off-by: Paul Levickij <plevickij57@gmail.com>
+---
+ Documentation/devicetree/bindings/display/msm/mdp4.yaml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/devicetree/bindings/display/msm/mdp4.yaml b/Documentation/devicetree/bindings/display/msm/mdp4.yaml
+--- a/Documentation/devicetree/bindings/display/msm/mdp4.yaml
++++ b/Documentation/devicetree/bindings/display/msm/mdp4.yaml
+@@ -46,7 +46,7 @@ properties:
+     maxItems: 1
+ 
+   iommus:
+-    maxItems: 4
++    maxItems: 22
+ 
+   interconnects:
+     minItems: 1

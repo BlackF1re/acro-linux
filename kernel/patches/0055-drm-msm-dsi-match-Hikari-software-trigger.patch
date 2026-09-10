@@ -1,0 +1,72 @@
+From: Paul Levickij <plevickij57@gmail.com>
+Date: Tue, 8 Sep 2026 00:00:00 +0000
+Subject: [PATCH] drm/msm/dsi: match Hikari command trigger semantics
+
+Sony's Hikari panel data leaves te_sel clear and selects software triggers
+for both MDP and command DMA.  Do not force the dedicated TE input on the
+MSM8x60 path.  Also flush command-mode and DMA descriptor writes before
+triggering the early V2 command engine, and include the controlling
+registers in timeout diagnostics.
+
+Signed-off-by: Paul Levickij <plevickij57@gmail.com>
+---
+ drivers/gpu/drm/msm/dsi/dsi_host.c | 27 ++++++++++++++++++++++-----
+ 1 file changed, 22 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -995,8 +995,14 @@ static void dsi_ctrl_enable(struct msm_dsi_host *msm_host,
+ 			DSI_CMD_DMA_CTRL_LOW_POWER);
+ 
+ 	data = 0;
+-	/* Always assume dedicated TE pin */
+-	data |= DSI_TRIG_CTRL_TE;
++	/*
++	 * Hikari's MSM8x60 downstream panel data leaves te_sel clear and uses
++	 * software triggers for both MDP and command DMA.  Selecting the
++	 * dedicated TE input here can prevent the V2 command engine from
++	 * consuming even the first panel command.
++	 */
++	if (!cfg_hnd->cfg->quiesce_msm8x60_boot_state)
++		data |= DSI_TRIG_CTRL_TE;
+ 	data |= DSI_TRIG_CTRL_MDP_TRIGGER(TRIGGER_NONE);
+ 	data |= DSI_TRIG_CTRL_DMA_TRIGGER(TRIGGER_SW);
+ 	data |= DSI_TRIG_CTRL_STREAM(msm_host->channel);
+@@ -1595,8 +1601,11 @@ static int dsi_cmd_dma_tx(struct msm_dsi_host *msm_host, int len)
+ 				ret = len;
+ 			} else {
+ 				dev_err(&msm_host->pdev->dev,
+-					"command DMA timeout: base=%#llx len=%d trigger=%#x intr=%#x status=%#x fifo=%#x ack=%#x clk=%#x\n",
+-					dma_base, len, trigger, intr,
++					"command DMA timeout: base=%#llx len=%d ctrl=%#x trig_ctrl=%#x trigger=%#x intr=%#x status=%#x fifo=%#x ack=%#x clk=%#x\n",
++					dma_base, len,
++					dsi_read(msm_host, REG_DSI_CTRL),
++					dsi_read(msm_host, REG_DSI_TRIG_CTRL),
++					trigger, intr,
+ 					dsi_read(msm_host, REG_DSI_STATUS0),
+ 					dsi_read(msm_host, REG_DSI_FIFO_STATUS),
+ 					dsi_read(msm_host, REG_DSI_ACK_ERR_STATUS),
+@@ -2342,6 +2351,9 @@ int msm_dsi_host_xfer_prepare(struct mipi_dsi_host *host,
+ 		msm_host->dma_cmd_ctrl_restore |
+ 		DSI_CTRL_CMD_MODE_EN |
+ 		DSI_CTRL_ENABLE);
++	/* MSM8x60 requires command mode to reach hardware before DMA setup. */
++	wmb();
++	(void)dsi_read(msm_host, REG_DSI_CTRL);
+ 	dsi_intr_ctrl(msm_host, DSI_IRQ_MASK_CMD_DMA_DONE, 1);
+ 
+ 	return 0;
+@@ -2518,6 +2530,10 @@ void msm_dsi_host_cmd_xfer_commit(struct mipi_dsi_host *host, u32 dma_base,
+ 
+ 	dsi_write(msm_host, REG_DSI_DMA_BASE, dma_base);
+ 	dsi_write(msm_host, REG_DSI_DMA_LEN, len);
++
++	/* Order and flush the DMA descriptor registers before triggering V2. */
++	wmb();
++	(void)dsi_read(msm_host, REG_DSI_DMA_LEN);
+ 	dsi_write(msm_host, REG_DSI_TRIG_DMA, 1);
+ 
+ 	/* Make sure trigger happens */
+-- 
+2.51.0

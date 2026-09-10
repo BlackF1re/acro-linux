@@ -1,0 +1,42 @@
+From: Paul Levickij <plevickij57@gmail.com>
+Date: Thu, 10 Sep 2026 00:00:00 +0000
+Subject: [PATCH] ARM: dts: qcom: use unique Hikari DSI1 clock parents
+
+Hikari has only DSI1. Advertising its PHY outputs under both the DSI1 and
+DSI2 input names gives two MMCC mux parents the same clk_hw. CCF then finds
+the DSI2 entry first and programs mux value 1, while Sony's working setup
+and the physical device require the DSI1 value 3.
+
+Remove the aliases for the absent second DSI controller.
+
+Signed-off-by: Paul Levickij <plevickij57@gmail.com>
+---
+ arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts | 12 ++++++++----
+ 1 file changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+--- a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
++++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+@@ -133,12 +133,16 @@
+ 		#clock-cells = <1>;
+ 		#reset-cells = <1>;
+ 		#power-domain-cells = <1>;
+-		/* MSM8x60 GCC exposes PLL8 as the shared MMSS parent. */
++		/*
++		 * MSM8x60 GCC exposes PLL8 as the shared MMSS parent.  Hikari has
++		 * only DSI1 wired here.  Do not alias the absent DSI2 inputs to the
++		 * DSI1 PHY: both names would then resolve to the same clk_hw and CCF
++		 * would select the first matching mux entry (hardware value 1/DSI2)
++		 * instead of value 3/DSI1.
++		 */
+ 		clocks = <&pxo_board>, <&gcc PLL8_VOTE>, <&gcc PLL8_VOTE>,
+-			 <&dsi_phy DSI_PIXEL_PLL_CLK>, <&dsi_phy DSI_BYTE_PLL_CLK>,
+ 			 <&dsi_phy DSI_PIXEL_PLL_CLK>, <&dsi_phy DSI_BYTE_PLL_CLK>;
+-		clock-names = "pxo", "pll3", "pll8_vote", "dsi1pll", "dsi1pllbyte",
+-			      "dsi2pll", "dsi2pllbyte";
++		clock-names = "pxo", "pll3", "pll8_vote", "dsi1pll", "dsi1pllbyte";
+ 		status = "okay";
+ 	};
+ 
+-- 
+2.51.0

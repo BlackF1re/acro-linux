@@ -81,12 +81,13 @@ through 1082.67 seconds prove a stable PID 1 and supervisor for at least
 symlinks, not a missing compiled BusyBox applet. The L6 voltage warning was
 non-blocking for this acceptance test and remains a power-management blocker.
 
-BOOT #6 is a **local-only**, untested display artifact.  It adds source-derived
+BOOT #6 has now reached a physically working display. It adds source-derived
 MSM8x60 MMCC/GDSC/NoC infrastructure, MDP4, the DRM/MSM DSI v2 host, a fixed
 rate 45 nm DSI PHY, the exact R63306/TMD MDV22 panel profile, AS3676
 backlight, fbdev emulation and fbcon while preserving the verified USB and
-ramoops paths.  These are implementation/static-validation states, not
-display acceptance claims.  See [DISPLAY_BOOT6.md](DISPLAY_BOOT6.md).
+ramoops paths. The final 0066 run produced visible native 720x1280 fbcon,
+active MDP/DSI interrupts, and no scanout underrun or kernel fault. See
+[DISPLAY_BOOT6.md](DISPLAY_BOOT6.md).
 
 The latest live diagnosis rules out both a missing GPU and an empty
 framebuffer: MDP4 had a changing dumb framebuffer and does not need Adreno for
@@ -306,3 +307,41 @@ before reading its revision. Exact Sony MSM8x60 clock source has no separate
 LUT gate. Kernel commit `b776ddafcde9` now aliases the LUT clock binding ID to
 the real MDP core clock. The corrected ELF passes all local gates, but display
 scanout and fbcon remain `NOT_VERIFIED` pending a physical run.
+
+## Current display boundary: sticky command-DMA trigger
+
+The exact working KXP/TWRP tree and a live TWRP register dump show that the
+subsequent timeout classifier was wrong: working Hikari leaves DSI
+`TRIG_DMA` equal to `1`, while the local fallback required it to clear. The
+legacy host logs a missing 200 ms completion but always continues with the
+command length. The current patch stack now does so only for MSM8x60 and only
+when the command engine is idle with no FIFO, ACK, timeout, contention, or
+lane-0 PHY error. The long MDV22 ID00/ID01 command sequence is independently
+confirmed correct. A read-only check of the currently running vendor kernel
+also records 12 physical `MIPI_DSI` interrupts and the expected four-lane
+418037760-bit/s configuration. This correction is `IMPLEMENTING`, not
+`VERIFIED`, until a later explicitly authorized boot produces stable visible
+pixels.
+
+## Display accepted on physical Hikari (2026-09-10)
+
+The paragraphs above retain the chronological failure history. They are
+superseded by physical artifact 0066 for current display status.
+
+Readback from both MDP IOMMU context banks proved that the hardware never
+enabled those translations. Earlier DRM runs therefore programmed IOVA
+`0x5000`, which MDP interpreted as a physical address, causing one
+`PRIMARY_INTF_UNDERRUN` per frame and the solid-blue output. The working
+Sony/TWRP configuration also has `CONFIG_MSM_IOMMU` disabled. Patch 0065 now
+uses physically contiguous CMA scanout when no KMS VM exists and guards the
+corresponding GEM VMA teardown path.
+
+The corrected 0066 run placed fbdev at physical `0x7bd00000`. Live DRM state
+showed connected DSI-1, active CRTC0, native 720x1280 mode and an XR24 fbcon
+plane. MDP and DSI interrupt counts advanced; the complete log through at
+least 867 seconds had no underrun, MDP error IRQ, Oops, BUG, unhandled fault,
+or hung task. The owner visually confirmed readable terminal output and
+repeating `HIKARI DISPLAY ALIVE` lines. Native panel output and fbcon are therefore
+`VERIFIED` with `VERIFIED_DEVICE` evidence. Suspend/resume, brightness policy,
+and accelerated GPU remain separate acceptance domains. See
+[the physical scanout record](../research/device/current/boot/display-physical-scanout-success.md).

@@ -111,3 +111,9 @@ items.
 | --- | --- | --- | --- |
 | OpenSEMC Fuji/Hikari charging BSP | Local `opensemc-msm8x60` checkout `c4784b04c08d30f799b8b14b597aeb2124d2e6e1`: `board-semc_fuji.c`, `charger-fuji_hikari.c`, `drivers/power/bq24160_charger.c`, `battery_chargalg.c` | GSBI8 addresses AS3676 `0x40`, BQ27520 `0x55`, BQ24160 `0x6b`; BQ24160 GPIO125 IRQ, BQ27520 GPIO123 SOC interrupt, cradle GPIO126; Hikari voltage/current/thermal/watchdog policy and revision-`0x05` hysteresis. | `HISTORICAL_SOURCE`, exact board-level wiring/policy reference only. |
 | Linus Linux BQ27xxx | Local upstream checkout `786262be6048deab760f68c8acc2c85607165894`: `drivers/power/supply/bq27xxx_battery*.c`, `Documentation/devicetree/bindings/power/supply/bq27xxx.yaml` | Maintained BQ27520 power-supply driver and binding; NVM update handling is separately guarded by `CONFIG_BATTERY_BQ27XXX_DT_UPDATES_NVM`. | `VERIFIED_UPSTREAM`; used read-only for the existing programmed gauge. |
+
+## Exact working TWRP display source (checked 2026-09-10)
+
+| Source | Revision / path | Extracted information | Use and confidence |
+| --- | --- | --- | --- |
+| KXP JB-MR1 TWRP kernel | Local checkout `ade5c5b9b348162546c26e29a0218a1893351212`, branch `jb-mr1`: `drivers/video/msm/mipi_dsi_host.c` and `drivers/video/msm/mipi_r63306_panels/mipi_tmd_video_wxga_mdv22.c` | The working host treats a missing command-DMA completion as nonfatal and returns the packet length; MDV22 DDB ID00 maps to the same long controller tables as ID01. A working-image register dump independently shows sticky `TRIG_DMA=1`. | `HISTORICAL_SOURCE` joined to `VERIFIED_DEVICE` register evidence; used for the scoped MSM8x60 completion-timeout compatibility rule and to retain the long panel sequence. |

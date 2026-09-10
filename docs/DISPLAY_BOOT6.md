@@ -1,8 +1,11 @@
 # Hikari BOOT #6 display artifact
 
-Status: `IMPLEMENTING`, built locally only.  No display component described
-here has been tested on the physical device.  BOOT #5.1 USB CDC ACM, PID 1,
-and ramoops remain the diagnostic and recovery foundation.
+Status: `VERIFIED` on the physical device for native panel output and fbcon.
+The 0066 run produced readable 720x1280 terminal output, active MDP/DSI
+interrupts, and no underrun or kernel fault. BOOT #5.1 USB CDC ACM, PID 1,
+and ramoops remain the diagnostic and recovery foundation. Earlier sections
+below are a chronological record; their then-current `NOT_VERIFIED` statements
+are superseded by the final physical acceptance section.
 
 ## Source and patch provenance
 
@@ -411,3 +414,65 @@ The fresh successor artifact and full validation results are in
 retained log; it has not been physically deployed, so panel transactions,
 pixels, and fbcon remain `NOT_VERIFIED`. Full sanitized evidence is in
 [display-mdp-iommu-pgtable-dma-oops.md](../research/device/current/boot/display-mdp-iommu-pgtable-dma-oops.md).
+
+## TWRP command-DMA completion diagnosis (2026-09-10)
+
+A register dump taken from the known-working `hikari-original-p3` TWRP image
+changes the interpretation of the mainline command timeout. After TWRP has
+successfully initialized the panel and entered video mode, DSI `TRIG_DMA`
+(`+0x08c`) is still `0x1`. The earlier local fallback incorrectly assumed
+that hardware clears this bit after consuming a command and therefore rejected
+the first `0xb0` packet even though mainline reported an idle command engine,
+empty HS FIFOs, and no ACK error.
+
+The exact KXP/TWRP source at commit
+`ade5c5b9b348162546c26e29a0218a1893351212` confirms the behaviour expected by
+that image. `mipi_dsi_cmd_dma_tx()` waits 200 ms and logs a timeout when the
+completion is absent, but unconditionally returns the padded command length
+and allows panel initialization to continue. Its ID mapping also confirms that
+MDV22 DDB revision `01 00 03` deliberately uses the long ID00/ID01 command
+tables already present in the DRM panel driver; replacing them with the short
+wildcard sequence would be a regression.
+
+A fresh read-only ADB check of that running image confirms the complete live
+configuration: the driver selected `mipi_video_tmd_wxga_mdv22_id_00`, reported
+horizontal/vertical periods `896`/`1296`, four lanes, bit clock `418037760`,
+and rounded pixel clock `69666666`; `/proc/interrupts` recorded 12
+`MIPI_DSI` interrupts after boot. This is `VERIFIED_DEVICE` evidence for the
+panel identity, timing family, lane count, and physical IRQ route. It does not
+by itself explain why the mainline transaction lacks the completion status.
+
+Patch 0056 replaces the invalid sticky-trigger test with an MSM8x60-only
+compatibility rule. A missing completion IRQ is nonfatal only if `STATUS0`
+shows an idle command engine and the Sony FIFO mask, ACK status, timeout status,
+contention status, and lane-0 PHY status contain no error. Other DSI variants
+retain the normal fatal timeout. This is `IMPLEMENTING`: visible pixels still
+require a later owner-approved physical boot.
+
+## Physical no-IOMMU scanout acceptance (2026-09-10)
+
+The final blocker was not panel initialization. Physical register readback
+showed that both attempted MDP IOMMU context banks remained disabled, so the
+hardware interpreted framebuffer IOVA `0x5000` as a physical address and
+raised `PRIMARY_INTF_UNDERRUN` on every frame. This matches the working
+Sony/TWRP configuration, which does not enable `CONFIG_MSM_IOMMU` and uses
+contiguous physical scanout.
+
+Patch 0065 detaches MDP from the unusable IOMMU contexts and allocates scanout
+objects from contiguous CMA. Its first run proved a valid physical address at
+`0x7bd00000`, then exposed one remaining null dereference in generic GEM VMA
+cleanup because a no-IOMMU KMS deliberately has no VM. The corrected patch
+guards that cleanup path.
+
+Artifact 0066 was physically booted. The owner explicitly confirmed readable
+terminal output and repeating `HIKARI DISPLAY ALIVE` lines. The live USB
+console recorded connected DSI-1, an active native 720x1280 CRTC, fbcon on an
+XR24 scanout plane, MDP address `0x7bd00000`, and advancing MDP/DSI interrupt
+counters. Complete `dmesg` contained no underrun, MDP error IRQ, Oops, BUG, or
+unhandled fault. The evidence and exact artifact hash are in
+[display-physical-scanout-success.md](../research/device/current/boot/display-physical-scanout-success.md).
+
+Native panel output and fbcon are therefore `VERIFIED` with
+`VERIFIED_DEVICE` evidence. Display suspend/resume, brightness policy, and
+accelerated GPU remain separate acceptance domains. A harmless fbdev flag
+warning is also tracked for cleanup; it does not affect the accepted pixels.

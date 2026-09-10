@@ -89,14 +89,14 @@ for spec in \
 	}
 done
 
-mdp0_phandle=$(fdtget -t x "$dtb" /iommu@7500000 phandle)
-mdp1_phandle=$(fdtget -t x "$dtb" /iommu@7600000 phandle)
-mdp_iommus=$(fdtget -t x "$dtb" /display-controller@5100000 iommus |
-	tr -s ' ' | sed 's/^ //;s/ $//')
-[[ $mdp_iommus == "$mdp0_phandle 0 $mdp0_phandle 2 $mdp1_phandle 0 $mdp1_phandle 2" ]] || {
-	echo "MDP4 IOMMU mapping must be port0 MIDs 0/2 and port1 MIDs 0/2, got '$mdp_iommus'" >&2
+# The physical Hikari leaves every MDP IOMMU context register at zero.  The
+# working Sony/TWRP configuration likewise builds framebuffer support without
+# CONFIG_MSM_IOMMU and scans out contiguous physical memory.  Keep the legacy
+# providers described for later investigation, but do not attach MDP to them.
+if fdtget "$dtb" /display-controller@5100000 iommus >/dev/null 2>&1; then
+	echo 'Hikari MDP must use contiguous physical scanout without an IOMMU' >&2
 	exit 1
-}
+fi
 
 # Sony's MSM8x60 BSP supplies mdp.0 through footswitch FS_MDP (ID 4).  A
 # clock-only MDP description can hang the CPU on its first 0x05100000 read.
@@ -137,11 +137,9 @@ scm_clock=$(fdtget -t x "$dtb" /firmware/scm clocks |
 	exit 1
 }
 
-# Sony's MSM8x60 DSI path explicitly programs and enables the DSI core clock.
-# The live Hikari MMCC register showed source value 0 (PXO), while Sony selects
-# source value 3 (DSI1 PLL).  Require the single source-parent assignment; do
-# not restore the earlier APQ8064 four-clock assignment that prevented /init.
-expected_names='iface bus core_mmss src byte pixel core'
+# Sony's MSM8x60 DSI driver directly programs the dedicated DSI pixel RCG at
+# 0x130/0x134/0x138.  It is distinct from the MDP PIXEL_CC register family.
+expected_names='iface bus core_mmss src byte pixel core sfpb sfpb_a mmfpb_a'
 actual_names=$(fdtget -t s "$dtb" /dsi@4700000 clock-names | tr -s ' ' | sed 's/^ //;s/ $//')
 [[ $actual_names == "$expected_names" ]] || {
 	echo "incorrect MSM8x60 DSI clock input list: $actual_names" >&2
@@ -153,14 +151,40 @@ assigned_clock=$(fdtget -t x "$dtb" /dsi@4700000 assigned-clocks |
 	tr -s ' ' | sed 's/^ //;s/ $//')
 assigned_parent=$(fdtget -t x "$dtb" /dsi@4700000 assigned-clock-parents |
 	tr -s ' ' | sed 's/^ //;s/ $//')
-[[ $assigned_clock == "$mmcc_phandle 38" ]] || {
-	echo "DSI source assignment must resolve to MMCC DSI_SRC (56/0x38), got '$assigned_clock'" >&2
+[[ $assigned_clock == "$mmcc_phandle 38 $mmcc_phandle 69" ]] || {
+	echo "DSI assignments must resolve to DSI_SRC and DSI_PIXEL_SRC (56, 105), got '$assigned_clock'" >&2
 	exit 1
 }
-[[ $assigned_parent == "$dsi_phy_phandle 1" ]] || {
-	echo "DSI source parent must resolve to DSI1 pixel/core PLL output 1, got '$assigned_parent'" >&2
+[[ $assigned_parent == "$dsi_phy_phandle 1 $dsi_phy_phandle 1" ]] || {
+	echo "both DSI RCGs must resolve to DSI1 pixel/core PLL output 1, got '$assigned_parent'" >&2
 	exit 1
 }
+
+dsi_clocks=$(fdtget -t x "$dtb" /dsi@4700000 clocks |
+	tr -s ' ' | sed 's/^ //;s/ $//')
+case " $dsi_clocks " in
+	*" $mmcc_phandle 6a "*) ;;
+	*) echo "DSI pixel input must resolve to DSI_PIXEL_CLK (106/0x6a): $dsi_clocks" >&2; exit 1 ;;
+esac
+
+# The DSI command-DMA master crosses msm_sys_fpb before reaching DDR.  Sony's
+# msm_bus fabric driver enabled both RPM SFPB clocks for this route; without
+# them the DSI block accepts TRIG_DMA but never fetches the command packet.
+case " $dsi_clocks " in
+	*" $rpmcc_phandle 14 $rpmcc_phandle 15 "*) ;;
+	*) echo "DSI must consume RPM_SFPB_CLK (20) and RPM_SFPB_A_CLK (21): $dsi_clocks" >&2; exit 1 ;;
+esac
+# Sony's msm8660_clock_late_init() globally held MMFPB_A at 64 MHz. Keep that
+# vote local to the DSI lifetime in mainline, where no legacy clock init exists.
+case " $dsi_clocks " in
+	*" $rpmcc_phandle 11 "*) ;;
+	*) echo "DSI must consume RPM_MMFPB_A_CLK (17): $dsi_clocks" >&2; exit 1 ;;
+esac
+case " $dsi_clocks " in
+	*" $mmcc_phandle 82 "*)
+		echo "DSI must not consume the unrelated MDP_PIXEL_CLK (130/0x82): $dsi_clocks" >&2
+		exit 1 ;;
+esac
 
 # The panel must drive the physical AS3676 LCD backlight through the DRM panel
 # helper.  A standalone backlight node can probe while leaving the LCD dark.

@@ -1,0 +1,96 @@
+From: Paul Levickij <plevickij57@gmail.com>
+Date: Thu, 10 Sep 2026 00:00:00 +0000
+Subject: [PATCH] drm/msm/mdp4: vote scanout memory bandwidth
+
+MDP4 currently enables its AXI clock but never requests interconnect
+bandwidth.  That leaves the MSM8x60 MMSS and APPSS fabric arbitration
+entries at zero and causes a primary-interface underrun on every frame.
+
+Acquire the optional mdp0-mem path and keep a conservative scanout vote
+active.  The values are the default EBI framebuffer vote from the Sony
+MSM8x60 board support: 407808000 bytes/s average and 1019520000 bytes/s
+peak.  Platforms without an interconnect description continue to work as
+before.
+
+Describe the optional path in the MDP4 binding as well.
+
+Signed-off-by: Paul Levickij <plevickij57@gmail.com>
+---
+ .../devicetree/bindings/display/msm/mdp4.yaml | 10 ++++++++
+ drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c      | 31 +++++++++++++++++++++-
+ 2 files changed, 40 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/devicetree/bindings/display/msm/mdp4.yaml b/Documentation/devicetree/bindings/display/msm/mdp4.yaml
+--- a/Documentation/devicetree/bindings/display/msm/mdp4.yaml
++++ b/Documentation/devicetree/bindings/display/msm/mdp4.yaml
+@@ -46,6 +46,16 @@ properties:
+   iommus:
+     maxItems: 4
+ 
++  interconnects:
++    minItems: 1
++    maxItems: 2
++
++  interconnect-names:
++    minItems: 1
++    items:
++      - const: mdp0-mem
++      - const: mdp1-mem
++
+   ports:
+     $ref: /schemas/graph.yaml#/properties/ports
+     properties:
+diff --git a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
+--- a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
++++ b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
+@@ -5,6 +5,7 @@
+  */
+ 
+ #include <linux/delay.h>
++#include <linux/interconnect.h>
+ 
+ #include <drm/drm_bridge.h>
+ #include <drm/drm_bridge_connector.h>
+@@ -532,11 +533,39 @@ static const struct dev_pm_ops mdp4_pm_ops = {
+ 	.complete = msm_kms_pm_complete,
+ };
+ 
++static int mdp4_setup_interconnect(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct icc_path *path;
++	int ret;
++
++	path = devm_of_icc_get(dev, "mdp0-mem");
++	if (IS_ERR(path))
++		return dev_err_probe(dev, PTR_ERR(path),
++				     "failed to get MDP memory path\n");
++	if (!path)
++		return 0;
++
++	/* Sony's default MSM8x60 EBI framebuffer vote. */
++	ret = icc_set_bw(path, Bps_to_icc(407808000),
++			 Bps_to_icc(1019520000));
++	if (ret)
++		return dev_err_probe(dev, ret,
++				     "failed to vote MDP memory bandwidth\n");
++
++	dev_info(dev, "MDP memory vote: 407808000/1019520000 Bps\n");
++	return 0;
++}
++
+ static int mdp4_probe(struct platform_device *pdev)
+ {
+ 	struct device *dev = &pdev->dev;
+ 	struct mdp4_kms *mdp4_kms;
+-	int irq;
++	int irq, ret;
++
++	ret = mdp4_setup_interconnect(pdev);
++	if (ret)
++		return ret;
+ 
+ 	mdp4_kms = devm_kzalloc(dev, sizeof(*mdp4_kms), GFP_KERNEL);
+ 	if (!mdp4_kms)
+-- 
+2.51.0

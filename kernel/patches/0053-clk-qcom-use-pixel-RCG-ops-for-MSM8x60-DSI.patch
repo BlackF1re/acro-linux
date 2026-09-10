@@ -1,0 +1,30 @@
+From: Xperia Hikari Linux Project <hikari-linux@localhost>
+Date: Tue, 8 Sep 2026 14:25:00 +0700
+Subject: [PATCH] clk: qcom: use pixel RCG ops for MSM8x60 DSI
+
+The generic table-driven RCG operations reject the panel's 69.673 MHz
+pixel rate because dsi1_pixel_src has no discrete frequency table. This
+clock is an M/N pixel divider fed by the DSI PLL, matching the hardware
+model handled by clk_rcg_pixel_ops. Use those operations and permit parent
+rate propagation so the DSI host can derive the pixel clock from its PLL.
+
+Signed-off-by: Xperia Hikari Linux Project <hikari-linux@localhost>
+---
+ drivers/clk/qcom/mmcc-msm8660.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -694,7 +694,8 @@ static struct clk_rcg dsi1_pixel_src = {
+ 			.name = "dsi1_pixel_src",
+ 			.parent_data = mmcc_pxo_dsi2_dsi1,
+ 			.num_parents = ARRAY_SIZE(mmcc_pxo_dsi2_dsi1),
+-			.ops = &clk_rcg_ops,
++			.ops = &clk_rcg_pixel_ops,
++			.flags = CLK_SET_RATE_PARENT,
+ 		},
+ 	},
+ };
+-- 
+2.43.0
