@@ -346,10 +346,12 @@ repeating `HIKARI DISPLAY ALIVE` lines. Native panel output and fbcon are theref
 and accelerated GPU remain separate acceptance domains. See
 [the physical scanout record](../research/device/current/boot/display-physical-scanout-success.md).
 
-The follow-up cleanup candidate reduces the production stack from 65 to 60
+The follow-up cleanup reduces the production stack from 65 to 60
 patches by retiring five MDP IOMMU experiments that have no runtime consumer in
 the accepted physical-CMA design. It leaves the verified DRM/DSI/MMCC and panel
 paths unchanged and explicitly disables both unused MDP IOMMU providers. The
-candidate passes the complete local build and static-gate suite but remains
-`NOT_VERIFIED` on the device; artifact 0066 remains the accepted rollback
-control. See [the cleanup record](../research/device/current/boot/display-patch-cleanup.md).
+artifact passed the complete local build/static-gate suite and a boot-only
+physical test: native 720x1280 fbcon remained visible and the captured boot log
+showed physical scanout with no underrun or kernel fault. It is `VERIFIED` with
+`VERIFIED_DEVICE` evidence; artifact 0066 remains the rollback control. See
+[the cleanup record](../research/device/current/boot/display-patch-cleanup.md).

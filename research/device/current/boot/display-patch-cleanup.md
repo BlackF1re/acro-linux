@@ -1,6 +1,6 @@
-# Hikari display patch cleanup candidate (2026-09-11)
+# Verified Hikari display patch cleanup (2026-09-11)
 
-Implementation state: `IMPLEMENTING`; physical state: `NOT_VERIFIED`.
+Implementation state: `VERIFIED`; physical state: `VERIFIED`.
 
 The physically accepted 0066 source stack contained five MSM IOMMU experiment
 patches that no longer had a runtime consumer after MDP moved to contiguous
@@ -31,7 +31,7 @@ retired IOMMU driver/binding experiments and the explicit provider-node disable
 status. Display, MMCC, USB recovery, ramoops, kernel-source, safe-profile,
 GPU-profile, charging and board-hardware gates passed.
 
-The boot-only candidate is:
+The boot-only artifact is:
 
 ```text
 /home/paul/xperia/build/hikari-artifacts-display-cleanup-0060-20260911/display/hikari-display-fastboot.elf
@@ -43,7 +43,13 @@ Its Sony ELF has exactly three load segments at the accepted addresses
 `0x40208000`, `0x42c10000` and `0x00020000`. The ARM decompressor, appended
 DTB, initramfs, RPM, SMEM and ramoops ranges do not overlap.
 
-The accepted 0066 artifact remains untouched and is the rollback control.
-Physical status remains `NOT_VERIFIED` until the cleanup candidate passes a
-device boot with readable 720x1280 fbcon, active DRM scanout and no display or
-kernel errors.
+The artifact was flashed only to `boot` and physically tested on Hikari. The
+kernel initialized MDP4 v4.1 without an IOMMU, selected contiguous physical
+scanout at `0x7bd00000`, completed the MDV22 panel sequence, registered fb0 and
+switched fbcon to 90x80 characters. The initramfs reported fb0 size 720x1280,
+wrote its display witness and remained alive through at least 94 seconds. The
+captured boot log contained no underrun, MDP error IRQ, Oops, BUG, unhandled
+fault or hung task. The owner visually confirmed that everything works.
+
+The cleanup artifact is therefore `VERIFIED` with `VERIFIED_DEVICE` evidence.
+The accepted 0066 artifact remains untouched as a known-good rollback control.

@@ -160,7 +160,7 @@ MDP/DSI interrupts, and no underrun or kernel fault. This is a physical display
 acceptance result, not merely a successful build; the detailed evidence is in
 [display-physical-scanout-success.md](../research/device/current/boot/display-physical-scanout-success.md).
 
-## Display patch-cleanup candidate 0060 (2026-09-11)
+## Verified display patch cleanup 0060 (2026-09-11)
 
 Five superseded MDP-IOMMU experiments were retired from the production series
 after physical 0066 proved that Hikari requires contiguous CMA scanout and does
@@ -178,8 +178,12 @@ size:    13,382,219 bytes
 SHA-256: 0f08c2f67b6e210c0f45ebe9c228d5fff6e1e48bafe8313066be814764b015bf
 ```
 
-This candidate is `NOT_VERIFIED` on physical hardware. The accepted 0066
-artifact above remains the rollback control. See
+The image was flashed only to `boot` and physically passed native 720x1280
+fbcon acceptance. MDP4 used physical scanout at `0x7bd00000`, the panel command
+sequence completed, the initramfs wrote its display witness, and the captured
+log contained no display underrun or kernel fault. The owner visually confirmed
+working output. This artifact is `VERIFIED`; accepted 0066 remains the rollback
+control. See
 [display-patch-cleanup.md](../research/device/current/boot/display-patch-cleanup.md).
 
 ## Earlier MDP multi-provider display artifact
