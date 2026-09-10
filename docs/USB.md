@@ -133,6 +133,14 @@ interaction, not a safe reason to change the working topology. A later focused
 power-cycle/suspend/runtime-PM/OTG investigation must establish the exact
 cause.
 
+The later display-cleanup boot again proved initial controller, gadget and ACM
+operation, including real shell traffic, but lost the host transport after
+about 138 seconds. There was no kernel crash or USB-controller error, and PID1
+continued beyond 515 seconds. A simultaneous BQ24160 USB-supply fault and later
+input cycling are relevant but not yet proven causal. Reliable enumeration and
+reconnect are therefore a current `REGRESSION`; see
+[the post-mortem](../research/device/current/boot/usb-charging-postmortem-2026-09-11.md).
+
 ## BOOT #5 diagnostic boundary
 
 Before its normal `ALIVE` loop, PID 1 records the contents of

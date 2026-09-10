@@ -94,6 +94,16 @@ a value inside the driver's supported range. It preserves regulator load,
 enable, topology, and the proven USB path. Power-cycle, suspend/resume, and
 positive charging remain physically unverified.
 
+The display-cleanup boot confirms that useful charging is still not working.
+After initially entering USB charging, BQ24160 reported current `STAT=FAULT`
+with fault code 6 (USB supply fault), then repeatedly alternated through no
+valid source, USB ready and charging. Sampled battery voltage declined from
+3.597 V to 3.570 V. In the immediate TWRP control boot on the same cable, ADB
+remained configured, the vendor stack explicitly selected USB at 500 mA, the
+fuel gauge reported +366 mA, and capacity increased from 8% to 9%. Target
+charging is therefore `PARTIAL`, not accepted. See
+[the post-mortem](../research/device/current/boot/usb-charging-postmortem-2026-09-11.md).
+
 ## Required physical acceptance test
 
 After owner-approved deployment, use the already verified USB ACM root shell

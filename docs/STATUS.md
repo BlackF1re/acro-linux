@@ -286,6 +286,16 @@ Cradle/IN and suspend charging remain blocked pending dedicated physical
 evidence. See
 [CHARGING.md](CHARGING.md).
 
+The display-cleanup boot supplied the first long post-display charging and USB
+trace. USB device mode initially enumerated and exchanged shell data, but the
+transport was later lost while the BQ24160 reported a current USB-supply fault
+and repeatedly lost/reacquired its input. The kernel and display remained alive
+through at least 515 seconds. Battery voltage declined during the mainline run;
+the immediate TWRP control instead measured +366 mA and a capacity increase
+from 8% to 9% on the same cable. Target USB reliability is `REGRESSION` and
+charging is `PARTIAL`; the correlation does not yet prove a shared cause. See
+[the USB/charging post-mortem](../research/device/current/boot/usb-charging-postmortem-2026-09-11.md).
+
 ## Current display boundary: DSI PLL start
 
 The latest retained physical run did not crash: DRM registered a native
