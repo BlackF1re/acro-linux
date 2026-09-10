@@ -1,0 +1,104 @@
+From: Hikari Patch Materializer <hikari-materializer@localhost>
+Date: Thu, 10 Sep 2026 17:00:00 +0700
+Subject: [PATCH] drm/msm/dsi: accept idle MSM8x60 command DMA timeout
+
+Sony's MSM8x60 DSI host reports a missing command-DMA completion IRQ
+but continues the panel command sequence.  Device evidence from a working
+Hikari also shows that TRIG_DMA remains asserted after successful
+initialization, so it cannot be used as a completion indication.
+
+Keep strict timeout handling for every other configuration.  On MSM8x60
+only, accept the missing IRQ when the command engine is idle and the
+controller has reported no FIFO, ACK, timeout, contention, or lane-0 PHY
+error.
+
+Signed-off-by: Hikari Patch Materializer <hikari-materializer@localhost>
+---
+ drivers/gpu/drm/msm/dsi/dsi_cfg.c  |  1 +
+ drivers/gpu/drm/msm/dsi/dsi_cfg.h  |  1 +
+ drivers/gpu/drm/msm/dsi/dsi_host.c | 42 +++++++++++++++++++++++++-------------
+ 3 files changed, 30 insertions(+), 14 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_cfg.h b/drivers/gpu/drm/msm/dsi/dsi_cfg.h
+--- a/drivers/gpu/drm/msm/dsi/dsi_cfg.h
++++ b/drivers/gpu/drm/msm/dsi/dsi_cfg.h
+@@ -44,5 +44,6 @@ struct msm_dsi_config {
+ 	u32 io_offset;
+ 	bool quiesce_msm8x60_boot_state;
++	bool cmd_dma_irq_timeout_nonfatal;
+ 	const struct regulator_bulk_data *regulator_data;
+ 	int num_regulators;
+ 	const char * const *bus_clk_names;
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_cfg.c b/drivers/gpu/drm/msm/dsi/dsi_cfg.c
+--- a/drivers/gpu/drm/msm/dsi/dsi_cfg.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_cfg.c
+@@ -22,5 +22,6 @@ static const struct msm_dsi_config msm8x60_dsi_cfg = {
+ 	.io_offset = 0,
+ 	.quiesce_msm8x60_boot_state = true,
++	.cmd_dma_irq_timeout_nonfatal = true,
+ 	.regulator_data = msm8x60_dsi_regulators,
+ 	.num_regulators = ARRAY_SIZE(msm8x60_dsi_regulators),
+ 	.bus_clk_names = dsi_v2_bus_clk_names,
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -1588,29 +1588,43 @@ static int dsi_cmd_dma_tx(struct msm_dsi_host *msm_host, int len)
+ 		if (ret == 0) {
+ 			u32 trigger = dsi_read(msm_host, REG_DSI_TRIG_DMA);
+ 			u32 intr = dsi_read(msm_host, REG_DSI_INTR_CTRL);
++			u32 status = dsi_read(msm_host, REG_DSI_STATUS0);
++			u32 fifo = dsi_read(msm_host, REG_DSI_FIFO_STATUS);
++			u32 ack = dsi_read(msm_host, REG_DSI_ACK_ERR_STATUS);
++			u32 timeout = dsi_read(msm_host, REG_DSI_TIMEOUT_STATUS);
++			u32 dln0 = dsi_read(msm_host, REG_DSI_DLN0_PHY_ERR);
++			u32 clk = dsi_read(msm_host, REG_DSI_CLK_STATUS);
++			bool idle, error_free;
++
++			idle = !(status & (DSI_STATUS0_CMD_MODE_ENGINE_BUSY |
++					  DSI_STATUS0_CMD_MODE_DMA_BUSY |
++					  DSI_STATUS0_DSI_BUSY));
++			error_free = !(status & DSI_STATUS0_INTERLEAVE_OP_CONTENTION) &&
++				     !(fifo & 0x44444489) && !ack &&
++				     !(timeout & 0x111) && !(dln0 & 0x11111);
+ 
+ 			/*
+-			 * MSM8x60 can lose the command-DMA completion interrupt while
+-			 * still completing the transfer.  The hardware clears TRIG_DMA
+-			 * after consuming the buffer, so do not abort panel preparation
+-			 * solely because IRQ 82 was not observed.
++			 * Sony's MSM8x60 host logs a missing completion interrupt but
++			 * continues with the command length.  A working Hikari likewise
++			 * leaves TRIG_DMA asserted, so that register cannot distinguish a
++			 * completed transfer.  Preserve the downstream behaviour only for
++			 * this configuration and only when the engine is idle and reports
++			 * no protocol, FIFO, timeout or lane-0 PHY error.
+ 			 */
+-			if (!(trigger & 1)) {
+-				dev_warn(&msm_host->pdev->dev,
+-					 "command DMA completed without IRQ: base=%#llx len=%d intr=%#x\n",
+-					 dma_base, len, intr);
++			if (cfg_hnd->cfg->cmd_dma_irq_timeout_nonfatal && idle &&
++			    error_free) {
++				dev_warn_once(&msm_host->pdev->dev,
++					      "command DMA completion IRQ missing; continuing on idle MSM8x60 engine (base=%#llx len=%d trigger=%#x intr=%#x fifo=%#x clk=%#x)\n",
++					      dma_base, len, trigger, intr, fifo, clk);
+ 				ret = len;
+ 			} else {
+ 				dev_err(&msm_host->pdev->dev,
+-					"command DMA timeout: base=%#llx len=%d ctrl=%#x trig_ctrl=%#x trigger=%#x intr=%#x status=%#x fifo=%#x ack=%#x clk=%#x\n",
++					"command DMA timeout: base=%#llx len=%d ctrl=%#x trig_ctrl=%#x trigger=%#x intr=%#x status=%#x fifo=%#x ack=%#x timeout=%#x dln0=%#x clk=%#x\n",
+ 					dma_base, len,
+ 					dsi_read(msm_host, REG_DSI_CTRL),
+ 					dsi_read(msm_host, REG_DSI_TRIG_CTRL),
+-					trigger, intr,
+-					dsi_read(msm_host, REG_DSI_STATUS0),
+-					dsi_read(msm_host, REG_DSI_FIFO_STATUS),
+-					dsi_read(msm_host, REG_DSI_ACK_ERR_STATUS),
+-					dsi_read(msm_host, REG_DSI_CLK_STATUS));
++					trigger, intr, status, fifo, ack, timeout, dln0,
++					clk);
+ 				ret = -ETIMEDOUT;
+ 			}
+ 		}
+-- 
+2.53.0

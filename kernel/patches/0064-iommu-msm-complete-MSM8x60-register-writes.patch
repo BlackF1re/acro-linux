@@ -1,0 +1,122 @@
+From: Paul Levickij <plevickij57@gmail.com>
+Date: Thu, 10 Sep 2026 00:00:00 +0000
+Subject: [PATCH] iommu/msm: complete MSM8x60 register writes
+
+The MSM8x60 IOMMU clocks are gated immediately after context programming
+and TLB invalidation.  Ensure those MMIO writes complete first, matching the
+barriers used by the working Sony implementation.  Without this ordering a
+display scanout can reach MDP before its translation context or invalidation
+has reached the IOMMU.
+
+Route context faults to the non-secure interrupt handled by Linux as Sony's
+MSM8x60 driver does.  The old secure route hid translation faults from the
+registered IRQ.  Read back the programmed context and MID routes once during
+attach so bring-up logs prove what the hardware retained before its clocks
+are disabled.
+
+Signed-off-by: Paul Levickij <plevickij57@gmail.com>
+---
+ drivers/iommu/msm_iommu.c | 33 +++++++++++++++++++++++++++++++--
+ 1 file changed, 31 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/iommu/msm_iommu.c b/drivers/iommu/msm_iommu.c
+--- a/drivers/iommu/msm_iommu.c
++++ b/drivers/iommu/msm_iommu.c
+@@ -115,6 +115,7 @@ static void msm_iommu_reset(void __iomem *base, int ncb)
+ 		SET_TLBLKCR(base, ctx, 0);
+ 		SET_CONTEXTIDR(base, ctx, 0);
+ 	}
++	mb();
+ }
+ 
+ static void __flush_iotlb(void *cookie)
+@@ -131,6 +132,7 @@ static void __flush_iotlb(void *cookie)
+ 			goto fail;
+ 
+ 		SET_CTX_TLBIALL(iommu->base, master->num, 0);
++		mb();
+ 
+ 		__disable_clocks(iommu);
+ 	}
+@@ -160,6 +162,7 @@ static void __flush_iotlb_range(unsigned long iova, size_t size,
+ 						    master->num);
+ 			SET_TLBIVA(iommu->base, master->num, addr);
+ 		}
++		mb();
+ 
+ 		__disable_clocks(iommu);
+ 	}
+@@ -253,6 +256,7 @@ static void __reset_context(void __iomem *base, int ctx)
+ 	SET_TLBFLPTER(base, ctx, 0);
+ 	SET_TLBSLPTER(base, ctx, 0);
+ 	SET_TLBLKCR(base, ctx, 0);
++	mb();
+ }
+ 
+ static void __program_context(void __iomem *base, int ctx,
+@@ -282,8 +286,8 @@ static void __program_context(void __iomem *base, int ctx,
+ 	/* Invalidate the TLB for this context */
+ 	SET_CTX_TLBIALL(base, ctx, 0);
+ 
+-	/* Set interrupt number to "secure" interrupt */
+-	SET_IRPTNDX(base, ctx, 0);
++	/* Route page faults to the non-secure interrupt handled by Linux. */
++	SET_IRPTNDX(base, ctx, 1);
+ 
+ 	/* Enable context fault interrupt */
+ 	SET_CFEIE(base, ctx, 1);
+@@ -301,6 +305,28 @@ static void __program_context(void __iomem *base, int ctx,
+ 
+ 	/* Enable the MMU */
+ 	SET_M(base, ctx, 1);
++	mb();
++}
++
++static void msm_iommu_log_context(struct msm_iommu_dev *iommu,
++				  struct msm_iommu_ctx_dev *master)
++{
++	u32 bad_mids = 0;
++	int i;
++
++	/* Read back every M2V route while the provider clocks are still on. */
++	for (i = 0; i < master->num_mids; i++)
++		if (GET_CBNDX(iommu->base, master->mids[i]) != master->num ||
++		    GET_NSCFG(iommu->base, master->mids[i]) != 3)
++			bad_mids |= BIT(i);
++
++	dev_info(iommu->dev,
++		 "context %d: TTBR0=%08x TTBCR=%08x SCTLR=%08x IRPTNDX=%u mids=%d bad=%08x\n",
++		 master->num, GET_TTBR0(iommu->base, master->num),
++		 GET_TTBCR(iommu->base, master->num),
++		 GET_SCTLR(iommu->base, master->num),
++		 GET_IRPTNDX(iommu->base, master->num),
++		 master->num_mids, bad_mids);
+ }
+ 
+ static struct iommu_domain *msm_iommu_domain_alloc_paging(struct device *dev)
+@@ -480,6 +506,7 @@ static int msm_iommu_attach_dev(struct iommu_domain *domain, struct device *dev,
+ 			}
+ 			config_mids(iommu, master);
+ 			__program_context(iommu->base, master->num, priv);
++			msm_iommu_log_context(iommu, master);
+ 			__disable_clocks(iommu);
+ 			list_add_tail(&master->domain_node, &priv->list_attached);
+ 		}
+@@ -629,6 +656,7 @@ static phys_addr_t msm_iommu_iova_to_phys(struct iommu_domain *domain,
+ 	/* Invalidate context TLB */
+ 	SET_CTX_TLBIALL(iommu->base, master->num, 0);
+ 	SET_V2PPR(iommu->base, master->num, va & V2Pxx_VA);
++	mb();
+ 
+ 	par = GET_PAR(iommu->base, master->num);
+ 
+@@ -764,6 +792,7 @@ irqreturn_t msm_iommu_fault_handler(int irq, void *dev_id)
+ 			SET_FSR(iommu->base, i, 0x4000000F);
+ 		}
+ 	}
++	mb();
+ 	__disable_clocks(iommu);
+ fail:
+ 	spin_unlock(&msm_iommu_lock);
+-- 
+2.51.0

@@ -69,9 +69,16 @@ for rel in "${patches[@]}"; do
   fi
 
   if ! git -C "$out" am "${am_args[@]}" "$patch"; then
-    echo "failed while applying $rel" >&2
-    echo "inspect $out, then run: git -C '$out' am --abort" >&2
-    exit 4
+    # Some project-exported patches intentionally lack a usable preimage blob
+    # in their Index line.  In that case --3way cannot synthesize an ancestor,
+    # even though the textual diff applies exactly to the pinned predecessor.
+    # Retry without --3way; git-am still preserves the original mail author.
+    git -C "$out" am --abort >/dev/null 2>&1 || true
+    if ! git -C "$out" am --keep-cr --committer-date-is-author-date "$patch"; then
+      echo "failed while applying $rel" >&2
+      echo "inspect $out, then run: git -C '$out' am --abort" >&2
+      exit 4
+    fi
   fi
 done
 

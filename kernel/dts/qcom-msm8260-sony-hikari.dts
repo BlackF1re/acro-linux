@@ -134,12 +134,16 @@
 		#clock-cells = <1>;
 		#reset-cells = <1>;
 		#power-domain-cells = <1>;
-		/* MSM8x60 GCC exposes PLL8 as the shared MMSS parent. */
+		/*
+		 * MSM8x60 GCC exposes PLL8 as the shared MMSS parent.  Hikari has
+		 * only DSI1 wired here.  Do not alias the absent DSI2 inputs to the
+		 * DSI1 PHY: both names would then resolve to the same clk_hw and CCF
+		 * would select the first matching mux entry (hardware value 1/DSI2)
+		 * instead of value 3/DSI1.
+		 */
 		clocks = <&pxo_board>, <&gcc PLL8_VOTE>, <&gcc PLL8_VOTE>,
-			 <&dsi_phy DSI_PIXEL_PLL_CLK>, <&dsi_phy DSI_BYTE_PLL_CLK>,
 			 <&dsi_phy DSI_PIXEL_PLL_CLK>, <&dsi_phy DSI_BYTE_PLL_CLK>;
-		clock-names = "pxo", "pll3", "pll8_vote", "dsi1pll", "dsi1pllbyte",
-			      "dsi2pll", "dsi2pllbyte";
+		clock-names = "pxo", "pll3", "pll8_vote", "dsi1pll", "dsi1pllbyte";
 		status = "okay";
 	};
 
@@ -226,8 +230,15 @@
 		clock-names = "core_clk", "iface_clk", "bus_clk", "lut_clk",
 			      "hdmi_clk", "tv_clk";
 		power-domains = <&mmcc MDP_GDSC>;
-		iommus = <&mdp_port0 0>, <&mdp_port0 2>,
-			 <&mdp_port1 0>, <&mdp_port1 2>;
+		/*
+		 * The working Sony/TWRP Hikari configuration leaves MSM_IOMMU
+		 * disabled and scans out physically contiguous framebuffer memory.
+		 * Keep MDP detached until the MSM8x60 IOMMU register interface is
+		 * understood: on this device every context/MID write reads back zero.
+		 */
+		interconnects = <&mmfab MMFAB_MAS_MDP_PORT0
+				 &afab AFAB_SLV_EBI_CH0>;
+		interconnect-names = "mdp0-mem";
 		/*
 		 * The Sony MSM8x60 BSP powers mdp.0 through footswitch FS_MDP (4).
 		 * MMCC's MDP_GDSC is its genpd representation; the platform core
@@ -268,12 +279,16 @@
 		clocks = <&mmcc DSI_M_AHB_CLK>, <&mmcc DSI_S_AHB_CLK>,
 			 <&mmcc AMP_AHB_CLK>, <&mmcc DSI_CLK>,
 			 <&mmcc DSI1_BYTE_CLK>,
-			 <&mmcc MDP_PIXEL_CLK>,
-			 <&mmcc DSI1_ESC_CLK>;
-		clock-names = "iface", "bus", "core_mmss", "src", "byte", "pixel", "core";
-		/* Sony's MSM8x60 DSI core mux selects DSI1 PLL with source value 3. */
-		assigned-clocks = <&mmcc DSI_SRC>;
-		assigned-clock-parents = <&dsi_phy DSI_PIXEL_PLL_CLK>;
+			 <&mmcc DSI_PIXEL_CLK>,
+			 <&mmcc DSI1_ESC_CLK>,
+			 <&rpmcc RPM_SFPB_CLK>, <&rpmcc RPM_SFPB_A_CLK>,
+			 <&rpmcc RPM_MMFPB_A_CLK>;
+		clock-names = "iface", "bus", "core_mmss", "src", "byte", "pixel", "core",
+			      "sfpb", "sfpb_a", "mmfpb_a";
+		/* Both dedicated DSI RCGs select DSI1 PLL with source value 3. */
+		assigned-clocks = <&mmcc DSI_SRC>, <&mmcc DSI_PIXEL_SRC>;
+		assigned-clock-parents = <&dsi_phy DSI_PIXEL_PLL_CLK>,
+					 <&dsi_phy DSI_PIXEL_PLL_CLK>;
 		phys = <&dsi_phy>;
 		phy-names = "dsi";
 		syscon-sfpb = <&mmss_sfpb>;

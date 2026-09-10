@@ -57,3 +57,13 @@
 0053-clk-qcom-use-pixel-RCG-ops-for-MSM8x60-DSI.patch
 0054-drm-msm-dsi-tolerate-missed-MSM8x60-command-DMA-IRQ.patch
 0055-drm-msm-dsi-match-Hikari-software-trigger.patch
+0056-drm-msm-dsi-accept-idle-MSM8x60-command-DMA-timeout.patch
+0057-clk-qcom-route-MSM8x60-DSI-through-DSI-pixel-RCG.patch
+0058-clk-qcom-skip-unreliable-MSM8x60-DSI-pixel-halt.patch
+0059-arm-dts-qcom-use-unique-Hikari-DSI1-clock-parents.patch
+0060-drm-msm-dsi-match-Hikari-video-host-timing.patch
+0061-drm-msm-dsi-match-Hikari-PHY-start-order.patch
+0062-drm-msm-mdp4-vote-scanout-memory-bandwidth.patch
+0063-dt-bindings-display-msm-mdp4-allow-MSM8x60-MIDs.patch
+0064-iommu-msm-complete-MSM8x60-register-writes.patch
+0065-drm-msm-support-contiguous-physical-scanout.patch

@@ -20,18 +20,64 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parents[1]
     host_path = root / "drivers/gpu/drm/msm/dsi/dsi_host.c"
     cfg_path = root / "drivers/gpu/drm/msm/dsi/dsi_cfg.c"
+    phy_path = root / "drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c"
     panel_path = root / "drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c"
     iommu_path = root / "drivers/iommu/msm_iommu.c"
     iommu_header_path = root / "drivers/iommu/msm_iommu.h"
     crtc_path = root / "drivers/gpu/drm/msm/disp/mdp4/mdp4_crtc.c"
+    mdp4_kms_path = root / "drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c"
+    mdp4_binding_path = root / "Documentation/devicetree/bindings/display/msm/mdp4.yaml"
     dts_path = repo_root / "kernel/dts/qcom-msm8260-sony-hikari.dts"
     host = host_path.read_text()
     cfg = cfg_path.read_text()
+    phy = phy_path.read_text()
     panel = panel_path.read_text()
     iommu = iommu_path.read_text()
     iommu_header = iommu_header_path.read_text()
     crtc = crtc_path.read_text()
+    mdp4_kms = mdp4_kms_path.read_text()
+    mdp4_binding = mdp4_binding_path.read_text()
     dts = dts_path.read_text()
+
+    # Physical Hikari readback proves that every attempted MDP IOMMU context
+    # write remains zero, while its working Sony/TWRP kernel has MSM_IOMMU
+    # disabled.  MDP must therefore receive contiguous physical addresses.
+    if re.search(r"\biommus\s*=", dts):
+        raise SystemExit("Hikari MDP must remain detached from the MSM IOMMU")
+    require(
+        mdp4_kms,
+        "using contiguous physical scanout without an IOMMU",
+        "MDP4 no-IOMMU fallback",
+    )
+    gem_path = root / "drivers/gpu/drm/msm/msm_gem.c"
+    gem = gem_path.read_text()
+    require(gem, "dma_alloc_contiguous", "contiguous scanout allocation")
+    require(gem, "msm_gem_get_and_pin_phys", "physical scanout address helper")
+    require(gem, "if (!priv->kms || !priv->kms->vm)", "no-IOMMU VMA cleanup guard")
+    iommu_binding = re.search(
+        r"^  iommus:\n(?P<body>(?:    .*\n)+)", mdp4_binding, re.M
+    )
+    if not iommu_binding:
+        raise SystemExit("missing MDP4 iommus binding")
+    require(iommu_binding.group("body"), "maxItems: 22", "MSM8x60 MDP MID capacity")
+
+    # The physical device reports PRIMARY_INTF_UNDERRUN on every frame when
+    # the MSM8x60 fabric remains at a zero vote.  Preserve Sony's exact
+    # framebuffer path and conservative default EBI bandwidth request.
+    require(
+        dts,
+        "interconnects = <&mmfab MMFAB_MAS_MDP_PORT0\n"
+        "\t\t\t\t &afab AFAB_SLV_EBI_CH0>;",
+        "Hikari MDP-to-EBI interconnect path",
+    )
+    require(dts, 'interconnect-names = "mdp0-mem";', "Hikari MDP ICC name")
+    require(mdp4_kms, 'devm_of_icc_get(dev, "mdp0-mem")', "MDP4 memory path lookup")
+    require(
+        mdp4_kms,
+        "icc_set_bw(path, Bps_to_icc(407808000),\n"
+        "\t\t\t Bps_to_icc(1019520000))",
+        "Sony MSM8x60 framebuffer bandwidth vote",
+    )
 
     # The MSM8x60 DSI core branch writes MMCC 0x004c bit 0 correctly, but its
     # 0x01d0/bit-2 halt readback is false on physical Hikari.  The historical
@@ -40,6 +86,14 @@ def main() -> int:
     # unreliable transition poll rather than failing host power-on with -EBUSY.
     mmcc_path = root / "drivers/clk/qcom/mmcc-msm8660.c"
     mmcc = mmcc_path.read_text()
+
+    # The board has only DSI1.  Supplying its PHY output under both DSI1 and
+    # DSI2 clock names makes the two MMCC parent entries share one clk_hw;
+    # assigned-clock-parents then resolves the first entry and writes mux
+    # value 1 (DSI2), while Sony and the physical Hikari require value 3.
+    require(dts, '"dsi1pll", "dsi1pllbyte";', "unique Hikari DSI1 MMCC parents")
+    if '"dsi2pll"' in dts or '"dsi2pllbyte"' in dts:
+        raise SystemExit("Hikari must not alias absent DSI2 MMCC inputs to DSI1")
     dsi_branch = re.search(
         r"static\s+struct\s+clk_branch\s+dsi1_clk\s*=\s*\{(.*?)\n\};",
         mmcc,
@@ -73,6 +127,50 @@ def main() -> int:
         ".clk_init_ver = dsi_clk_init_v2,",
         "MSM8x60 V2 DSI source-clock acquisition",
     )
+    require(
+        host,
+        "data |= DSI_TRIG_CTRL_MDP_TRIGGER(TRIGGER_SW);",
+        "Hikari software MDP trigger",
+    )
+    require(
+        phy,
+        "phy->timing.shared_timings.clk_post = 0x04;",
+        "Hikari MDV22 T_CLK_POST",
+    )
+    require(
+        phy,
+        "phy->timing.shared_timings.clk_pre = 0x1b;",
+        "Hikari MDV22 T_CLK_PRE",
+    )
+    require(
+        host,
+        "!cfg_hnd->cfg->quiesce_msm8x60_boot_state) {",
+        "Hikari clock-lane force suppression",
+    )
+    analog_pre = phy.index("writel(0x050, base + PHY_REG(0x214));")
+    pll_table = phy.index(
+        "write_table(base, PHY_REG(0x204), &hikari_pll[1]",
+        analog_pre,
+    )
+    if analog_pre > pll_table:
+        raise SystemExit("Hikari PLL_CTRL_5 pre-enable occurs after the operational PLL table")
+    require(
+        cfg,
+        ".cmd_dma_irq_timeout_nonfatal = true,",
+        "MSM8x60 nonfatal command-DMA completion timeout",
+    )
+    require(
+        host,
+        "cfg_hnd->cfg->cmd_dma_irq_timeout_nonfatal && idle &&",
+        "MSM8x60-scoped command-DMA timeout handling",
+    )
+    require(
+        host,
+        "!(fifo & 0x44444489) && !ack",
+        "Sony DSI FIFO and ACK error gate",
+    )
+    if "hardware clears TRIG_DMA" in host or "if (!(trigger & 1))" in host:
+        raise SystemExit("command-DMA completion still depends on sticky TRIG_DMA")
     rate_start = host.index("int dsi_link_clk_set_rate_msm8x60(")
     enable_start = host.index("int dsi_link_clk_enable_msm8x60(", rate_start)
     disable_start = host.index("void dsi_link_clk_disable_6g(", enable_start)
@@ -124,8 +222,13 @@ def main() -> int:
         "mipi_dsi_dcs_set_display_on(m->dsi)",
         "MDV22 pre-scanout Display On command",
     )
+    display_on = prepare.index("mipi_dsi_dcs_set_display_on(m->dsi)")
+    if "msleep(" in prepare[display_on:]:
+        raise SystemExit("MDV22 has a non-Sony delay after Display On")
     if "mipi_dsi_dcs_set_display_on" in enable:
         raise SystemExit("MDV22 Display On regressed to the post-scanout enable callback")
+    if "mipi_dsi_dcs_set_display_off" in panel:
+        raise SystemExit("MDV22 added a Display Off command absent from Sony's exact off table")
 
     off_sequence = (
         "mipi_dsi_dcs_enter_sleep_mode(m->dsi);\n"
@@ -174,6 +277,45 @@ def main() -> int:
         raise SystemExit("io-pgtable DMA ownership regressed to the translated client")
     require(iommu_header, "struct msm_iommu_dev *iommu;", "master provider pointer")
     require(iommu_header, "struct list_head domain_node;", "per-master domain link")
+
+    program_start = iommu.index("static void __program_context(")
+    domain_alloc_start = iommu.index(
+        "static struct iommu_domain *msm_iommu_domain_alloc_paging(", program_start
+    )
+    program_context = iommu[program_start:domain_alloc_start]
+    require(
+        program_context,
+        "SET_IRPTNDX(base, ctx, 1);",
+        "MSM8x60 non-secure context-fault route",
+    )
+    if "SET_IRPTNDX(base, ctx, 0);" in program_context:
+        raise SystemExit("MSM8x60 context faults regressed to the secure IRQ")
+    enabled_mmu = program_context.index("SET_M(base, ctx, 1);")
+    completed_context = program_context.index("mb();", enabled_mmu)
+    if completed_context < enabled_mmu:
+        raise SystemExit("MSM8x60 context programming lacks a completion barrier")
+    require(
+        iommu,
+        "msm_iommu_log_context(iommu, master);",
+        "MSM8x60 context and MID-route hardware readback",
+    )
+
+    flush_start = iommu.index("static void __flush_iotlb(void *cookie)")
+    flush_range_start = iommu.index("static void __flush_iotlb_range(", flush_start)
+    flush_all = iommu[flush_start:flush_range_start]
+    flush_walk_start = iommu.index("static void __flush_iotlb_walk(", flush_range_start)
+    flush_range = iommu[flush_range_start:flush_walk_start]
+    for name, body, command in (
+        ("full", flush_all, "SET_CTX_TLBIALL"),
+        ("range", flush_range, "SET_TLBIVA"),
+    ):
+        command_pos = body.index(command)
+        barrier_pos = body.index("mb();", command_pos)
+        clocks_off_pos = body.index("__disable_clocks(iommu);", barrier_pos)
+        if not command_pos < barrier_pos < clocks_off_pos:
+            raise SystemExit(
+                f"MSM8x60 {name} TLB invalidation is not completed before clock gating"
+            )
 
     attach_start = iommu.index("static int msm_iommu_attach_dev(")
     identity_start = iommu.index("static int msm_iommu_identity_attach(", attach_start)

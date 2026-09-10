@@ -1,0 +1,60 @@
+From: Paul Levickij <plevickij57@gmail.com>
+Date: Thu, 10 Sep 2026 00:00:00 +0000
+Subject: [PATCH] drm/msm/dsi: match Hikari PHY start order
+
+The Sony MSM8x60 sequence writes the PHY analog pre-enable values before
+reset, calibration and the panel PHY database. The database consequently
+replaces temporary PLL_CTRL_5 value 0x50 with its operational value 0x2f.
+The initial mainline implementation did this in the opposite order and left
+0x50 active.
+
+Sony also leaves DSI_LANE_CTRL clear. Avoid the newer host driver's forced
+clock-lane HS request on this exact MSM8x60 path; the video engine controls
+the lane as in the downstream implementation.
+
+Signed-off-by: Paul Levickij <plevickij57@gmail.com>
+---
+ drivers/gpu/drm/msm/dsi/dsi_host.c          | 3 ++-
+ drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c | 8 +++++---
+ 2 files changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -1044,7 +1044,8 @@ static void dsi_ctrl_enable(struct msm_dsi_host *msm_host,
+ 	dsi_write(msm_host, REG_DSI_LANE_SWAP_CTRL,
+ 		  DSI_LANE_SWAP_CTRL_DLN_SWAP_SEL(msm_host->dlane_swap));
+ 
+-	if (!(flags & MIPI_DSI_CLOCK_NON_CONTINUOUS)) {
++	if (!(flags & MIPI_DSI_CLOCK_NON_CONTINUOUS) &&
++	    !cfg_hnd->cfg->quiesce_msm8x60_boot_state) {
+ 		lane_ctrl = dsi_read(msm_host, REG_DSI_LANE_CTRL);
+ 
+ 		if (msm_dsi_phy_set_continuous_clock(phy, true))
+diff --git a/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c b/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
+--- a/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
++++ b/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
+@@ -113,6 +113,11 @@ static int dsi_45nm_enable(struct msm_dsi_phy *phy,
+ 	phy->timing.shared_timings.clk_pre_inc_by_2 = false;
+ 	phy->timing.shared_timings.byte_intf_clk_div_2 = false;
+ 
++	/* Sony applies the analog pre-enable controls before PHY programming. */
++	writel(0x050, base + PHY_REG(0x214));
++	writel(0x00f, base + PHY_REG(0x258));
++	writel(0, base + PHY_REG(0x25c));
++
+ 	/* Same reset/calibration sequencing as the exact MSM8x60 BSP. */
+ 	writel(1, base + PHY_REG(0x128));
+ 	wmb();
+@@ -143,9 +148,6 @@ static int dsi_45nm_enable(struct msm_dsi_phy *phy,
+ 	/* Legacy hardware requires PLL_CTRL_0 to be committed last. */
+ 	write_table(base, PHY_REG(0x204), &hikari_pll[1], ARRAY_SIZE(hikari_pll) - 1);
+ 	dsi_45nm_program_hikari_dividers(base);
+-	writel(0x050, base + PHY_REG(0x214));
+-	writel(0x00f, base + PHY_REG(0x258));
+-	writel(0, base + PHY_REG(0x25c));
+ 	/*
+ 	 * Sony enables the 45 nm PLL separately from programming its table.
+ 	 * Fixed-rate CCF providers describe the two outputs but cannot turn the
+-- 
+2.51.0

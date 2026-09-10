@@ -1,0 +1,270 @@
+From bf494ebad392a3c1444e7b0d46f02a4e30fb0786 Mon Sep 17 00:00:00 2001
+From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+Date: Thu, 10 Sep 2026 19:05:00 +0300
+Subject: [PATCH] drm/msm: support contiguous physical scanout without IOMMU
+
+Sony MSM8x60 display uses physically contiguous scanout without enabling the legacy MSM IOMMU. Allow MDP4 to operate without a KMS VM and back scanout GEM objects with contiguous pages in that configuration.
+
+Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+---
+ drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c | 23 ++++++--
+ drivers/gpu/drm/msm/msm_fb.c             | 12 +++-
+ drivers/gpu/drm/msm/msm_fbdev.c          | 11 +++-
+ drivers/gpu/drm/msm/msm_gem.c            | 70 +++++++++++++++++++++++-
+ drivers/gpu/drm/msm/msm_gem.h            |  3 +
+ 5 files changed, 107 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
+index 3a2de5fd7..cec3a27fd 100644
+--- a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
++++ b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
+@@ -124,8 +124,12 @@ static void mdp4_destroy(struct msm_kms *kms)
+ 	struct mdp4_kms *mdp4_kms = to_mdp4_kms(to_mdp_kms(kms));
+ 	struct device *dev = mdp4_kms->dev->dev;
+ 
+-	if (mdp4_kms->blank_cursor_iova)
+-		msm_gem_unpin_iova(mdp4_kms->blank_cursor_bo, kms->vm);
++	if (mdp4_kms->blank_cursor_iova) {
++		if (kms->vm)
++			msm_gem_unpin_iova(mdp4_kms->blank_cursor_bo, kms->vm);
++		else
++			msm_gem_unpin_phys(mdp4_kms->blank_cursor_bo);
++	}
+ 	drm_gem_object_put(mdp4_kms->blank_cursor_bo);
+ 
+ 	if (kms->vm) {
+@@ -494,7 +498,11 @@ static int mdp4_kms_init(struct drm_device *dev)
+ 	vm = msm_kms_init_vm(mdp4_kms->dev, NULL);
+ 	if (IS_ERR(vm)) {
+ 		ret = PTR_ERR(vm);
+-		return ret;
++		if (ret != -ENODEV)
++			return ret;
++		DRM_DEV_INFO(dev->dev,
++			     "using contiguous physical scanout without an IOMMU\n");
++		vm = NULL;
+ 	}
+ 
+ 	kms->vm = vm;
+@@ -513,8 +521,13 @@ static int mdp4_kms_init(struct drm_device *dev)
+ 		return ret;
+ 	}
+ 
+-	ret = msm_gem_get_and_pin_iova(mdp4_kms->blank_cursor_bo, kms->vm,
+-			&mdp4_kms->blank_cursor_iova);
++	if (kms->vm)
++		ret = msm_gem_get_and_pin_iova(mdp4_kms->blank_cursor_bo,
++					       kms->vm,
++					       &mdp4_kms->blank_cursor_iova);
++	else
++		ret = msm_gem_get_and_pin_phys(mdp4_kms->blank_cursor_bo,
++					       &mdp4_kms->blank_cursor_iova);
+ 	if (ret) {
+ 		DRM_DEV_ERROR(dev->dev, "could not pin blank-cursor bo: %d\n", ret);
+ 		return ret;
+diff --git a/drivers/gpu/drm/msm/msm_fb.c b/drivers/gpu/drm/msm/msm_fb.c
+index 60c108d35..469347fde 100644
+--- a/drivers/gpu/drm/msm/msm_fb.c
++++ b/drivers/gpu/drm/msm/msm_fb.c
+@@ -86,7 +86,12 @@ int msm_framebuffer_prepare(struct drm_framebuffer *fb, bool needs_dirtyfb)
+ 
+ 	for (i = 0; i < n; i++) {
+ 		msm_gem_vma_get(fb->obj[i]);
+-		ret = msm_gem_get_and_pin_iova(fb->obj[i], vm, &msm_fb->iova[i]);
++		if (vm)
++			ret = msm_gem_get_and_pin_iova(fb->obj[i], vm,
++						       &msm_fb->iova[i]);
++		else
++			ret = msm_gem_get_and_pin_phys(fb->obj[i],
++						       &msm_fb->iova[i]);
+ 		drm_dbg_state(fb->dev, "FB[%u]: iova[%d]: %08llx (%d)\n",
+ 			      fb->base.id, i, msm_fb->iova[i], ret);
+ 		if (ret)
+@@ -112,7 +117,10 @@ void msm_framebuffer_cleanup(struct drm_framebuffer *fb, bool needed_dirtyfb)
+ 	memset(msm_fb->iova, 0, sizeof(msm_fb->iova));
+ 
+ 	for (i = 0; i < n; i++) {
+-		msm_gem_unpin_iova(fb->obj[i], vm);
++		if (vm)
++			msm_gem_unpin_iova(fb->obj[i], vm);
++		else
++			msm_gem_unpin_phys(fb->obj[i]);
+ 		msm_gem_vma_put(fb->obj[i]);
+ 	}
+ }
+diff --git a/drivers/gpu/drm/msm/msm_fbdev.c b/drivers/gpu/drm/msm/msm_fbdev.c
+index 89ca9da3e..186e7ca22 100644
+--- a/drivers/gpu/drm/msm/msm_fbdev.c
++++ b/drivers/gpu/drm/msm/msm_fbdev.c
+@@ -142,7 +142,10 @@ int msm_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
+ 	 * in panic (ie. lock-safe, etc) we could avoid pinning the
+ 	 * buffer now:
+ 	 */
+-	ret = msm_gem_get_and_pin_iova(bo, priv->kms->vm, &paddr);
++	if (priv->kms->vm)
++		ret = msm_gem_get_and_pin_iova(bo, priv->kms->vm, &paddr);
++	else
++		ret = msm_gem_get_and_pin_phys(bo, &paddr);
+ 	if (ret) {
+ 		drm_err(dev, "failed to get buffer obj iova: %d\n", ret);
+ 		goto err_drm_client_buffer_delete;
+@@ -166,6 +169,7 @@ int msm_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
+ 	fbi->screen_size = bo->size;
+ 	fbi->fix.smem_start = paddr;
+ 	fbi->fix.smem_len = bo->size;
++	drm_info(dev, "fbdev scanout address %08llx\n", paddr);
+ 
+ 	DBG("par=%p, %dx%d", fbi->par, fbi->var.xres, fbi->var.yres);
+ 	DBG("allocated %dx%d fb", buffer->fb->width, buffer->fb->height);
+@@ -179,7 +183,10 @@ int msm_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
+ 	return 0;
+ 
+ err_msm_gem_unpin:
+-	msm_gem_unpin_iova(bo, priv->kms->vm);
++	if (priv->kms->vm)
++		msm_gem_unpin_iova(bo, priv->kms->vm);
++	else
++		msm_gem_unpin_phys(bo);
+ 	msm_gem_vma_put(bo);
+ err_drm_client_buffer_delete:
+ 	drm_client_buffer_delete(buffer);
+diff --git a/drivers/gpu/drm/msm/msm_gem.c b/drivers/gpu/drm/msm/msm_gem.c
+index c4cff3d53..b4c0c2066 100644
+--- a/drivers/gpu/drm/msm/msm_gem.c
++++ b/drivers/gpu/drm/msm/msm_gem.c
+@@ -8,6 +8,7 @@
+ #include <linux/vmalloc.h>
+ #include <linux/spinlock.h>
+ #include <linux/shmem_fs.h>
++#include <linux/dma-map-ops.h>
+ #include <linux/dma-buf.h>
+ #include <linux/pagemap.h>
+ 
+@@ -102,7 +103,7 @@ void msm_gem_vma_put(struct drm_gem_object *obj)
+ 	if (atomic_dec_return(&to_msm_bo(obj)->vma_ref))
+ 		return;
+ 
+-	if (!priv->kms)
++	if (!priv->kms || !priv->kms->vm)
+ 		return;
+ 
+ #ifdef CONFIG_DRM_MSM_KMS
+@@ -196,7 +197,28 @@ static struct page **get_pages(struct drm_gem_object *obj)
+ 		struct page **p;
+ 		size_t npages = obj->size >> PAGE_SHIFT;
+ 
+-		p = drm_gem_get_pages(obj);
++		if ((msm_obj->flags & MSM_BO_SCANOUT) &&
++		    !device_iommu_mapped(dev->dev)) {
++			struct page *base;
++			size_t i;
++
++			base = dma_alloc_contiguous(dev->dev, obj->size,
++						    GFP_KERNEL | __GFP_NOWARN);
++			if (!base)
++				return ERR_PTR(-ENOMEM);
++
++			p = kvmalloc_array(npages, sizeof(*p), GFP_KERNEL);
++			if (!p) {
++				dma_free_contiguous(dev->dev, base, obj->size);
++				return ERR_PTR(-ENOMEM);
++			}
++
++			for (i = 0; i < npages; i++)
++				p[i] = base + i;
++			msm_obj->contiguous_pages = base;
++		} else {
++			p = drm_gem_get_pages(obj);
++		}
+ 
+ 		if (IS_ERR(p)) {
+ 			DRM_DEV_ERROR(dev->dev, "could not get pages: %ld\n",
+@@ -214,6 +236,13 @@ static struct page **get_pages(struct drm_gem_object *obj)
+ 
+ 			DRM_DEV_ERROR(dev->dev, "failed to allocate sgt\n");
+ 			msm_obj->sgt = NULL;
++			if (msm_obj->contiguous_pages) {
++				dma_free_contiguous(dev->dev,
++						    msm_obj->contiguous_pages,
++						    obj->size);
++				msm_obj->contiguous_pages = NULL;
++				kvfree(p);
++			}
+ 			return ptr;
+ 		}
+ 
+@@ -256,7 +285,14 @@ static void put_pages(struct drm_gem_object *obj)
+ 
+ 		update_device_mem(obj->dev->dev_private, -obj->size);
+ 
+-		drm_gem_put_pages(obj, msm_obj->pages, true, false);
++		if (msm_obj->contiguous_pages) {
++			dma_free_contiguous(obj->dev->dev,
++					    msm_obj->contiguous_pages, obj->size);
++			msm_obj->contiguous_pages = NULL;
++			kvfree(msm_obj->pages);
++		} else {
++			drm_gem_put_pages(obj, msm_obj->pages, true, false);
++		}
+ 
+ 		msm_obj->pages = NULL;
+ 		update_lru(obj);
+@@ -320,6 +356,34 @@ void msm_gem_unpin_pages_locked(struct drm_gem_object *obj)
+ 	msm_gem_unpin_locked(obj);
+ }
+ 
++int msm_gem_get_and_pin_phys(struct drm_gem_object *obj, uint64_t *phys)
++{
++	struct msm_gem_object *msm_obj = to_msm_bo(obj);
++	struct page **pages;
++	int ret = 0;
++
++	msm_gem_lock(obj);
++	pages = msm_gem_get_pages_locked(obj, MSM_MADV_WILLNEED);
++	if (IS_ERR(pages)) {
++		ret = PTR_ERR(pages);
++	} else if (!msm_obj->contiguous_pages) {
++		ret = -EINVAL;
++	} else {
++		*phys = page_to_phys(msm_obj->contiguous_pages);
++		pin_obj_locked(obj);
++	}
++	msm_gem_unlock(obj);
++
++	return ret;
++}
++
++void msm_gem_unpin_phys(struct drm_gem_object *obj)
++{
++	msm_gem_lock(obj);
++	msm_gem_unpin_locked(obj);
++	msm_gem_unlock(obj);
++}
++
+ static pgprot_t msm_gem_pgprot(struct msm_gem_object *msm_obj, pgprot_t prot)
+ {
+ 	if (msm_obj->flags & MSM_BO_WC)
+diff --git a/drivers/gpu/drm/msm/msm_gem.h b/drivers/gpu/drm/msm/msm_gem.h
+index dff60cbc9..1953d078d 100644
+--- a/drivers/gpu/drm/msm/msm_gem.h
++++ b/drivers/gpu/drm/msm/msm_gem.h
+@@ -216,6 +216,7 @@ struct msm_gem_object {
+ 	struct list_head node;
+ 
+ 	struct page **pages;
++	struct page *contiguous_pages;
+ 	struct sg_table *sgt;
+ 	void *vaddr;
+ 
+@@ -282,6 +283,8 @@ void msm_gem_pin_obj_locked(struct drm_gem_object *obj);
+ struct page **msm_gem_get_pages_locked(struct drm_gem_object *obj, unsigned madv);
+ struct page **msm_gem_pin_pages_locked(struct drm_gem_object *obj);
+ void msm_gem_unpin_pages_locked(struct drm_gem_object *obj);
++int msm_gem_get_and_pin_phys(struct drm_gem_object *obj, uint64_t *phys);
++void msm_gem_unpin_phys(struct drm_gem_object *obj);
+ int msm_gem_dumb_create(struct drm_file *file, struct drm_device *dev,
+ 		struct drm_mode_create_dumb *args);
+ void *msm_gem_get_vaddr_locked(struct drm_gem_object *obj);
+-- 
+2.53.0
+
