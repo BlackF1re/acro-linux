@@ -58,15 +58,9 @@ for rel in "${patches[@]}"; do
   }
   echo "Applying $rel"
 
-  # Imported patches carry blob identity and use --3way.  The Hikari IOMMU
-  # correction is intentionally a context-only mail patch against the exact
-  # pinned Linux source, so apply it directly instead of asking git-am to
-  # synthesize a fake ancestor from nonexistent index SHA information.
-  if [[ $rel == 0040-iommu-msm-enable-clocks-during-hardware-probe.patch ]]; then
-    am_args=(--keep-cr --committer-date-is-author-date)
-  else
-    am_args=(--3way --keep-cr --committer-date-is-author-date)
-  fi
+  # Imported patches normally carry blob identity, allowing git-am to recover
+  # context through a three-way application when the pinned base moves.
+  am_args=(--3way --keep-cr --committer-date-is-author-date)
 
   if ! git -C "$out" am "${am_args[@]}" "$patch"; then
     # Some project-exported patches intentionally lack a usable preimage blob

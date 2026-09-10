@@ -206,6 +206,8 @@
 		clock-names = "smmu_pclk", "iommu_clk";
 		#iommu-cells = <1>;
 		qcom,ncb = <2>;
+		/* Physical context writes read back zero; no production client. */
+		status = "disabled";
 	};
 
 	mdp_port1: iommu@7600000 {
@@ -217,6 +219,8 @@
 		clock-names = "smmu_pclk", "iommu_clk";
 		#iommu-cells = <1>;
 		qcom,ncb = <2>;
+		/* Physical context writes read back zero; no production client. */
+		status = "disabled";
 	};
 
 	mdp: display-controller@5100000 {

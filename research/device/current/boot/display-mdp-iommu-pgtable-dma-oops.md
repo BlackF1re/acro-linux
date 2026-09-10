@@ -103,11 +103,10 @@ Signed kernel commit `96651e282822a6b587b43dc3c4767a1f27581933`:
 - leaves the caller's original IOVA unchanged while flushing multiple
   providers.
 
-Project patch
-`kernel/patches/0042-iommu-msm-fix-page-table-DMA-ownership.patch` preserves
-the fix in the reproducible patch stack. Source guards reject the recursive
-client-as-page-table-owner pattern, page-table destruction from identity
-detach, and provider-level domain lists that lose per-context ownership.
+The historical patch is retained at
+`research/patches/retired-display-iommu/0042-iommu-msm-fix-page-table-DMA-ownership.patch`.
+It was removed from the production series after physical scanout succeeded
+with MDP detached from both IOMMU providers.
 
 ## Locally validated successor
 
