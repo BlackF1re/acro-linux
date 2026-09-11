@@ -46,6 +46,15 @@ provenance is in [SOURCES.md](SOURCES.md).
 | HDMI | platform hdmi_msm.* | hdmi_msm | MSM8x60 HDMI block; external PHY/controller unknown | VERIFIED_DEVICE / UNKNOWN |
 | USB | platform msm_otg, msm_hsusb* | legacy MSM OTG/host | MSM8x60 integrated USB path; exact PHY die unknown | VERIFIED_DEVICE / UNKNOWN |
 
+The exact Fuji/Hikari USB connector wiring is `HISTORICAL_SOURCE` from the
+OpenSEMC Sony-generation board code: PM8058 GPIO30 is active-low ID with a
+1.5 kOhm S3 pull-up; PM8058 MPP10 is active-low VBUS detect; PM8901 MPP1
+enables external 5 V; TLMM28 enables the NCP373 protected VBUS switch; and
+TLMM104 is its active-low fault input. PM8901 is on the second SSBI controller
+at `0x00c00000`, with an active-low interrupt on TLMM91 and four MPPs. These
+facts are implemented in the current local DT, but OTG function is not yet
+`VERIFIED_DEVICE` under target Linux.
+
 pm8xxx-nfc is a PM8058-side platform support node (power/interrupt
 integration); it is not evidence for a second NFC controller. The I2C pn544
 node and /dev/pn544 identify the controller.

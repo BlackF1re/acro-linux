@@ -7,11 +7,75 @@
 
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
+#include <dt-bindings/pinctrl/qcom,pmic-mpp.h>
 #include "pm8058.dtsi"
 
 /* Fuji/Hikari routes the PM8058 interrupt to MSM TLMM GPIO88, active low. */
 &pm8058 {
 	interrupts-extended = <&tlmm 88 IRQ_TYPE_LEVEL_LOW>;
+};
+
+/* MSM8x60's second SSBI arbiter connects the four-MPP PM8901. */
+&{/} {
+	pm8901_ssbi: ssbi@c00000 {
+		compatible = "qcom,ssbi";
+		reg = <0x00c00000 0x1000>;
+		qcom,controller-type = "pmic-arbiter";
+
+		pm8901: pmic {
+			compatible = "qcom,pm8901";
+			interrupt-parent = <&tlmm>;
+			interrupts = <91 IRQ_TYPE_LEVEL_LOW>;
+			#interrupt-cells = <2>;
+			interrupt-controller;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			pm8901_mpps: mpps@50 {
+				compatible = "qcom,pm8901-mpp", "qcom,ssbi-mpp";
+				reg = <0x50>;
+				gpio-controller;
+				#gpio-cells = <2>;
+				gpio-ranges = <&pm8901_mpps 0 0 4>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+
+				hikari_ext_5v_enable: ext-5v-enable-state {
+					pins = "mpp1";
+					function = "digital";
+					output-low;
+					power-source = <PM8901_MPP_MSMIO>;
+				};
+			};
+		};
+	};
+
+	ext_5v: regulator-ext-5v {
+		compatible = "regulator-fixed";
+		regulator-name = "ext-5v";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		vin-supply = <&usb_otg_guard>;
+		gpio = <&pm8901_mpps 0 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		pinctrl-names = "default";
+		pinctrl-0 = <&hikari_ext_5v_enable>;
+	};
+
+	usb_otg_vbus: regulator-usb-otg-vbus {
+		compatible = "regulator-fixed";
+		regulator-name = "usb-otg-vbus";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		vin-supply = <&ext_5v>;
+		gpio = <&tlmm 28 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		startup-delay-us = <1000>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <104 IRQ_TYPE_EDGE_FALLING>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&hikari_ncp373_enable &hikari_ncp373_fault>;
+	};
 };
 
 /*
@@ -62,6 +126,20 @@
 };
 
 &tlmm {
+	hikari_ncp373_enable: ncp373-enable-state {
+		pins = "gpio28";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-disable;
+		output-low;
+	};
+
+	hikari_ncp373_fault: ncp373-fault-state {
+		pins = "gpio104";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-disable;
+	};
 	hikari_gsbi3_i2c_pins: gsbi3-i2c-state {
 		pins = "gpio43", "gpio44";
 		function = "gsbi3";
@@ -100,6 +178,17 @@
 
 /* PM8058 GPIO22 is the Hikari microSD card-detect input, active low. */
 &pm8058_gpio {
+	/* PM8058 GPIO30: USB ID, low in A-cable/host mode. */
+	hikari_usb_id: usb-id-state {
+		pinconf {
+			pins = "gpio30";
+			function = "normal";
+			input-enable;
+			bias-pull-up;
+			qcom,pull-up-strength = <PMIC_GPIO_PULL_UP_1P5>;
+			power-source = <PM8058_GPIO_S3>;
+		};
+	};
 	hikari_sd_detect: sd-card-detect-state {
 		pinconf {
 			pins = "gpio22";
@@ -155,6 +244,16 @@
 			bias-pull-down;
 			power-source = <PM8058_GPIO_S3>;
 		};
+	};
+};
+
+&pm8058_mpps {
+	/* PM8058 MPP10 is the active-low connector VBUS comparator output. */
+	hikari_usb_vbus_detect: usb-vbus-detect-state {
+		pins = "mpp10";
+		function = "digital";
+		input-enable;
+		power-source = <PM8058_MPP_S3>;
 	};
 };
 

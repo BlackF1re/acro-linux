@@ -20,8 +20,9 @@ done
 
 test -f "$config" && test -f "$dtb" || usage
 for option in \
-  CONFIG_USB=y CONFIG_USB_CHIPIDEA=y CONFIG_USB_CHIPIDEA_UDC=y \
+  CONFIG_USB=y CONFIG_USB_CHIPIDEA=y CONFIG_USB_CHIPIDEA_UDC=y CONFIG_USB_CHIPIDEA_HOST=y \
   CONFIG_USB_CHIPIDEA_MSM=y CONFIG_PHY_QCOM_USB_HS=y \
+  CONFIG_USB_ROLE_SWITCH=y CONFIG_USB_CONN_GPIO=y \
   CONFIG_REGULATOR_QCOM_RPM=y \
   CONFIG_USB_GADGET=y CONFIG_USB_G_SERIAL=y CONFIG_U_SERIAL_CONSOLE=y \
   CONFIG_USB_U_SERIAL=y CONFIG_USB_F_ACM=y CONFIG_USB_LIBCOMPOSITE=y; do
@@ -37,7 +38,8 @@ grep -Eq '^CONFIG_CMDLINE=".*console=tty0 .*console=ttyGS0,115200([ "].*)$' "$co
 
 dump=$(fdtdump "$dtb")
 for required in \
-  'usb@12500000' 'qcom,ci-hdrc' 'dr_mode = "peripheral"' \
+  'usb@12500000' 'qcom,ci-hdrc' 'dr_mode = "otg"' \
+  'gpio-usb-b-connector' 'usb-role-switch' \
   'qcom,usb-hs-phy-msm8660' 'v1p8-supply' 'v3p3-supply'; do
   grep -Fq "$required" <<<"$dump" || {
     echo "BOOT5_USB_DTB=FAIL missing $required" >&2
@@ -57,24 +59,44 @@ test "$(get_string /usb@12500000 status)" = okay || {
   echo "BOOT5_USB_DTB=FAIL controller is not enabled" >&2
   exit 1
 }
-test "$(get_string /usb@12500000 dr_mode)" = peripheral || {
-  echo "BOOT5_USB_DTB=FAIL dr_mode is not peripheral" >&2
+test "$(get_string /usb@12500000 dr_mode)" = otg || {
+  echo "BOOT5_USB_DTB=FAIL dr_mode is not dual-role" >&2
   exit 1
 }
 test "$(get_cells /usb@12500000 interrupts)" = '0 64 4' || {
   echo "BOOT5_USB_DTB=FAIL controller IRQ is not GIC_SPI 100" >&2
   exit 1
 }
-for prohibited in extcon usb-role-switch; do
-  if fdtget "$dtb" /usb@12500000 "$prohibited" >/dev/null 2>&1; then
-    echo "BOOT5_USB_DTB=FAIL unexpected $prohibited dependency" >&2
+fdtget "$dtb" /usb@12500000 usb-role-switch >/dev/null || {
+  echo 'BOOT5_USB_DTB=FAIL role switch is absent' >&2
+  exit 1
+}
+test "$(get_string /usb@12500000 role-switch-default-mode)" = peripheral || {
+  echo 'BOOT5_USB_DTB=FAIL safe default role is not peripheral' >&2
+  exit 1
+}
+test "$(get_string /connector type)" = micro || {
+  echo 'BOOT5_USB_DTB=FAIL connector type is not micro-USB' >&2
+  exit 1
+}
+for property in id-gpios vbus-gpios vbus-supply; do
+  get_cells /connector "$property" >/dev/null || {
+    echo "BOOT5_USB_DTB=FAIL connector lacks $property" >&2
     exit 1
-  fi
+  }
 done
+get_cells /connector/port/endpoint remote-endpoint >/dev/null || {
+  echo 'BOOT5_USB_DTB=FAIL connector graph endpoint is absent' >&2
+  exit 1
+}
+get_cells /usb@12500000/port/endpoint remote-endpoint >/dev/null || {
+  echo 'BOOT5_USB_DTB=FAIL controller graph endpoint is absent' >&2
+  exit 1
+}
 
 # DTC rejects dangling labels while compiling this DTB.  These direct reads
 # additionally gate every reference that the ChipIdea controller and its PHY
-# need for the first peripheral-mode attempt.
+# need for both the recovery gadget and OTG host mode.
 for ref in \
   '/usb@12500000:phys' \
   '/usb@12500000:clocks' \

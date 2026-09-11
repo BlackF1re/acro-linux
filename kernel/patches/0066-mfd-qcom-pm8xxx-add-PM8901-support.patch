@@ -1,0 +1,58 @@
+From 0c2212a5c816171076184336a41041f9890cec29 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Fri, 11 Sep 2026 02:39:26 +0700
+Subject: [PATCH 66/68] mfd: qcom-pm8xxx: add PM8901 support
+
+Sony MSM8x60 boards use PM8901 on the second SSBI controller. Add its
+72 interrupts to the generic PM8xxx MFD. Expose the four MPPs through the
+existing SSBI MPP driver.
+
+Signed-off-by: BlackF1re <plevickij57@gmail.com>
+---
+ drivers/mfd/qcom-pm8xxx.c               | 8 ++++++++
+ drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c | 1 +
+ 2 files changed, 9 insertions(+)
+
+diff --git a/drivers/mfd/qcom-pm8xxx.c b/drivers/mfd/qcom-pm8xxx.c
+index 0cf374c01..393db42c4 100644
+--- a/drivers/mfd/qcom-pm8xxx.c
++++ b/drivers/mfd/qcom-pm8xxx.c
+@@ -61,6 +61,7 @@
+ 
+ #define PM8XXX_NR_IRQS		256
+ #define PM8821_NR_IRQS		112
++#define PM8901_NR_IRQS		72
+ 
+ struct pm_irq_data {
+ 	int num_irqs;
+@@ -498,9 +499,16 @@ static const struct pm_irq_data pm8821_data = {
+ 	.irq_handler = pm8821_irq_handler,
+ };
+ 
++static const struct pm_irq_data pm8901_data = {
++	.num_irqs = PM8901_NR_IRQS,
++	.irq_chip = &pm8xxx_irq_chip,
++	.irq_handler = pm8xxx_irq_handler,
++};
++
+ static const struct of_device_id pm8xxx_id_table[] = {
+ 	{ .compatible = "qcom,pm8058", .data = &pm8xxx_data},
+ 	{ .compatible = "qcom,pm8821", .data = &pm8821_data},
++	{ .compatible = "qcom,pm8901", .data = &pm8901_data},
+ 	{ .compatible = "qcom,pm8921", .data = &pm8xxx_data},
+ 	{ }
+ };
+diff --git a/drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c b/drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c
+index 7970fa6e1..4c9af373a 100644
+--- a/drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c
++++ b/drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c
+@@ -807,6 +807,7 @@ static const struct of_device_id pm8xxx_mpp_of_match[] = {
+ 	{ .compatible = "qcom,pm8038-mpp", .data = (void *) 6 },
+ 	{ .compatible = "qcom,pm8058-mpp", .data = (void *) 12 },
+ 	{ .compatible = "qcom,pm8821-mpp", .data = (void *) 4 },
++	{ .compatible = "qcom,pm8901-mpp", .data = (void *)4 },
+ 	{ .compatible = "qcom,pm8917-mpp", .data = (void *) 10 },
+ 	{ .compatible = "qcom,pm8921-mpp", .data = (void *) 12 },
+ 	{ },
+-- 
+2.53.0

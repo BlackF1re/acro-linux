@@ -16,9 +16,21 @@ source "$repo_root/firmware/a220/source.lock"
 mkdir -p "$out"
 out=$(realpath -m -- "$out")
 
+expected_sha256() {
+  case "$1" in
+    qcom/leia_pm4_470.fw) printf '%s\n' "$A220_PM4_SHA256" ;;
+    qcom/leia_pfp_470.fw) printf '%s\n' "$A220_PFP_SHA256" ;;
+    *) echo "missing checksum for $1" >&2; return 1 ;;
+  esac
+}
+
 for rel in $A220_FIRMWARE_FILES; do
   dest="$out/$rel"
   mkdir -p "$(dirname -- "$dest")"
+  expected=$(expected_sha256 "$rel")
+  if [[ -f $dest ]] && printf '%s  %s\n' "$expected" "$dest" | sha256sum --check --status; then
+    continue
+  fi
   url="$LINUX_FIRMWARE_RAW/$LINUX_FIRMWARE_REF/$rel"
   python3 - "$url" "$dest" <<'PY'
 from pathlib import Path
@@ -38,6 +50,10 @@ with tempfile.NamedTemporaryFile(dir=dst.parent, delete=False) as f:
 tmp.chmod(0o644)
 tmp.replace(dst)
 PY
+  printf '%s  %s\n' "$expected" "$dest" | sha256sum --check --status || {
+    echo "firmware checksum mismatch: $rel" >&2
+    exit 1
+  }
 done
 
 for rel in $A220_FIRMWARE_FILES; do

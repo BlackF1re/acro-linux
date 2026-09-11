@@ -62,3 +62,6 @@
 0061-drm-msm-dsi-match-Hikari-PHY-start-order.patch
 0062-drm-msm-mdp4-vote-scanout-memory-bandwidth.patch
 0065-drm-msm-support-contiguous-physical-scanout.patch
+0066-mfd-qcom-pm8xxx-add-PM8901-support.patch
+0067-dt-bindings-power-supply-add-BQ24160-OTG-guard.patch
+0068-power-supply-bq24160-coordinate-USB-OTG-lock.patch
