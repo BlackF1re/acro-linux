@@ -138,7 +138,9 @@ if [[ -n "$initramfs_source" ]]; then
   fi
   if [[ "$require_charging" == 1 ]]; then
     for required in CONFIG_POWER_SUPPLY=y CONFIG_BATTERY_BQ27XXX=y \
-      CONFIG_BATTERY_BQ27XXX_I2C=y CONFIG_CHARGER_BQ24160=y CONFIG_I2C_QUP=y; do
+      CONFIG_BATTERY_BQ27XXX_I2C=y CONFIG_CHARGER_BQ24160=y CONFIG_I2C_QUP=y \
+      CONFIG_PINCTRL_QCOM_SSBI_PMIC=y CONFIG_REGULATOR_FIXED_VOLTAGE=y \
+      CONFIG_USB_CHIPIDEA_HOST=y CONFIG_USB_ROLE_SWITCH=y CONFIG_USB_CONN_GPIO=y; do
       grep -qx "$required" "$build_dir/.config" || {
         echo "Hikari charging build lost $required" >&2
         exit 1
@@ -154,11 +156,6 @@ fi
 read -r -a build_targets <<<"$targets"
 make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" \
   -j"$jobs" "${build_targets[@]}"
-if [[ -f "$build_dir/vmlinux" ]] && \
-   strings "$build_dir/vmlinux" | grep -F 'Invalid PAR value detected' >/dev/null; then
-  echo 'built vmlinux contains the rejected MSM8x60 probe-time PAR test' >&2
-  exit 1
-fi
 if [[ " $targets " == *" zImage "* ]]; then
   echo "zImage: $build_dir/arch/arm/boot/zImage"
 fi

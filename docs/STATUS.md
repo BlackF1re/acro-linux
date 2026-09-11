@@ -296,6 +296,16 @@ from 8% to 9% on the same cable. Target USB reliability is `REGRESSION` and
 charging is `PARTIAL`; the correlation does not yet prove a shared cause. See
 [the USB/charging post-mortem](../research/device/current/boot/usb-charging-postmortem-2026-09-11.md).
 
+The local 0068 successor addresses both sides of that post-mortem without
+changing the already verified display path. It selects BQ24160 USB input and
+releases `OTG_LOCK` at probe, removes a blocking raw ttyGS write from the
+reconnect supervisor, changes HSUSB1 to a GPIO-driven role switch, and adds
+the exact PM8901 MPP1/NCP373 VBUS source chain. Host enable takes the charger
+OTG lock and disables charging before energizing either 5 V switch. The full
+kernel/DTB/initramfs/ELF build and static gates pass. Nothing in this successor
+has yet been deployed: USB device remains `REGRESSION`, charging remains
+`PARTIAL`, and USB OTG is now `IMPLEMENTING`, pending physical acceptance.
+
 ## Current display boundary: DSI PLL start
 
 The latest retained physical run did not crash: DRM registered a native

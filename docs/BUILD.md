@@ -449,3 +449,37 @@ because WSL inherited a Windows temporary directory; rebuilding with a native
 WSL temporary directory succeeded.  No device was flashed or rebooted.
 Visible pixels and advancing display interrupts remain the required physical
 acceptance test.
+
+## Hikari USB/OTG/charging successor
+
+The 63-patch series, ending at patch 0068, adds PM8901 support and the
+source-backed BQ24160/dual-role USB power path while retaining the physically
+verified 0066 display stack. The final **not deployed** display artifact is:
+
+```text
+/home/paul/xperia/build/hikari-artifacts-usb-otg-0068-final/display/hikari-display-fastboot.elf
+size:   13,387,117 bytes
+SHA-256 a5df4cd8535f7e48bf379de20d7b3f7cf3812f5a4d743969945cc888140fd529
+```
+
+Companion profiles and initramfs:
+
+```text
+gpu/hikari-gpu-fastboot.elf
+SHA-256 b2d55146072a09d69ecdb5118aba8c643f287b07a9bef2c3dd839f2327855c96
+safe/hikari-safe-fastboot.elf
+SHA-256 e63dd8e51b11cd5964ea8141c34e88839b8540bc36bf1ee45c1f20877df6a090
+/home/paul/xperia/build/hikari-initramfs-usb-otg-0068-final/hikari-firstboot.cpio.gz
+SHA-256 ff8a8f638ace114cc936fffb14264e5fcb69558692273a20319647cb0d25a386
+```
+
+The materialized kernel source commit is
+`ca6633c7d4dd48aaaf57bc8b5648a3aedb1ce693`.
+
+Kernel and all three DTBs built. Kernel-source, USB config/DT graph, charging,
+board-hardware, display, diagnostic-survival, initramfs-layout, safe-profile,
+GPU-profile, persistent-RAM, Sony-ELF, appended-DTB, p3-size, SMEM and
+decompressor-overlap gates pass. DT schema checking has no new USB/PM8901/
+BQ24160/NCP373 error; the remaining warnings predate this change and concern
+other board nodes. The build reused only A220 firmware whose pinned SHA-256
+matched `firmware/a220/source.lock`. No device was flashed or rebooted.

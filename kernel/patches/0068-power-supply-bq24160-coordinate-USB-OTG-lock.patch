@@ -1,0 +1,170 @@
+From 1137e3bd6d03c5dedbbd285002a3451c231a5530 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Fri, 11 Sep 2026 02:39:28 +0700
+Subject: [PATCH 68/68] power: supply: bq24160: coordinate USB OTG lock
+
+Sony's BQ24160 sequence selects USB input and releases the OTG lock before
+sink charging. Host mode must reverse that policy before enabling external
+VBUS.
+
+Initialize the sink state at probe. Expose a regulator guard which asserts
+OTG lock and disables charging while a dependent VBUS source is active.
+
+Signed-off-by: BlackF1re <plevickij57@gmail.com>
+---
+ drivers/power/supply/bq24160_charger.c | 98 ++++++++++++++++++++++++++
+ 1 file changed, 98 insertions(+)
+
+diff --git a/drivers/power/supply/bq24160_charger.c b/drivers/power/supply/bq24160_charger.c
+index 23c376095..16301866d 100644
+--- a/drivers/power/supply/bq24160_charger.c
++++ b/drivers/power/supply/bq24160_charger.c
+@@ -16,9 +16,11 @@
+ #include <linux/pm_wakeup.h>
+ #include <linux/power_supply.h>
+ #include <linux/regmap.h>
++#include <linux/regulator/driver.h>
+ #include <linux/workqueue.h>
+ 
+ #define BQ24160_REG_STATUS		0x00
++#define BQ24160_REG_BR_STATUS		0x01
+ #define BQ24160_REG_CONTROL		0x02
+ #define BQ24160_REG_VOLTAGE		0x03
+ #define BQ24160_REG_VENDOR		0x04
+@@ -27,7 +29,9 @@
+ 
+ #define BQ24160_STATUS_TMR_RST		BIT(7)
+ #define BQ24160_STATUS_STAT_MASK	GENMASK(6, 4)
++#define BQ24160_STATUS_SUPPLY_SEL_USB	BIT(3)
+ #define BQ24160_STATUS_FAULT_MASK	GENMASK(2, 0)
++#define BQ24160_BR_STATUS_OTG_LOCK	BIT(3)
+ #define BQ24160_CTRL_IUSB_MASK		GENMASK(6, 4)
+ #define BQ24160_CTRL_EN_STAT		BIT(3)
+ #define BQ24160_CTRL_TE		BIT(2)
+@@ -68,6 +72,7 @@ struct bq24160 {
+ 	int hot_degc;
+ 	unsigned int last_status;
+ 	bool rev23_hold;
++	bool otg_locked;
+ 	bool charging;
+ };
+ 
+@@ -193,6 +198,11 @@ static int bq24160_sync_locked(struct bq24160 *bq)
+ 				 BQ24160_STATUS_TMR_RST, BQ24160_STATUS_TMR_RST);
+ 	if (ret)
+ 		return ret;
++	/* Host mode deliberately disconnects the USB charger input from VBUS. */
++	if (bq->otg_locked)
++		return regmap_update_bits(bq->regmap, BQ24160_REG_BR_STATUS,
++					  BQ24160_BR_STATUS_OTG_LOCK,
++					  BQ24160_BR_STATUS_OTG_LOCK);
+ 
+ 	stat = FIELD_GET(BQ24160_STATUS_STAT_MASK, status);
+ 	fault = FIELD_GET(BQ24160_STATUS_FAULT_MASK, status);
+@@ -352,9 +362,77 @@ static const struct regmap_config bq24160_regmap_config = {
+ 	.max_register = 0x07,
+ };
+ 
++static int bq24160_otg_guard_enable(struct regulator_dev *rdev)
++{
++	struct bq24160 *bq = rdev_get_drvdata(rdev);
++	int ret;
++
++	mutex_lock(&bq->lock);
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_BR_STATUS,
++				 BQ24160_BR_STATUS_OTG_LOCK,
++				 BQ24160_BR_STATUS_OTG_LOCK);
++	if (!ret) {
++		bq->otg_locked = true;
++		ret = bq24160_disable(bq);
++		if (ret) {
++			bq->otg_locked = false;
++			regmap_update_bits(bq->regmap, BQ24160_REG_BR_STATUS,
++					   BQ24160_BR_STATUS_OTG_LOCK, 0);
++		}
++	}
++	mutex_unlock(&bq->lock);
++
++	return ret;
++}
++
++static int bq24160_otg_guard_disable(struct regulator_dev *rdev)
++{
++	struct bq24160 *bq = rdev_get_drvdata(rdev);
++	int ret;
++
++	mutex_lock(&bq->lock);
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_BR_STATUS,
++				 BQ24160_BR_STATUS_OTG_LOCK, 0);
++	if (!ret)
++		bq->otg_locked = false;
++	mutex_unlock(&bq->lock);
++	if (!ret)
++		mod_delayed_work(system_wq, &bq->status_work, 0);
++
++	return ret;
++}
++
++static int bq24160_otg_guard_is_enabled(struct regulator_dev *rdev)
++{
++	struct bq24160 *bq = rdev_get_drvdata(rdev);
++	unsigned int val;
++	int ret;
++
++	ret = regmap_read(bq->regmap, BQ24160_REG_BR_STATUS, &val);
++	return ret ? ret : !!(val & BQ24160_BR_STATUS_OTG_LOCK);
++}
++
++static const struct regulator_ops bq24160_otg_guard_ops = {
++	.enable = bq24160_otg_guard_enable,
++	.disable = bq24160_otg_guard_disable,
++	.is_enabled = bq24160_otg_guard_is_enabled,
++};
++
++static const struct regulator_desc bq24160_otg_guard_desc = {
++	.name = "usb-otg-guard",
++	.of_match = "usb-otg-guard",
++	.type = REGULATOR_VOLTAGE,
++	.owner = THIS_MODULE,
++	.ops = &bq24160_otg_guard_ops,
++	.fixed_uV = 5000000,
++	.n_voltages = 1,
++};
++
+ static int bq24160_probe(struct i2c_client *client)
+ {
+ 	struct power_supply_config psy_cfg = {};
++	struct regulator_config regulator_cfg = {};
++	struct regulator_dev *rdev;
+ 	struct bq24160 *bq;
+ 	int ret;
+ 
+@@ -395,6 +473,26 @@ static int bq24160_probe(struct i2c_client *client)
+ 	if (IS_ERR(bq->psy))
+ 		return PTR_ERR(bq->psy);
+ 
++	/* Sony's USB sink setup explicitly selects USB and releases OTG lock. */
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_STATUS,
++				 BQ24160_STATUS_SUPPLY_SEL_USB,
++				 BQ24160_STATUS_SUPPLY_SEL_USB);
++	if (ret)
++		return dev_err_probe(&client->dev, ret, "failed to select USB input\n");
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_BR_STATUS,
++				 BQ24160_BR_STATUS_OTG_LOCK, 0);
++	if (ret)
++		return dev_err_probe(&client->dev, ret, "failed to release OTG lock\n");
++
++	regulator_cfg.dev = &client->dev;
++	regulator_cfg.driver_data = bq;
++	regulator_cfg.of_node = client->dev.of_node;
++	rdev = devm_regulator_register(&client->dev,
++				       &bq24160_otg_guard_desc, &regulator_cfg);
++	if (IS_ERR(rdev))
++		return dev_err_probe(&client->dev, PTR_ERR(rdev),
++				     "failed to register OTG guard\n");
++
+ 	if (client->irq > 0) {
+ 		ret = devm_request_threaded_irq(&client->dev, client->irq, NULL,
+ 						bq24160_irq_thread, IRQF_ONESHOT | IRQF_TRIGGER_RISING |
+-- 
+2.53.0

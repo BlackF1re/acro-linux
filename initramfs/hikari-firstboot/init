@@ -68,13 +68,14 @@ console_supervisor()
 				log "HIKARI USB TTYGS0 READY"
 				announced=1
 			fi
-			printf '\r\nHIKARI TTYGS0 RAW TX VERIFIED\r\n' >/dev/ttyGS0
-			log "HIKARI TTYGS0 RAW WRITE rc=$?"
 			log "HIKARI SHELL START"
-			# First prove the uncomplicated data path.  A future getty/ctty layer
-			# may add job control, but must not obscure first USB-console evidence.
+			# Opening the console below intentionally waits for a host.  Do not
+			# issue a separate write first: after cable removal a ttyGS write can
+			# sleep indefinitely and prevent this supervisor from accepting the
+			# next USB connection.
 			/bin/sh -i </dev/ttyGS0 >/dev/ttyGS0 2>&1
 			log "HIKARI SHELL EXIT rc=$?"
+			log "HIKARI SHELL RESTART"
 		else
 			if [ "$wait_logged" -eq 0 ]; then
 				log "HIKARI WAIT TTYGS0"

@@ -96,6 +96,10 @@ if grep -Eq '^[[:space:]]*exec[[:space:]].*(ttyGS0|/bin/sh)' "$init"; then
   echo 'HIKARI_DIAG_SURVIVAL=FAIL PID1 must not exec the USB shell' >&2
   exit 1
 fi
+if grep -Eq 'printf.*>[[:space:]]*/dev/ttyGS0' "$init"; then
+  echo 'HIKARI_DIAG_SURVIVAL=FAIL raw ttyGS0 write can block reconnect supervision' >&2
+  exit 1
+fi
 
 # Reuse the physically verified BOOT #5 USB/DT checks and the TWRP-compatible
 # persistent-console checks instead of duplicating their hardware constants.
@@ -104,4 +108,4 @@ fi
 python3 "$repo_root/tools/check_hikari_kernel_guards.py" --kernel-src "$kernel_src"
 
 echo 'HIKARI_DIAG_SURVIVAL=PASS'
-echo 'usb=ttyGS0 built-in peripheral-mode; pid1=independent supervisor; panic-escalation=off; ramoops=retained'
+echo 'usb=ttyGS0 built-in OTG device path; pid1=independent supervisor; panic-escalation=off; ramoops=retained'

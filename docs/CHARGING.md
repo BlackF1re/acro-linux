@@ -104,6 +104,26 @@ fuel gauge reported +366 mA, and capacity increased from 8% to 9%. Target
 charging is therefore `PARTIAL`, not accepted. See
 [the post-mortem](../research/device/current/boot/usb-charging-postmortem-2026-09-11.md).
 
+## USB-supply and OTG coordination successor
+
+The working TWRP control and exact Sony driver both explicitly select the USB
+input in BQ24160 register 0 and release `OTG_LOCK` in register 1 before normal
+sink charging. The target driver previously did neither. Patch 0068 now
+performs both operations at probe; this is the smallest source-backed change
+that directly addresses the target-only USB-supply fault.
+
+The same patch exports an `usb-otg-guard` regulator consumed by the external
+5 V/NCP373 VBUS chain. Host enable asserts `OTG_LOCK` and CE-disable before
+either 5 V switch can turn on. Host disable removes the lock and schedules an
+immediate normal policy update. It therefore makes source and sink modes
+mutually exclusive without importing the Android charger framework.
+
+This correction has compiled and passed the DT/config/source guards, but it
+has not run on the phone. Charging remains `PARTIAL`: acceptance still needs
+stable device-mode USB, no current USB-supply fault, positive battery current
+and rising state of charge. OTG-source operation is a separate acceptance test
+and must not be counted as charging success.
+
 ## Required physical acceptance test
 
 After owner-approved deployment, use the already verified USB ACM root shell

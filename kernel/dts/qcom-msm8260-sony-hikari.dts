@@ -88,12 +88,28 @@
 
 /*
  * HSUSB1 is the connector-facing ChipIdea controller.  The address and IRQ
- * are shared MSM8x60 facts; `peripheral` and the two PHY rails come from the
- * Fuji/Hikari downstream board code.  PMIC VBUS/ID callbacks were only used
- * for legacy OTG role switching, so BOOT #5 deliberately supports device
- * mode only and does not invent an extcon or host-role GPIO description.
+ * are shared MSM8x60 facts and the two PHY rails come from the Fuji/Hikari
+ * downstream board code.  USB ID, VBUS detection and the protected VBUS
+ * source below reproduce the exact Sony connector topology in current USB
+ * role-switch and regulator frameworks.
  */
 &{/} {
+	usb_connector: connector {
+		compatible = "gpio-usb-b-connector", "usb-b-connector";
+		type = "micro";
+		id-gpios = <&pm8058_gpio 29 GPIO_ACTIVE_HIGH>;
+		vbus-gpios = <&pm8058_mpps 9 GPIO_ACTIVE_LOW>;
+		vbus-supply = <&usb_otg_vbus>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&hikari_usb_id &hikari_usb_vbus_detect>;
+
+		port {
+			usb_connector_hs: endpoint {
+				remote-endpoint = <&usb_hs1_drd>;
+			};
+		};
+	};
+
 	usb_hs1: usb@12500000 {
 		compatible = "qcom,ci-hdrc";
 		reg = <0x12500000 0x200>, <0x12500200 0x200>;
@@ -105,12 +121,20 @@
 		resets = <&gcc USB_HS1_RESET>;
 		reset-names = "core";
 		phy_type = "ulpi";
-		dr_mode = "peripheral";
+		dr_mode = "otg";
+		usb-role-switch;
+		role-switch-default-mode = "peripheral";
 		ahb-burst-config = <0>;
 		phys = <&usb_hs1_phy>;
 		phy-names = "usb-phy";
 		#reset-cells = <1>;
 		status = "okay";
+
+		port {
+			usb_hs1_drd: endpoint {
+				remote-endpoint = <&usb_connector_hs>;
+			};
+		};
 
 		ulpi {
 			usb_hs1_phy: phy {
@@ -373,7 +397,7 @@
 		status = "okay";
 	};
 
-	charger@6b {
+	bq24160: charger@6b {
 		compatible = "ti,bq24160";
 		reg = <0x6b>;
 		interrupt-parent = <&tlmm>;
@@ -385,5 +409,11 @@
 		ti,charge-term-current-microamp = <50000>;
 		wakeup-source;
 		status = "okay";
+
+		usb_otg_guard: usb-otg-guard {
+			regulator-name = "usb-otg-guard";
+			regulator-min-microvolt = <5000000>;
+			regulator-max-microvolt = <5000000>;
+		};
 	};
 };

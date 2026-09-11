@@ -5,12 +5,12 @@ authorizes no phone operation.
 
 ## Provenance and hardware model
 
-`VERIFIED_VENDOR_SOURCE`: the Sony/Fuji downstream board file registers the
+`HISTORICAL_SOURCE`: the Sony/Fuji downstream board file registers the
 connector-facing HSUSB controller at `0x12500000`; its `msm_hsusb_ldo_init()`
 uses PM8058 L6 at 3.05 V and L7 at 1.8 V. It also contains PM8058 MPP10 VBUS
-and PMIC GPIO30 ID handling for Android OTG role switching. BOOT #5 does not
-claim that those callbacks map to an upstream extcon, so it deliberately sets
-the controller to `dr_mode = "peripheral"` only.
+and PMIC GPIO30 ID handling for OTG role switching. The initial BOOT #5 model
+deliberately used peripheral-only mode; the current local successor converts
+the exact wiring to the upstream USB role-switch and regulator frameworks.
 
 `VERIFIED_UPSTREAM`: Linux
 [`786262be6048`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=786262be6048deab760f68c8acc2c85607165894)
@@ -49,12 +49,11 @@ No ECM function is configured in BOOT #5. Adding a composite function before
 the ACM transport has a physical result would make failure attribution worse.
 
 If the UDC binds, g_serial creates `/dev/ttyGS0`; a separate supervisor waits
-indefinitely for it and restarts the console service if it exits. First it
-writes an explicit raw transport marker, then starts `/bin/sh -i` with stdin,
-stdout, and stderr all attached to `/dev/ttyGS0`. This deliberately proves
-basic I/O before a later getty/controlling-TTY refinement. PID 1 remains
-independent, logs its state to ramoops, and emits an `ALIVE` marker every 30
-seconds.
+indefinitely for it and restarts `/bin/sh -i` with stdin, stdout, and stderr
+attached to that node. It performs no raw write before opening the shell: such
+a write can block forever after a cable disconnect and prevent the supervisor
+from serving a later reconnect. PID 1 remains independent, logs its state to
+ramoops, and emits an `ALIVE` marker every 30 seconds.
 
 ## Host use after an owner-approved physical boot
 
@@ -140,6 +139,44 @@ continued beyond 515 seconds. A simultaneous BQ24160 USB-supply fault and later
 input cycling are relevant but not yet proven causal. Reliable enumeration and
 reconnect are therefore a current `REGRESSION`; see
 [the post-mortem](../research/device/current/boot/usb-charging-postmortem-2026-09-11.md).
+
+## Local dual-role and OTG successor
+
+The post-mortem successor is built but has not been deployed. It adds the
+exact Fuji/Hikari connector and source path found in OpenSEMC revision
+`c4784b04c08d30f799b8b14b597aeb2124d2e6e1`:
+
+```text
+PM8058 GPIO30, active-low ID (1.5 kOhm pull-up to S3) -> gpio-usb-b-connector
+PM8058 MPP10, active-low VBUS detect                 -> gpio-usb-b-connector
+connector role switch <-> HSUSB1 ChipIdea @ 0x12500000
+
+BQ24160 OTG lock -> PM8901 MPP1 EXT_5V enable
+                 -> NCP373 load switch, enable TLMM28
+                 -> connector VBUS
+NCP373 fault     -> TLMM104, active low
+```
+
+PM8901 is the second SSBI PMIC at `0x00c00000`, with its interrupt on TLMM91
+active low and four MPPs. Patch 0066 adds the missing generic PM8901 MFD and
+MPP matches. The DT changes HSUSB1 to `dr_mode = "otg"`, keeps peripheral as
+the safe default, and represents both connector graph directions.
+
+The source regulator chain enforces Sony's required order. Enabling host VBUS
+first asserts the BQ24160 OTG lock and disables charging, then enables the
+PM8901 external 5 V stage, and finally closes NCP373. Disable unwinds that
+order and immediately restarts the conservative charging policy. This avoids
+driving VBUS into the charger input and keeps the 500 mA sink policy unchanged.
+
+The initramfs console correction and dual-role hardware model are local build
+results only. Device mode remains `REGRESSION` until sustained enumeration,
+shell traffic and disconnect/reconnect pass. OTG remains `IMPLEMENTING` until
+a real peripheral enumerates and transfers data while the phone supplies VBUS.
+
+Required OTG acceptance uses a low-risk device such as a USB keyboard or
+powered hub first. It must confirm the role transition, approximately 5 V on
+VBUS, peripheral enumeration and real input/data traffic, with no BQ24160 or
+NCP373 fault. Unpowered high-current disks are not an initial test load.
 
 ## BOOT #5 diagnostic boundary
 
