@@ -97,8 +97,8 @@
 	usb_connector: connector {
 		compatible = "gpio-usb-b-connector", "usb-b-connector";
 		type = "micro";
-		id-gpios = <&pm8058_gpio 29 GPIO_ACTIVE_HIGH>;
-		vbus-gpios = <&pm8058_mpps 9 GPIO_ACTIVE_LOW>;
+		id-gpios = <&pm8058_gpio 31 GPIO_ACTIVE_HIGH>;
+		vbus-gpios = <&pm8058_mpps 11 GPIO_ACTIVE_LOW>;
 		vbus-supply = <&usb_otg_vbus>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&hikari_usb_id &hikari_usb_vbus_detect>;

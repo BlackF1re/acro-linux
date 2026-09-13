@@ -10,7 +10,7 @@ CONFIG_ARCH_QCOM_RESERVE_SMEM=y
 CONFIG_ARM_APPENDED_DTB=y
 CONFIG_ARM_ATAG_DTB_COMPAT=y
 CONFIG_ARM_ATAG_DTB_COMPAT_CMDLINE_EXTEND=y
-CONFIG_CMDLINE="console=tty0 console=ttyGS0,115200 driver_async_probe=mdp4,msm_dsi"
+CONFIG_CMDLINE="console=tty0 driver_async_probe=mdp4,msm_dsi"
 CONFIG_DEVTMPFS=y
 CONFIG_DEVTMPFS_MOUNT=y
 CONFIG_TMPFS=y
@@ -36,10 +36,10 @@ CONFIG_USB_CHIPIDEA_MSM=y
 CONFIG_PHY_QCOM_USB_HS=y
 CONFIG_USB_GADGET=y
 CONFIG_USB_G_SERIAL=y
-CONFIG_U_SERIAL_CONSOLE=y
+# CONFIG_U_SERIAL_CONSOLE is not set
 
 # Diagnostic-survival policy: recoverable peripheral faults should leave the
-# kernel alive long enough for ttyGS0 and ramoops to report the failure.  A
+# kernel alive long enough for tty0 and ramoops to report the failure.  A
 # true fatal panic still stops execution, but must not be triggered merely by
 # an oops, hung-task report or soft-lockup warning in experimental drivers.
 # CONFIG_PANIC_ON_OOPS is not set

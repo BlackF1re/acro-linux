@@ -1,0 +1,60 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Sat, 12 Sep 2026 19:30:00 +0700
+Subject: [PATCH 71/71] pinctrl: qcom: ssbi-mpp: use the PM8901 register base
+
+Unlike the other PM8xxx variants supported by this driver, PM8901 places
+its MPP control registers at 0x27 rather than 0x50.  Using the common base
+updates unrelated PMIC registers while the pinctrl cache misleadingly shows
+the requested MPP state.
+
+Select the PM8901 base when probing its compatible.  This lets MPP1 really
+drive the external 5 V enable on Sony Hikari instead of leaving the hardware
+at the bootloader-provided low state.
+
+Signed-off-by: BlackF1re <plevickij57@gmail.com>
+---
+ drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c b/drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c
+index 645a0f8fb..c51031358 100644
+--- a/drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c
++++ b/drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c
+@@ -27,7 +27,7 @@
+ 
+ /* MPP registers */
+ #define SSBI_REG_ADDR_MPP_BASE		0x50
+-#define SSBI_REG_ADDR_MPP(n)		(SSBI_REG_ADDR_MPP_BASE + n)
++#define SSBI_REG_ADDR_PM8901_MPP_BASE	0x27
+ 
+ /* MPP Type: type */
+ #define PM8XXX_MPP_TYPE_D_INPUT         0
+@@ -839,6 +839,7 @@ static int pm8xxx_mpp_probe(struct platform_device *pdev)
+ 	struct pinctrl_pin_desc *pins;
+ 	struct gpio_irq_chip *girq;
+ 	struct pm8xxx_mpp *pctrl;
++	unsigned int reg_base = SSBI_REG_ADDR_MPP_BASE;
+ 	int ret;
+ 	int i;
+ 
+@@ -849,6 +850,8 @@ static int pm8xxx_mpp_probe(struct platform_device *pdev)
+ 	pctrl->dev = &pdev->dev;
+ 	pctrl->npins = (uintptr_t) device_get_match_data(&pdev->dev);
+ 
++	if (of_device_is_compatible(pdev->dev.of_node, "qcom,pm8901-mpp"))
++		reg_base = SSBI_REG_ADDR_PM8901_MPP_BASE;
+ 	pctrl->regmap = dev_get_regmap(pdev->dev.parent, NULL);
+ 	if (!pctrl->regmap) {
+ 		dev_err(&pdev->dev, "parent regmap unavailable\n");
+@@ -873,7 +876,7 @@ static int pm8xxx_mpp_probe(struct platform_device *pdev)
+ 		return -ENOMEM;
+ 
+ 	for (i = 0; i < pctrl->desc.npins; i++) {
+-		pin_data[i].reg = SSBI_REG_ADDR_MPP(i);
++		pin_data[i].reg = reg_base + i;
+ 
+ 		ret = pm8xxx_pin_populate(pctrl, &pin_data[i]);
+ 		if (ret)
+-- 
+2.53.0

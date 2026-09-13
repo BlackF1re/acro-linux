@@ -37,7 +37,7 @@ for option in \
   CONFIG_USB=y CONFIG_USB_GADGET=y \
   CONFIG_USB_CHIPIDEA=y CONFIG_USB_CHIPIDEA_UDC=y \
   CONFIG_USB_CHIPIDEA_MSM=y CONFIG_PHY_QCOM_USB_HS=y \
-  CONFIG_USB_G_SERIAL=y CONFIG_U_SERIAL_CONSOLE=y \
+  CONFIG_USB_G_SERIAL=y \
   CONFIG_USB_U_SERIAL=y CONFIG_USB_F_ACM=y CONFIG_USB_LIBCOMPOSITE=y; do
   grep -qx "$option" "$config" || {
     echo "HIKARI_DIAG_SURVIVAL=FAIL missing built-in $option" >&2
@@ -47,7 +47,7 @@ done
 
 # Recoverable bring-up faults should be logged, not deliberately escalated to
 # panic.  The detectors remain useful because they emit diagnostics to both
-# ttyGS0 and ramoops while their panic actions stay disabled.
+# tty0 and ramoops while their panic actions stay disabled.
 grep -qx '# CONFIG_PANIC_ON_OOPS is not set' "$config" || {
   echo 'HIKARI_DIAG_SURVIVAL=FAIL panic-on-oops must remain disabled' >&2
   exit 1
@@ -62,11 +62,14 @@ for option in \
   }
 done
 
-# Keep the known-good console first-class and keep risky display probes off the
-# synchronous initcall path.  Additional drivers may fail or defer without
-# becoming a prerequisite for ttyGS0.
-grep -Eq '^CONFIG_CMDLINE=".*console=tty0 .*console=ttyGS0,115200 .*driver_async_probe=mdp4,msm_dsi.*"$' "$config" || {
-  echo 'HIKARI_DIAG_SURVIVAL=FAIL ttyGS0/async display cmdline invariant lost' >&2
+# Keep display probes off the synchronous initcall path, but never make ttyGS0
+# a kernel console: an open gserial line deadlocks ChipIdea OTG teardown.
+grep -Eq '^CONFIG_CMDLINE=".*console=tty0 .*driver_async_probe=mdp4,msm_dsi.*"$' "$config" || {
+  echo 'HIKARI_DIAG_SURVIVAL=FAIL tty0/async display cmdline invariant lost' >&2
+  exit 1
+}
+grep -qx '# CONFIG_U_SERIAL_CONSOLE is not set' "$config" || {
+  echo 'HIKARI_DIAG_SURVIVAL=FAIL ttyGS0 kernel console blocks OTG switching' >&2
   exit 1
 }
 
@@ -80,8 +83,25 @@ fi
 for marker in \
   'console_supervisor()' \
   'console_supervisor &' \
-  '/bin/sh -i </dev/ttyGS0 >/dev/ttyGS0 2>&1' \
+  '/sys/class/udc/ci_hdrc.0/state' \
+  '[ "$state" = configured ]' \
+  '[ "$role" = device ]' \
+  '[ "$role" != device ]' \
+  '/usr/sbin/hikari-console-launch &' \
+  'shell_pid=$!' \
+  'kill -0 "$shell_pid"' \
+  'kill "$shell_pid"' \
+  'wait "$shell_pid"' \
   'HIKARI SHELL EXIT rc=$?' \
+  'HIKARI SHELL ROLE EXIT' \
+  'HIKARI SHELL RETRY DELAY' \
+  '/bin/sleep 5' \
+  'HIKARI SHELL WAIT DEVICE ROLE' \
+  'usb_role_monitor()' \
+  'usb_role_monitor &' \
+  'HIKARI USB TRANSITION' \
+  'HIKARI PM8901 RAW' \
+  'HIKARI BQ24160 RAW' \
   'HIKARI ALIVE uptime=$1'; do
   grep -Fq "$marker" "$init" || {
     echo "HIKARI_DIAG_SURVIVAL=FAIL PID1 invariant missing: $marker" >&2
@@ -100,6 +120,10 @@ if grep -Eq 'printf.*>[[:space:]]*/dev/ttyGS0' "$init"; then
   echo 'HIKARI_DIAG_SURVIVAL=FAIL raw ttyGS0 write can block reconnect supervision' >&2
   exit 1
 fi
+if grep -Fq 'HIKARI SHELL RESTART' "$init"; then
+  echo 'HIKARI_DIAG_SURVIVAL=FAIL unbounded ttyGS0 shell respawn blocks OTG teardown' >&2
+  exit 1
+fi
 
 # Reuse the physically verified BOOT #5 USB/DT checks and the TWRP-compatible
 # persistent-console checks instead of duplicating their hardware constants.
@@ -108,4 +132,4 @@ fi
 python3 "$repo_root/tools/check_hikari_kernel_guards.py" --kernel-src "$kernel_src"
 
 echo 'HIKARI_DIAG_SURVIVAL=PASS'
-echo 'usb=ttyGS0 built-in OTG device path; pid1=independent supervisor; panic-escalation=off; ramoops=retained'
+echo 'usb=ttyGS0 session gated by USB device role and UDC configured state; retry=bounded; ttyGS0 kernel console=off; pid1=independent; ramoops=retained'

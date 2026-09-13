@@ -1,0 +1,78 @@
+
+/bin/sh: gpio0: not found
+~ # echo HIKARI_0076_FOCUSED
+HIKARI_0076_FOCUSED
+~ # for f in /sys/class/usb_role/*/role; do echo ROLE=$(cat $f); done
+ROLE=device
+~ # mount -t debugfs none /sys/kernel/debug 2>/dev/null || true
+~ # cat /sys/kernel/debug/regulator/regulator_summary | grep -E 'usb|otg|ext|ncp
+|5v|bq24160|pm8901'
+    ncp                           0    0      0 unknown     0mV     0mA     0mV     0mV 
+ usb-otg-guard                    0    1      0 unknown  5000mV     0mA  5000mV  5000mV 
+    ext-5v                        0    1      0 unknown  5000mV     0mA  5000mV  5000mV 
+       usb-otg-vbus               0    1      0 unknown  5000mV     0mA  5000mV  5000mV 
+~ # cat /sys/kernel/debug/gpio | grep -E 'usb|otg|ncp|ext|gpio31|gpio104|mpp1|mp
+p11'
+ gpio31  : in  low  func0 2mA pull down
+ gpio104 : in  high func0 2mA no pull
+ mpp1 : digital in gpio
+ mpp10: sink 5mA low
+ mpp11: digital in gpio
+ mpp12: sink 5mA low
+ gpio31: in   normal  VIN2 pull-up 1.5uA               push-pull  low  high   
+ mpp1 : digital bi-dir 0Ohm
+~ # dmesg | grep -E 'HIKARI SHELL|usb-conn-gpio|ci_hdrc|EHCI|new (full|high|low)
+-speed USB|gserial_free|blocked for more|bq24160|ncp|regulator' | tail -n 180
+[    0.403599] qcom_rpm_reg 104000.rpm:regulators-1: regulator requires qcom,switch-mode-frequency property
+[    0.403891] qcom_rpm_reg 104000.rpm:regulators-1: driver callback failed to parse DT for regulator s3
+[    1.031673] rmi4_i2c 0-002c: supply vio not found, using dummy regulator
+[    1.296819] bq24160 1-006b: status raw=0x2b stat=2 fault=3
+[    1.300061] hci_uart_bcm serial0-0: supply vbat not found, using dummy regulator
+[    1.302032] hci_uart_bcm serial0-0: supply vddio not found, using dummy regulator
+[    1.310629] pm8xxx-adc 500000.ssbi:pmic:xoadc@197: supply xoadc-ref not found, using dummy regulator
+[    2.313076] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+[    2.355717] faux_driver regulatory: Direct firmware load for regulatory.db failed with error -2
+[    2.356455] cfg80211: failed to load regulatory.db
+[    2.655599] HIKARI USB SYSFS UDC: ci_hdrc.0
+[    2.683625] HIKARI SHELL START
+[    5.931813] HIKARI SHELL EXIT rc=0
+[    5.941456] HIKARI SHELL WAIT DISCONNECT
+[   11.451778] bq24160 1-006b: status raw=0x27 stat=2 fault=7
+[  539.041083] workqueue: work func bq24160_status_work enqueued on deprecated workqueue. Use system_{percpu|dfl}_wq instead.
+[  539.047680] bq24160 1-006b: status raw=0x07 stat=0 fault=7
+[  543.771734] bq24160 1-006b: status raw=0x20 stat=2 fault=0
+[  543.931721] bq24160 1-006b: status raw=0x27 stat=2 fault=7
+[  544.101729] bq24160 1-006b: status raw=0x22 stat=2 fault=2
+[  545.606013] HIKARI SHELL START
+[  564.411729] bq24160 1-006b: status raw=0x27 stat=2 fault=7
+[  752.973542] HIKARI SHELL EXIT rc=0
+[  752.976953] HIKARI SHELL WAIT DISCONNECT
+[  753.231769] bq24160 1-006b: status raw=0x07 stat=0 fault=7
+[  758.971743] bq24160 1-006b: status raw=0x00 stat=0 fault=0
+[  776.522787] ci_hdrc ci_hdrc.0: EHCI Host Controller
+[  776.526735] ci_hdrc ci_hdrc.0: new USB bus registered, assigned bus number 1
+[  776.551279] ci_hdrc ci_hdrc.0: USB 2.0 started, EHCI 1.00
+[  776.582288] usb usb1: Product: EHCI Host Controller
+[  776.597775] usb usb1: SerialNumber: ci_hdrc.0
+[  790.192690] ci_hdrc ci_hdrc.0: remove, state 4
+[  790.202670] ci_hdrc ci_hdrc.0: USB bus 1 deregistered
+[  807.212785] ci_hdrc ci_hdrc.0: EHCI Host Controller
+[  807.216847] ci_hdrc ci_hdrc.0: new USB bus registered, assigned bus number 1
+[  807.251176] ci_hdrc ci_hdrc.0: USB 2.0 started, EHCI 1.00
+[  807.266012] usb usb1: Product: EHCI Host Controller
+[  807.273483] usb usb1: SerialNumber: ci_hdrc.0
+[  859.592720] ci_hdrc ci_hdrc.0: remove, state 4
+[  859.603119] ci_hdrc ci_hdrc.0: USB bus 1 deregistered
+[  862.954670] ci_hdrc ci_hdrc.0: EHCI Host Controller
+[  862.964906] ci_hdrc ci_hdrc.0: new USB bus registered, assigned bus number 1
+[  862.991170] ci_hdrc ci_hdrc.0: USB 2.0 started, EHCI 1.00
+[  863.025786] usb usb1: Product: EHCI Host Controller
+[  863.043279] usb usb1: SerialNumber: ci_hdrc.0
+[  868.672729] ci_hdrc ci_hdrc.0: remove, state 4
+[  868.694228] ci_hdrc ci_hdrc.0: USB bus 1 deregistered
+[  882.251943] bq24160 1-006b: status raw=0x20 stat=2 fault=0
+[  882.581699] bq24160 1-006b: status raw=0x27 stat=2 fault=7
+[  883.181512] HIKARI SHELL START
+[  892.091738] bq24160 1-006b: status raw=0x22 stat=2 fault=2
+[  902.331717] bq24160 1-006b: status raw=0x27 stat=2 fault=7
+~ # exit

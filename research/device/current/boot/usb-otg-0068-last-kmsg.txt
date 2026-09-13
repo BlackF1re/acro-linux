@@ -1,0 +1,343 @@
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 7.3.0-rc1-gca6633c7d4dd-dirty (hikari-build@local) (arm-linux-gnueabihf-gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0, GNU ld (GNU Binutils for Ubuntu) 2.46) #1 SMP PREEMPT 1970-01-01 00:00:00 UTC
+[    0.000000] CPU: ARMv7 Processor [510f02d4] revision 4 (ARMv7), cr=10c5787d
+[    0.000000] CPU: PIPT / VIPT nonaliasing data cache, VIVT ASID tagged instruction cache
+[    0.000000] OF: fdt: Machine model: Sony Xperia acro S (Hikari)
+[    0.000000] Memory policy: Data cache writealloc
+[    0.000000] cma: Reserved 64 MiB at 0x7bc00000
+[    0.000000] OF: reserved mem: 0x7ffe0000..0x7fffffff (128 KiB) map non-reusable ramoops@7ffe0000
+[    0.000000] Zone ranges:
+[    0.000000]   Normal   [mem 0x0000000040200000-0x000000006fffffff]
+[    0.000000]   HighMem  [mem 0x0000000070000000-0x000000007fefffff]
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000040200000-0x0000000042efffff]
+[    0.000000]   node   0: [mem 0x0000000048000000-0x000000007fefffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000040200000-0x000000007fefffff]
+[    0.000000] On node 0, zone Normal: 512 pages in unavailable ranges
+[    0.000000] On node 0, zone Normal: 256 pages in unavailable ranges
+[    0.000000] On node 0, zone HighMem: 256 pages in unavailable ranges
+[    0.000000] percpu: Embedded 17 pages/cpu s40332 r8192 d21108 u69632
+[    0.000000] Kernel command line:  startup=0x30 ta_info=0,16,256  semcandroidboot.babe1324=<redacted-device-id> warmboot=0x77665501 androidboot.serialno=<redacted-device-id>
+[    0.000000] Unknown kernel command line parameters "startup=0x30 ta_info=0,16,256 warmboot=0x77665501", will be passed to user space.
+[    0.000000] printk: log buffer data + meta data: 131072 + 409600 = 540672 bytes
+[    0.000000] Dentry cache hash table entries: 131072 (order: 7, 524288 bytes, linear)
+[    0.000000] Inode-cache hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 240640
+[    0.000000] mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+[    0.000000] SLUB: HWalign=32, Order=0-3, MinObjects=0, CPUs=2, Nodes=1
+[    0.000000] rcu: Preemptible hierarchical RCU implementation.
+[    0.000000] rcu: 	RCU event tracing is enabled.
+[    0.000000] rcu: 	RCU restricting CPUs from NR_CPUS=4 to nr_cpu_ids=2.
+[    0.000000] 	Trampoline variant of Tasks RCU enabled.
+[    0.000000] 	Tracing variant of Tasks RCU enabled.
+[    0.000000] rcu: RCU calculated value of scheduler-enlistment delay is 10 jiffies.
+[    0.000000] rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=2
+[    0.000000] RCU Tasks: Setting shift to 1 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=2.
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[    0.000000] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.000000] clocksource: dg_timer: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 283149695806 ns
+[    0.000001] sched_clock: 32 bits at 7MHz, resolution 148ns, wraps every 318145725365ns
+[    0.000023] Switching to timer-based delay loop, resolution 148ns
+[    0.000741] Console: colour dummy device 80x30
+[    0.000770] printk: legacy console [tty0] enabled
+[    0.001926] Calibrating delay loop (skipped), value calculated using timer frequency.. 13.50 BogoMIPS (lpj=67500)
+[    0.001995] CPU: Testing write buffer coherency: ok
+[    0.002114] pid_max: default: 32768 minimum: 301
+[    0.002457] Mount-cache hash table entries: 2048 (order: 1, 8192 bytes, linear)
+[    0.002532] Mountpoint-cache hash table entries: 2048 (order: 1, 8192 bytes, linear)
+[    0.003151] VFS: Finished mounting rootfs on nullfs
+[    0.004277] CPU0: thread -1, cpu 0, socket 0, mpidr 80000000
+[    0.004711] qcom_scm: convention: smc legacy
+[    0.105917] Setting up static identity map for 0x40300000 - 0x40300060
+[    0.106328] rcu: Hierarchical SRCU implementation.
+[    0.106374] rcu: 	Max phase no-delay instances is 1000.
+[    0.107055] Timer migration: 1 hierarchy levels; 8 children per group; 1 crossnode level
+[    0.109668] smp: Bringing up secondary CPUs ...
+[    0.111704] CPU1: thread -1, cpu 1, socket 0, mpidr 80000001
+[    0.112616] smp: Brought up 1 node, 2 CPUs
+[    0.112708] SMP: Total of 2 processors activated (27.00 BogoMIPS).
+[    0.112749] CPU: All CPU(s) started in SVC mode.
+[    0.113120] Memory: 856996K/962560K available (15360K kernel code, 2088K rwdata, 7016K rodata, 2048K init, 259K bss, 37644K reserved, 65536K cma-reserved, 195584K highmem)
+[    0.114658] devtmpfs: initialized
+[    0.137561] VFP support v0.3: implementor 51 architecture 64 part 2d variant 0 rev 0
+[    0.138553] posixtimers hash table entries: 1024 (order: 1, 8192 bytes, linear)
+[    0.138737] futex hash table entries: 512 (32768 bytes on 1 NUMA nodes, total 32 KiB, linear).
+[    0.148435] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    0.150545] DMA: preallocated 256 KiB pool for atomic coherent allocations
+[    0.155124] thermal_sys: Registered thermal governor 'step_wise'
+[    0.155392] cpuidle: using governor menu
+[    0.156436] hw-breakpoint: Scorpion CPU detected. Hardware breakpoints and watchpoints disabled
+[    0.162229] ramoops: uncorrectable error in header
+[    0.162531] printk: legacy console [ramoops-1] enabled
+[    0.186179] pstore: Registered ramoops as persistent store backend
+[    0.186487] ramoops: using 0x20000@0x7ffe0000, ecc: 16
+[    0.221009] qcom_rpm 104000.rpm: RPM firmware 2.0.102
+[    0.238389] /usb@12500000: Fixed dependency cycle(s) with /connector
+[    0.238705] /connector: Fixed dependency cycle(s) with /usb@12500000
+[    0.239196] /usb@12500000/ulpi/phy: Fixed dependency cycle(s) with /usb@12500000
+[    0.239487] /usb@12500000: Fixed dependency cycle(s) with /usb@12500000/ulpi/phy
+[    0.244234] qnoc-msm8660 interconnect-afab: RPM fabric ARB enabled (4 masters, 4 slaves, 2 tiered)
+[    0.244853] qnoc-msm8660 interconnect-afab: MSM8660 interconnect provider registered
+[    0.247329] qnoc-msm8660 interconnect-sfab: RPM fabric ARB enabled (17 masters, 9 slaves, 2 tiered)
+[    0.248040] qnoc-msm8660 interconnect-sfab: MSM8660 interconnect provider registered
+[    0.251409] qnoc-msm8660 interconnect-mmfab: RPM fabric ARB enabled (14 masters, 4 slaves, 3 tiered)
+[    0.252104] qnoc-msm8660 interconnect-mmfab: MSM8660 interconnect provider registered
+[    0.254457] qnoc-msm8660 interconnect-dfab: MSM8660 interconnect provider registered
+[    0.258479] /dsi@4700000: Fixed dependency cycle(s) with /display-controller@5100000
+[    0.258708] /display-controller@5100000: Fixed dependency cycle(s) with /dsi@4700000
+[    0.259109] /dsi@4700000/panel@0: Fixed dependency cycle(s) with /dsi@4700000
+[    0.259398] /dsi@4700000: Fixed dependency cycle(s) with /dsi@4700000/panel@0
+[    0.266071] kprobes: kprobe jump-optimization is enabled. All kprobes are optimized if possible.
+[    0.275374] iommu: Default domain type: Translated
+[    0.275725] iommu: DMA domain TLB invalidation policy: strict mode
+[    0.278449] SCSI subsystem initialized
+[    0.280383] usbcore: registered new interface driver usbfs
+[    0.281059] usbcore: registered new interface driver hub
+[    0.281489] usbcore: registered new device driver usb
+[    0.282403] mc: Linux media interface: v0.10
+[    0.283100] videodev: Linux video capture interface: v2.00
+[    0.283916] pps_core: LinuxPPS API ver. 1 registered
+[    0.284226] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[    0.284926] PTP clock support registered
+[    0.286026] qcom_scm firmware:scm: MSM8x60 legacy SCM provider probe begin
+[    0.287295] qcom_scm firmware:scm: MSM8x60 legacy SCM provider ready for atomic SCM_IO
+[    0.288810] l1: Bringing 0uV into 3050000-3050000uV
+[    0.289517] l2: Bringing 0uV into 2850000-2850000uV
+[    0.290271] Advanced Linux Sound Architecture Driver Initialized.
+[    0.291177] l5: Bringing 0uV into 2850000-2850000uV
+[    0.293088] Bluetooth: Core ver 2.22
+[    0.293699] NET: Registered PF_BLUETOOTH protocol family
+[    0.293998] Bluetooth: HCI device and connection manager initialized
+[    0.294499] Bluetooth: HCI socket layer initialized
+[    0.294804] Bluetooth: L2CAP socket layer initialized
+[    0.295650] Bluetooth: SCO socket layer initialized
+[    0.296718] nfc: nfc_init: NFC Core ver 0.1
+[    0.297250] qcom_rpm_reg 104000.rpm:regulators-1: regulator requires qcom,switch-mode-frequency property
+[    0.297280] NET: Registered PF_NFC protocol family
+[    0.297322] qcom_rpm_reg 104000.rpm:regulators-1: driver callback failed to parse DT for regulator s3
+[    0.297927] vgaarb: loaded
+[    0.299257] l0: Bringing 0uV into 1200000-1200000uV
+[    0.300512] clocksource: Switched to clocksource dg_timer
+[    0.302809] l6: Bringing 0uV into 3050000-3050000uV
+[    0.303632] l7: Bringing 0uV into 1800000-1800000uV
+[    0.308766] l8: Bringing 0uV into 1800000-1800000uV
+[    0.311812] l10: Bringing 0uV into 2850000-2850000uV
+[    0.322603] l14: Bringing 0uV into 2850000-2850000uV
+[    0.349667] NET: Registered PF_INET protocol family
+[    0.350803] IP idents hash table entries: 16384 (order: 5, 131072 bytes, linear)
+[    0.355761] tcp_listen_portaddr_hash hash table entries: 512 (order: 0, 4096 bytes, linear)
+[    0.356349] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    0.356693] TCP established hash table entries: 8192 (order: 3, 32768 bytes, linear)
+[    0.357415] TCP bind hash table entries: 8192 (order: 5, 131072 bytes, linear)
+[    0.358695] TCP: Hash tables configured (established 8192 bind 8192)
+[    0.359262] UDP hash table entries: 512 (order: 3, 28672 bytes, linear)
+[    0.360314] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    0.362264] RPC: Registered named UNIX socket transport module.
+[    0.362790] RPC: Registered udp transport module.
+[    0.363079] RPC: Registered tcp transport module.
+[    0.363543] RPC: Registered tcp-with-tls transport module.
+[    0.363836] RPC: Registered tcp NFSv4.1 backchannel transport module.
+[    0.368757] PCI: CLS 0 bytes, default 64
+[    0.383174] Initialise system trusted keyrings
+[    0.390921] workingset: timestamp_bits=30 (anon: 25) max_order=18 bucket_order=0 (anon: 0)
+[    0.401122] NFS: Registering the id_resolver key type
+[    0.401463] Key type id_resolver registered
+[    0.401616] Key type id_legacy registered
+[    0.401779] nfs4filelayout_init: NFSv4 File Layout Driver Registering...
+[    0.402022] nfs4flexfilelayout_init: NFSv4 Flexfile Layout Driver Registering...
+[    0.471334] Key type cifs.idmap registered
+[    0.471726] jffs2: version 2.2. (NAND) Â© 2001-2006 Red Hat, Inc.
+[    0.472268] fuse: init (API version 7.46)
+[    0.474250] Key type asymmetric registered
+[    0.474579] Asymmetric key parser 'x509' registered
+[    0.475191] Block layer SCSI generic (bsg) driver version 0.4 loaded (major 243)
+[    0.475520] io scheduler mq-deadline registered
+[    0.476004] io scheduler kyber registered
+[    0.476372] io scheduler bfq registered
+[    0.509099] gsbi 16200000.gsbi: GSBI port protocol: 2 crci: 0
+[    0.522778] gsbi 16500000.gsbi: GSBI port protocol: 4 crci: 0
+[    0.525999] gsbi 19800000.gsbi: GSBI port protocol: 2 crci: 0
+[    0.540990] gsbi 19c00000.gsbi: GSBI port protocol: 2 crci: 0
+[    0.550339] msm_serial 16540000.serial: msm_serial: detected port #0
+[    0.550956] msm_serial 16540000.serial: uartclk = 27000000
+[    0.560882] 16540000.serial: ttyMSM0 MMIO:0x16540000 (irq = 29, base_baud = 1687500) is a MSM
+[    0.561843] serial serial0: tty port ttyMSM0 registered
+[    0.562440] msm_serial: driver initialized
+[    0.622175] Trying to unpack rootfs image as initramfs...
+[    0.630229] brd: module loaded
+[    0.661789] loop: module loaded
+[    0.662603] ssbi 500000.ssbi: SSBI controller type: 'pmic-arbiter'
+[    0.664332] pm8xxx_probe: PMIC revision 1: E3
+[    0.664524] pm8xxx_probe: PMIC revision 2: 00
+[    0.701014] ssbi c00000.ssbi: SSBI controller type: 'pmic-arbiter'
+[    0.702542] pm8xxx_probe: PMIC revision 1: F4
+[    0.702726] pm8xxx_probe: PMIC revision 2: 03
+[    0.712402] SCSI Media Changer driver v0.25 
+[    0.725386] SLIP: version 0.8.4-NET3.019-NEWTTY (dynamic channels, max=256) (6 bit encapsulation enabled).
+[    0.725689] CSLIP: code copyright 1989 Regents of the University of California.
+[    0.726386] usbcore: registered new interface driver ax88179_178a
+[    0.726671] usbcore: registered new interface driver cdc_ether
+[    0.727055] usbcore: registered new interface driver net1080
+[    0.727332] usbcore: registered new interface driver cdc_subset
+[    0.727698] usbcore: registered new interface driver cdc_ncm
+[    0.727975] usbcore: registered new interface driver r8153_ecm
+[    0.741811] usbcore: registered new interface driver cdc_acm
+[    0.742006] cdc_acm: USB Abstract Control Model driver for USB modems and ISDN adapters
+[    0.892843] Freeing initrd memory: 1084K
+[    0.914521] g_serial gadget.0: Gadget Serial v2.4
+[    0.914809] g_serial gadget.0: g_serial ready
+[    0.916328] input: PMIC8XXX keypad as /devices/platform/soc/500000.ssbi/500000.ssbi:pmic/500000.ssbi:pmic:keypad@148/input/input0
+[    0.923253] input: pm8xxx_vib_ffmemless as /devices/platform/soc/500000.ssbi/500000.ssbi:pmic/500000.ssbi:pmic:vibrator@4a/input/input1
+[    0.926747] input: pmic8xxx_pwrkey as /devices/platform/soc/500000.ssbi/500000.ssbi:pmic/500000.ssbi:pmic:pwrkey@1c/input/input2
+[    0.933777] rtc-pm8xxx 500000.ssbi:pmic:rtc@1e8: registered as rtc0
+[    0.934419] rtc-pm8xxx 500000.ssbi:pmic:rtc@1e8: setting system clock to 1970-01-06T14:43:09 UTC (484989)
+[    0.935384] i2c_dev: i2c /dev entries driver
+[    0.936703] i2c_qup 16280000.i2c: using default clock-frequency 100000
+[    0.940929] rmi4_i2c 0-002c: supply vio not found, using dummy regulator
+[    0.942831] rmi4_i2c 0-002c: rmi_set_page: set page failed: -6.
+[    0.943354] rmi4_i2c 0-002c: Failed to set page select to 0
+[    0.964093] as3676-hikari 1-0040: Hikari DCDC started: CTRL=0xd DCDC1=0x62 DCDC2=0x8c
+[    0.966015] as3676-hikari 1-0040: AS3676 detected (IDs 0xae 0x52): LCD DCDC ready; backlight waits for DRM panel enable
+[    0.971007] pn544_hci_i2c 1-0028: NFC: Detecting nfc_en polarity
+[    1.153488] pn544_hci_i2c 1-0028: NFC: Could not detect nfc_en polarity, fallback to active high
+[    1.172545] i2c_qup 19c80000.i2c: using default clock-frequency 100000
+[    1.179925] bq27xxx-battery 1-0055: data memory update not supported for chip
+[    1.205157] bq24160 1-006b: status raw=0x2b stat=2 fault=3
+[    1.214624] Bluetooth: HCI UART driver ver 2.3
+[    1.214975] Bluetooth: HCI UART protocol H4 registered
+[    1.217351] hci_uart_bcm serial0-0: supply vbat not found, using dummy regulator
+[    1.218339] hci_uart_bcm serial0-0: supply vddio not found, using dummy regulator
+[    1.219664] Bluetooth: HCI UART protocol Broadcom registered
+[    1.227421] mmci-pl18x 12400000.mmc: mmc0: PL180 manf 51 rev0 at 0x12400000 irq 45,0 (pio)
+[    1.229420] mmci-pl18x 12180000.mmc: Got CD GPIO
+[    1.235950] usbcore: registered new interface driver usbhid
+[    1.236542] usbhid: USB HID core driver
+[    1.241867] mmci-pl18x 121c0000.mmc: allocated mmc-pwrseq
+[    1.251747] mmci-pl18x 12180000.mmc: mmc1: PL180 manf 51 rev0 at 0x12180000 irq 46,0 (pio)
+[    1.255613] pm8xxx-adc 500000.ssbi:pmic:xoadc@197: supply xoadc-ref not found, using dummy regulator
+[    1.263240] pm8xxx-adc 500000.ssbi:pmic:xoadc@197: absolute calibration dx = 625000 uV, dy = 9415 units
+[    1.268496] pm8xxx-adc 500000.ssbi:pmic:xoadc@197: ratiometric calibration dx = 1800, dy = -21 units
+[    1.269049] pm8xxx-adc 500000.ssbi:pmic:xoadc@197: PM8058-XOADC XOADC driver enabled
+[    1.312946] mmc0: new high speed MMC card at address 0001
+[    1.315550] mmcblk0: mmc0:0001 MAG2GA 14.6 GiB
+[    1.324036]  mmcblk0: p1 p2 p3 p4 < p5 p6 p7 p8 p9 p10 p11 p12 p13 p14 p15 >
+[    1.336723] mmcblk0boot0: mmc0:0001 MAG2GA 2.00 MiB
+[    1.343596] mmcblk0boot1: mmc0:0001 MAG2GA 2.00 MiB
+[    1.350120] mmcblk0rpmb: mmc0:0001 MAG2GA 128 KiB, chardev (238:0)
+[    1.461085] bq24160 1-006b: charging enabled: input=500000uA charge=1525000uA voltage=4200000uV temp=34.0C battery=3997000uV
+[    1.502602] mpu3050-i2c 2-0068: found MPU-3050 part no: 3, version: 14
+[    1.506831] mpu3050-i2c 2-0068: die ID: 0972, wafer ID: 07, A lot ID: 0000, W lot ID: FBB, WP ID: 3, rev ID: 1A
+[    1.548145] i2c i2c-2: Added multiplexed i2c bus 3
+[    1.550708] workqueue: work func bq24160_status_work enqueued on deprecated workqueue. Use system_{percpu|dfl}_wq instead.
+[    1.552113] bq24160 1-006b: status raw=0x40 stat=4 fault=0
+[    1.552958] hw perfevents: enabled with armv7_scorpion_mp PMU driver, 5 (8000000f) counters available
+[    1.562034] NET: Registered PF_PACKET protocol family
+[    1.562625] Key type dns_resolver registered
+[    1.563597] Registering SWP/SWPB emulation handler
+[    1.626499] Loading compiled-in X.509 certificates
+[    1.693605] mmCc-msm8660 400°000.clocc-controller: secure MMCC initializatIoî begin
+[    1.694194] mmcc-msM8660 4p0000.algck-controller: secure MMCC AHB control initialized
+[    1.694735] mmcc-msm8660 4000000.clock-controller: secure MMCC AXI control initialized
+[    1.696467] mmcc-msm8660 4000000.clock-controller: MMSS fabric: unhalted all master ports (0-13)
+[    1.724892] mmcc-msm8660 4000000.clock-controller: MDP footswitch: clock-assisted AXI/AHB/core reset completed (GFS=0x11f)
+[    1.729731] msm_dsi 4700000.dsi: using MSM8x60 DSI V2 configuration
+[    1.731959] msm_dsi 4700000.dsi: quiesced MSM8x60 firmware state; retaining DSI AHB clocks
+[    1.756310] mdp4 5100000.display-controller: MDP memory vote: 407808000/1019520000 Bps
+[    1.759142] mdp4 5100000.display-controller: bound 4700000.dsi (ops dsi_ops)
+[    1.763259] mdp4 5100000.display-controller: [drm:mdp4_kms_init] reading MDP4 revision with display power domain enabled
+[    1.763927] mdp4 5100000.display-controller: [drm:mdp4_kms_init] MDP4 version v4.1
+[    1.780522] mdp4 5100000.display-controller: [drm] no IOMMU, bailing out
+[    1.781114] mdp4 5100000.display-controller: [drm:mdp4_kms_init] using contiguous physical scanout without an IOMMU
+[    1.791343] mdp4 5100000.display-controller: [drm] [PLANE:35:plane-0] pixel format with alpha exposed but blend mode not setup. Please fix.
+[    1.791941] mdp4 5100000.display-controller: [drm] [PLANE:37:plane-1] pixel format with alpha exposed but blend mode not setup. Please fix.
+[    1.792486] mdp4 5100000.display-controller: [drm] [PLANE:39:plane-2] pixel format with alpha exposed but blend mode not setup. Please fix.
+[    1.793023] mdp4 5100000.display-controller: [drm] [PLANE:42:plane-3] pixel format with alpha exposed but blend mode not setup. Please fix.
+[    1.798090] [drm] Initialized msm 1.13.0 for 5100000.display-controller on minor 0
+[    1.798581] mdp4 5100000.display-controller: no GPU device was found
+[    1.806395] mdp4 5100000.display-controller: [drm] fbdev scanout address 7bd00000
+[    1.810372] msm_dsi_phy 47000f0.dsi-phy: Hikari 45nm DSI PHY enabled: bit 418037760, byte 52254720, source 209018880 Hz, PLL_CTRL_0 0x41
+[    2.090878] panel-renesas-r63306-tmd-mdv22 4700000.dsi.0: MDV22 command sequence complete before video scanout
+[    2.092437] fb0: sys_imageblit: framebuffer is not in virtual address space.
+[    2.153862] Console: switching to colour frame buffer device 90x80
+[    2.227183] mdp4 5100000.display-controller: [drm] fb0: msmdrmfb frame buffer device
+[    2.237431] mmci-pl18x 121c0000.mmc: allocated mmc-pwrseq
+[    2.268176] input: gpio-keys as /devices/platform/gpio-keys/input/input3
+[    2.276661] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+[    2.276787] mmci-pl18x 121c0000.mmc: allocated mmc-pwrseq
+[    2.301874] Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+[    2.308684] Loaded X.509 cert 'wens: 61c038651aabdcf94bd0ac7ff06c7248db18c600'
+[    2.309754] faux_driver regulatory: Direct firmware load for regulatory.db failed with error -2
+[    2.310308] cfg80211: failed to load regulatory.db
+[    2.337710] clk: Disabling unused clocks
+[    2.339636] PM: genpd: Disabling unused power domains
+[    2.340839] ALSA device list:
+[    2.341234]   No soundcards found.
+[    2.350514] Freeing unused kernel image (initmem) memory: 2048K
+[    2.351760] Run /init as init process
+[    2.373783] HIKARI DEV MOUNT rc=0
+[    2.374894] HIKARI INIT ENTER
+[    2.376037] HIKARI KMSG AVAILABLE
+[    2.385158] HIKARI RUN MOUNT rc=0
+[    2.385970] HIKARI BOOT5 INIT START
+[    2.386965] HIKARI BOOT5 DEV READY
+[    2.388438] HIKARI USB SYSFS UDC: BEGIN
+[    2.390051] HIKARI USB SYSFS UDC: ci_hdrc.0
+[    2.391435] HIKARI USB TTY: BEGIN
+[    2.393602] HIKARI USB TTY: ttyGS0
+[    2.399470] HIKARI BOOT5 SERVICES START
+[    2.399782] HIKARI USB UDC READY
+[    2.400419] HIKARI USB GADGET READY
+[    2.403345] HIKARI DISPLAY FB0 READY
+[    2.404929] HIKARI TTYGS0 EXISTS
+[    2.405509] HIKARI USB TTYGS0 READY
+[    2.405974] HIKARI SHELL START
+[    2.416710] HIKARI DISPLAY SIZE 720,1280
+[    2.417095] HIKARI ALIVE uptime=2.31
+[    3.474705] fb0: sys_fillrect: framebuffer is not in virtual address space.
+[    3.530746] Bluetooth: hci0: command 0x0c03 tx timeout
+[    3.530939] Bluetooth: hci0: BCM: Reset failed (-110)
+[    3.736408] HIKARI DISPLAY WITNESS WRITTEN
+[   12.401384] bq24160 1-006b: status raw=0x27 stat=2 fault=7
+[   12.741928] mmci-pl18x 121c0000.mmc: allocated mmc-pwrseq
+[   12.751162] platform regulator-usb-otg-vbus: deferred probe pending: platform: supplier regulator-ext-5v not ready
+[   12.768850] platform connector: deferred probe pending: platform: supplier regulator-usb-otg-vbus not ready
+[   12.786294] platform regulator-ext-5v: deferred probe pending: reg-fixed-voltage: can't get GPIO
+[   32.430254] HIKARI ALIVE uptime=32.32
+[   62.448566] HIKARI ALIVE uptime=62.34
+[   83.950671] random: crng init done
+[   92.466502] HIKARI ALIVE uptime=92.36
+[  122.484197] HIKARI ALIVE uptime=122.38
+[  152.501950] HIKARI ALIVE uptime=152.39
+[  182.519191] HIKARI ALIVE uptime=182.41
+[  212.536625] HIKARI ALIVE uptime=212.43
+[  242.553978] HIKARI ALIVE uptime=242.45
+[  272.571065] HIKARI ALIVE uptime=272.46
+[  302.588045] HIKARI ALIVE uptime=302.48
+[  332.605224] HIKARI ALIVE uptime=332.50
+[  362.622213] HIKARI ALIVE uptime=362.51
+[  392.638965] HIKARI ALIVE uptime=392.53
+[  422.657394] HIKARI ALIVE uptime=422.55
+[  452.676102] HIKARI ALIVE uptime=452.57
+[  482.693085] HIKARI ALIVE uptime=482.58
+[  512.709874] HIKARI ALIVE uptime=512.60
+[  542.727030] HIKARI ALIVE uptime=542.62
+[  572.744261] HIKARI ALIVE uptime=572.64
+[  602.761627] HIKARI ALIVE uptime=602.65
+[  632.778608] HIKARI ALIVE uptime=632.67
+[  662.795814] HIKARI ALIVE uptime=662.69
+[  692.813187] HIKARI ALIVE uptime=692.70
+[  722.830324] HIKARI ALIVE uptime=722.72
+[  752.848004] HIKARI ALIVE uptime=752.74
+[  782.865548] HIKARI ALIVE uptime=782.76
+[  812.882862] HIKARI ALIVE uptime=812.77
+[  842.899608] HIKARI ALIVE uptime=842.79
+[  872.916824] HIKARI ALIVE uptime=872.81
+[  902.933981] HIKARI ALIVE uptime=902.83
+[  932.951358] HIKARI ALIVE uptime=932.84
+[  962.968279] HIKARI ALIVE uptime=962.86
+[  992.985215] HIKARI ALIVE uptime=992.88
+[ 1023.002211] HIKARI ALIVE uptime=1022.89
+
+380 Corrected bytes, 1 unrecoverable blocks

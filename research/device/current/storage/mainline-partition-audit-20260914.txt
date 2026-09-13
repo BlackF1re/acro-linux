@@ -1,0 +1,48 @@
+Title: Read-only Hikari eMMC partition audit under target Linux
+Date: 2026-09-14
+Evidence state: VERIFIED_DEVICE
+
+The physical Hikari was running the accepted target-Linux build 0083. The
+following results were collected read-only through its CDC ACM root shell.
+No block device was opened for writing, mounted, formatted or flashed.
+Device-unique CID, serial and filesystem UUID values are deliberately omitted.
+
+Whole user area:
+  /dev/mmcblk0: 30,535,680 sectors of 512 bytes = 15,634,268,160 bytes
+  removable: 0
+  device name: MAG2GA
+  manufacturer ID: 0x15
+  manufacture date: 08/2012
+  partition table: DOS/MBR
+
+Independent live parsers agreed: BusyBox fdisk read the MBR/EBR chain, while
+sysfs reported each kernel partition object's start and size. BusyBox blkid
+separately identified the filesystem types shown below. The exact same starts,
+sizes and total length also match the private pre-experiment raw backup's
+offline fdisk/sfdisk audit in backup-offline-validation.txt.
+
+part  boot  start       sectors     MBR type  filesystem
+p1          1           4096        0xf0      none reported
+p2    *     4097        1024        0x4d      none reported
+p3          8192        40960       0x48      none reported
+p4          49152       30486528    0x05      extended container
+p5          50176       1024        0x46      none reported
+p6          53248       6144        0x4a      none reported
+p7          61440       6144        0x4b      none reported
+p8          69632       6144        0x58      none reported
+p9          77824       10240       0x70      none reported
+p10         90112       16384       0x83      ext4
+p11         106496      32768       0xf0      none reported
+p12         139264      2097152     0x83      ext4
+p13         2236416     512000      0x83      ext4
+p14         2748416    4194304     0x83      ext4
+p15         6942720     23592960    0x0c      vfat
+
+The kernel also exposes /dev/mmcblk0boot0 and /dev/mmcblk0boot1, each 4096
+sectors (2 MiB). They were not read. RPMB was not inspected. These hardware
+areas are outside the backed-up user-area stream and must never be treated as
+installation space.
+
+No filesystem LABEL was reported by blkid for p10 or p12--p15, and no by-name
+symlink directory was exposed. Names such as boot, system, cache and userdata
+in project documentation are therefore established roles, not on-disk labels.

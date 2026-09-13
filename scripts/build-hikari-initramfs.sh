@@ -31,6 +31,11 @@ for helper in $helpers; do
     exit 1
   }
 done
+console_launcher_src="$repo_root/initramfs/hikari-firstboot/usr/sbin/hikari-console-launch.c"
+test -f "$console_launcher_src" || {
+  echo "missing project diagnostic console launcher: $console_launcher_src" >&2
+  exit 1
+}
 test -x "$gen_init_cpio" || { echo "missing executable gen_init_cpio: $gen_init_cpio" >&2; exit 1; }
 [[ "$source_date_epoch" =~ ^[0-9]+$ ]] || { echo "SOURCE_DATE_EPOCH must be an integer" >&2; exit 1; }
 [[ "$initramfs_name" != */* && "$initramfs_name" = *.cpio.gz ]] || { echo "INITRAMFS_NAME must be a .cpio.gz filename" >&2; exit 1; }
@@ -53,6 +58,14 @@ if grep -q '^CONFIG_TC=y$' "$busybox_build/.config"; then
   sed -i 's/^CONFIG_TC=y$/# CONFIG_TC is not set/' "$busybox_build/.config"
 fi
 make -C "$busybox_src" O="$busybox_build" ARCH=arm CROSS_COMPILE="$cross_compile" -j"$jobs" busybox
+
+console_launcher="$initramfs_build/hikari-console-launch"
+"${cross_compile}gcc" -Os -nostdlib -static -marm -fomit-frame-pointer \
+  -fno-stack-protector -fno-unwind-tables -fno-asynchronous-unwind-tables \
+  -Wall -Wextra -Werror -Wl,--build-id=none -Wl,-e,_start \
+  -Wl,-z,max-page-size=4096 \
+  -o "$console_launcher" "$console_launcher_src"
+"${cross_compile}strip" -s "$console_launcher"
 
 busybox_install="$initramfs_build/busybox-install"
 rm -rf -- "$busybox_install"
@@ -96,6 +109,8 @@ archive="$initramfs_build/${initramfs_name%.gz}"
     printf 'file /usr/sbin/%s %s 0755 0 0\n' "$helper" \
       "$repo_root/initramfs/hikari-firstboot/usr/sbin/$helper"
   done
+  printf 'file /usr/sbin/hikari-console-launch %s 0755 0 0\n' \
+    "$console_launcher"
 } > "$list"
 
 "$gen_init_cpio" -t "$source_date_epoch" "$list" > "$archive"

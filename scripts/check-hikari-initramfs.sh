@@ -14,7 +14,7 @@ for path in init bin/sh bin/mount bin/sleep bin/cttyhack bin/mkdir bin/cat bin/e
             usr/sbin/i2cdetect usr/sbin/i2cdump usr/sbin/i2cget usr/sbin/i2ctransfer \
             usr/sbin/powertop \
             usr/sbin/hikari-diag usr/sbin/hikari-display-diag usr/sbin/hikari-power-diag \
-            usr/sbin/hikari-gpu-diag \
+            usr/sbin/hikari-gpu-diag usr/sbin/hikari-console-launch \
             lib/firmware/qcom/leia_pm4_470.fw lib/firmware/qcom/leia_pfp_470.fw \
             dev proc sys; do
   printf '%s\n' "$listing" | grep -Eq "[[:space:]]${path}( |$| ->)" || {
@@ -22,7 +22,8 @@ for path in init bin/sh bin/mount bin/sleep bin/cttyhack bin/mkdir bin/cat bin/e
     exit 1
   }
 done
-for helper in hikari-diag hikari-display-diag hikari-power-diag hikari-gpu-diag; do
+for helper in hikari-diag hikari-display-diag hikari-power-diag hikari-gpu-diag \
+              hikari-console-launch; do
   printf '%s\n' "$listing" | grep -Eq "^-rwxr-xr-x.* usr/sbin/${helper}$" || {
     echo "Hikari initramfs missing executable diagnostic helper $helper" >&2
     exit 1

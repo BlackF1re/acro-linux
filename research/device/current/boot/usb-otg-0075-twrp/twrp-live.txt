@@ -1,0 +1,42 @@
+uid=0(root) gid=0(root)
+Linux localhost 3.4.0-Elite-1.5+ #1 SMP PREEMPT Tue Feb 18 15:09:17 EST 2014 armv7l GNU/Linux
+__bionic_open_tzdata: couldn't find any tzdata when looking for localtime!
+__bionic_open_tzdata: couldn't find any tzdata when looking for GMT!
+__bionic_open_tzdata: couldn't find any tzdata when looking for posixrules!
+-r--r--r-- root     root        29276 1970-01-06 22:08 last_kmsg
+/sys/fs/pstore: No such file or directory
+-rw-r--r-- root     root            0 2025-06-17 07:09 last_install
+-rw-r----- root     root        32567 1970-01-06 21:56 last_log
+-rw------- system   system      32567 1970-01-06 21:56 log
+-rw-r--r-- root     root          286 1970-01-06 21:56 recovery.fstab
+-rw-rw-rw- root     root           42 1970-01-06 21:56 storage.fstab
+rootfs on / type rootfs (rw,seclabel,relatime)
+tmpfs on /dev type tmpfs (rw,seclabel,nosuid,relatime,mode=755)
+devpts on /dev/pts type devpts (rw,seclabel,relatime,mode=600)
+proc on /proc type proc (rw,relatime)
+sysfs on /sys type sysfs (rw,seclabel,relatime)
+selinuxfs on /sys/fs/selinux type selinuxfs (rw,relatime)
+/dev/block/mmcblk0p15 on /sdcard type vfat (rw,relatime,fmask=0000,dmask=0000,allow_utime=0022,codepage=cp437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro)
+/dev/block/mmcblk0p13 on /cache type ext4 (rw,seclabel,relatime,data=ordered)
+POWER
+===/sys/class/power_supply/ac
+type=Mains
+online=0
+===/sys/class/power_supply/bq24160
+type=Battery
+status=Charging
+===/sys/class/power_supply/bq27520
+type=Battery
+voltage_now=4134000
+current_now=250000
+capacity=89
+===/sys/class/power_supply/chargalg
+type=Battery
+===/sys/class/power_supply/hsusb_chg
+type=USB
+online=1
+===/sys/class/power_supply/semc_battery_data
+type=Battery
+===/sys/class/power_supply/semc_chg_cradle
+type=Mains
+online=0

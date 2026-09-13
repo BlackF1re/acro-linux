@@ -112,6 +112,32 @@ single explicitly whitelisted boot target.  No safe temporary-boot mechanism
 has been established for this exact handset; it is therefore UNKNOWN rather
 than assumed from related Xperia devices.
 
+## Production userspace and low-reflash development path
+
+The intended system is a current minimal Debian `armhf` root filesystem plus
+this project's maintained mainline kernel, DT and kernel modules. Debian does
+not replace or absorb the hardware patches: the patch series remains the
+reproducible kernel/BSP layer, while Debian supplies ordinary package-managed
+userspace. Modules installed into the root filesystem must match the exact
+kernel build.
+
+The first storage target should be microSD, not eMMC. Keep a known-good,
+display/USB-capable bootstrap Sony ELF in p3 and make it mount the Debian root
+from the removable card. Rootfs and application changes can then be made by
+editing the card, with no recovery or fastboot cycle.
+
+Kernel/DT experiments still require replacing p3 unless the bootstrap gains a
+second-stage mechanism. The preferred later workflow is a stable rescue kernel
+in p3 which loads a test kernel, DTB and initramfs from microSD and enters it
+with ARM `kexec`. That capability is a design target and must be verified on
+MSM8260 before it is relied upon. It reduces ordinary development reflashes
+without introducing an Android dependency or altering the partition table.
+
+The removable-card controller must first pass physical detection, read/write
+and repeated cold-boot tests under target Linux. During the 2026-09-14 live
+audit only the soldered eMMC (`mmcblk0`) was present; microSD boot is therefore
+feasible architecture, not yet `VERIFIED_DEVICE`.
+
 ## Sources
 
 - [Historical LT26 custom boot ELF change](https://android.googlesource.com/device/sony/lt26/%2B/b644924c93b3c89e0e6f3aeeb85fb9a23147350f%5E%21/)

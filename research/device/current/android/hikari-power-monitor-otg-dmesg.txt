@@ -1,0 +1,1769 @@
+ger status: 0
+<6>[  903.849629] healthd: battery l=93 v=4079 t=40.0 h=2 st=3 c=-157 chg=
+<4>[  913.622582] TSENS: Current CPU Temperature is: 46
+<6>[  913.749239] healthd: battery l=93 v=4078 t=39.0 h=2 st=3 c=-156 chg=
+<4>[  933.622232] TSENS: Current CPU Temperature is: 45
+<3>[  943.281046] mdp4_mixer_blend_setup: Error: no bg_pipe at mixer=0
+<6>[  943.468610] request_suspend_state: sleep (0->3) at 943376529894 (2026-09-11 11:55:55.806861603 UTC)
+<6>[  943.468753] as3676 3-0040: as3676_early_suspend
+<6>[  943.469985] clearpad clearpad: early suspend
+<6>[  943.470108] clearpad clearpad: power OFF
+<4>[  943.480825] dhd_set_suspend: force extra Suspend setting 
+<4>[  943.493619] dhd_get_dtim_skip bcn_li_dtim=3 DTIM=2 Listen=10
+<3>[  943.497621] dtv_pipe is not configured yet
+<4>[  944.279274] Unknown PRIVATE command SETSUSPENDMODE 1 - ignored
+<6>[  944.299715] PM: suspend entry 2026-09-11 11:55:56.637966195 UTC
+<4>[  944.304501] Freezing user space processes ... (elapsed 0.01 seconds) done.
+<4>[  944.322905] Freezing remaining freezable tasks ... (elapsed 0.01 seconds) done.
+<4>[  944.342673] Suspending console(s) (use no_console_suspend to debug)
+<6>[  944.346693] msm_fb_ext_suspend: Turning off HPD circuitry
+<6>[  944.347722] lm3560 3-0053: lm356x_suspend: Suspending LM356X driver.
+<6>[  945.093991] PM: suspend of devices complete after 750.022 msecs
+<6>[  945.095081] PM: late suspend of devices complete after 1.079 msecs
+<6>[  945.096402] PM: noirq suspend of devices complete after 1.312 msecs
+<4>[  945.096408] Disabling non-boot CPUs ...
+<6>[  945.096603] msm_pm_enter
+<6>[  945.096603] msm_pm_enter: power collapse
+<6>[  945.096603] msm_mpm_irqs_detectable: cannot monitor 0000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000
+<6>[  945.096603] msm_pm_enter: return
+<6>[  945.097812] PM: noirq resume of devices complete after 0.989 msecs
+<6>[  945.098469] wakeup wake lock: mmc2
+<6>[  945.099500] PM: early resume of devices complete after 0.889 msecs
+<6>[  945.104706] lm3560 3-0053: lm356x_resume: Reinit lm356x chip.
+<6>[  945.105993] lm3560 3-0053: lm356x_resume: Resuming LM356X driver.
+<6>[  945.106447] msm_fb_ext_resume: Turning on HPD circuitry
+<6>[  945.108737] PM: resume of devices complete after 9.224 msecs
+<4>[  945.111230] Restarting tasks ... done.
+<6>[  945.123943] PM: suspend exit 2026-09-11 11:56:05.698947383 UTC
+<6>[  945.124062] suspend: exit suspend, ret = 0 (2026-09-11 11:56:05.699069308 UTC)
+<6>[  946.102258] PM: suspend entry 2026-09-11 11:56:06.677256318 UTC
+<4>[  946.104349] Freezing user space processes ... (elapsed 0.01 seconds) done.
+<4>[  946.372962] Freezing remaining freezable tasks ... (elapsed 0.02 seconds) done.
+<4>[  946.393487] Suspending console(s) (use no_console_suspend to debug)
+<6>[  946.397469] msm_fb_ext_suspend: Turning off HPD circuitry
+<6>[  946.399833] lm3560 3-0053: lm356x_suspend: Suspending LM356X driver.
+<6>[  946.606853] PM: suspend of devices complete after 212.103 msecs
+<6>[  946.607946] PM: late suspend of devices complete after 1.083 msecs
+<6>[  946.609266] PM: noirq suspend of devices complete after 1.311 msecs
+<4>[  946.609273] Disabling non-boot CPUs ...
+<6>[  946.609466] msm_pm_enter
+<6>[  946.609466] msm_pm_enter: power collapse
+<6>[  946.609466] msm_mpm_irqs_detectable: cannot monitor 0000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000
+<6>[  946.609466] msm_pm_enter: return
+<6>[  946.610668] PM: noirq resume of devices complete after 0.988 msecs
+<6>[  946.611324] wakeup wake lock: mmc2
+<6>[  946.612386] PM: early resume of devices complete after 0.919 msecs
+<6>[  946.618049] lm3560 3-0053: lm356x_resume: Reinit lm356x chip.
+<6>[  946.619337] lm3560 3-0053: lm356x_resume: Resuming LM356X driver.
+<6>[  946.619797] msm_fb_ext_resume: Turning on HPD circuitry
+<4>[  946.622207] msm_thermal: Thermal Throttled (max)! temp: 4294967243
+<6>[  946.622223] msm_thermal: Limiting core0 max frequency to 384000
+<6>[  946.622245] PM: resume of devices complete after 9.850 msecs
+<4>[  946.624964] Restarting tasks ... 
+<6>[  946.634819] healthd: battery l=93 v=4106 t=39.0 h=2 st=3 c=0 chg=
+<4>[  946.636523] done.
+<6>[  946.636809] PM: suspend exit 2026-09-11 11:56:20.698443532 UTC
+<6>[  946.636928] suspend: exit suspend, ret = 0 (2026-09-11 11:56:20.698565903 UTC)
+<6>[  947.613116] PM: suspend entry 2026-09-11 11:56:21.674700085 UTC
+<4>[  947.632685] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  947.633186] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<4>[  947.635054] Freezing user space processes ... 
+<6>[  947.660689] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  947.694652] (elapsed 0.05 seconds) done.
+<4>[  947.943097] Freezing remaining freezable tasks ... (elapsed 0.02 seconds) done.
+<4>[  947.965261] Suspending console(s) (use no_console_suspend to debug)
+<6>[  947.988699] msm_fb_ext_suspend: Turning off HPD circuitry
+<6>[  947.995573] lm3560 3-0053: lm356x_suspend: Suspending LM356X driver.
+<6>[  948.291247] PM: suspend of devices complete after 320.068 msecs
+<6>[  948.295665] PM: late suspend of devices complete after 4.353 msecs
+<6>[  948.301797] PM: noirq suspend of devices complete after 6.074 msecs
+<4>[  948.301837] Disabling non-boot CPUs ...
+<6>[  948.302307] msm_pm_enter
+<6>[  948.302307] msm_pm_enter: power collapse
+<6>[  948.302307] msm_mpm_irqs_detectable: cannot monitor 0000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000
+<6>[  948.302307] msm_pm_enter: return
+<6>[  948.307708] PM: noirq resume of devices complete after 4.352 msecs
+<6>[  948.310533] wakeup wake lock: alarm_rtc
+<6>[  948.315108] PM: early resume of devices complete after 4.344 msecs
+<6>[  948.324946] lm3560 3-0053: lm356x_resume: Reinit lm356x chip.
+<6>[  948.345441] lm3560 3-0053: lm356x_resume: Resuming LM356X driver.
+<6>[  948.347852] msm_fb_ext_resume: Turning on HPD circuitry
+<6>[  948.358032] PM: resume of devices complete after 42.862 msecs
+<4>[  948.372706] Restarting tasks ... done.
+<6>[  948.403958] PM: suspend exit 2026-09-11 11:56:27.731824122 UTC
+<6>[  948.405014] suspend: exit suspend, ret = 0 (2026-09-11 11:56:27.732886196 UTC)
+<6>[  948.406046] active wake lock mmc2_detect
+<6>[  948.406466] active wake lock mmc1_detect
+<6>[  948.406890] active wake lock alarm, time left 495
+<4>[  948.652444] msm_thermal: Thermal Throttled (max)! temp: 4294967255
+<6>[  948.652981] msm_thermal: Limiting core0 max frequency to 384000
+<4>[  949.652409] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  949.652914] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  949.653697] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[  949.832950] PM: suspend entry 2026-09-11 11:56:29.160814634 UTC
+<4>[  949.839028] Freezing user space processes ... (elapsed 0.06 seconds) done.
+<4>[  949.905210] Freezing remaining freezable tasks ... (elapsed 0.01 seconds) done.
+<4>[  949.924818] Suspending console(s) (use no_console_suspend to debug)
+<6>[  949.938904] msm_fb_ext_suspend: Turning off HPD circuitry
+<6>[  949.943535] lm3560 3-0053: lm356x_suspend: Suspending LM356X driver.
+<6>[  950.222015] PM: suspend of devices complete after 293.121 msecs
+<6>[  950.225009] PM: late suspend of devices complete after 2.958 msecs
+<6>[  950.229071] PM: noirq suspend of devices complete after 4.031 msecs
+<4>[  950.229093] Disabling non-boot CPUs ...
+<6>[  950.229497] msm_pm_enter
+<6>[  950.229497] msm_pm_enter: power collapse
+<6>[  950.229497] msm_mpm_irqs_detectable: cannot monitor 0000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000
+<6>[  950.229497] msm_pm_enter: return
+<6>[  950.233319] PM: noirq resume of devices complete after 3.057 msecs
+<6>[  950.234950] wakeup wake lock: mmc2
+<6>[  950.238175] PM: early resume of devices complete after 2.806 msecs
+<6>[  950.247156] lm3560 3-0053: lm356x_resume: Reinit lm356x chip.
+<6>[  950.248813] lm3560 3-0053: lm356x_resume: Resuming LM356X driver.
+<6>[  950.251004] msm_fb_ext_resume: Turning on HPD circuitry
+<6>[  950.258703] PM: resume of devices complete after 20.490 msecs
+<4>[  950.266801] Restarting tasks ... done.
+<6>[  950.286613] PM: suspend exit 2026-09-11 11:56:33.712609156 UTC
+<6>[  950.286968] suspend: exit suspend, ret = 0 (2026-09-11 11:56:33.712972860 UTC)
+<6>[  950.293626] healthd: battery l=93 v=4108 t=38.0 h=2 st=3 c=2 chg=
+<4>[  950.653824] msm_thermal: Thermal Throttled (max)! temp: 4294967237
+<6>[  950.839626] msm_thermal: Limiting core0 max frequency to 384000
+<4>[  951.834418] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  951.834969] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  951.934399] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[  952.442578] PM: suspend entry 2026-09-11 11:56:35.868539947 UTC
+<4>[  952.450572] Freezing user space processes ... (elapsed 0.06 seconds) done.
+<4>[  952.763008] Freezing remaining freezable tasks ... (elapsed 0.02 seconds) done.
+<4>[  952.787689] Suspending console(s) (use no_console_suspend to debug)
+<6>[  952.812388] msm_fb_ext_suspend: Turning off HPD circuitry
+<6>[  952.819234] lm3560 3-0053: lm356x_suspend: Suspending LM356X driver.
+<4>[  952.933267] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  952.933316] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  952.933390] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[  953.150957] PM: suspend of devices complete after 356.035 msecs
+<6>[  953.155375] PM: late suspend of devices complete after 4.353 msecs
+<6>[  953.161504] PM: noirq suspend of devices complete after 6.072 msecs
+<4>[  953.161544] Disabling non-boot CPUs ...
+<6>[  953.162015] msm_pm_enter
+<6>[  953.162015] msm_pm_enter: power collapse
+<6>[  953.162015] msm_mpm_irqs_detectable: cannot monitor 0000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000
+<6>[  953.162015] msm_pm_enter: return
+<6>[  953.167386] PM: noirq resume of devices complete after 4.352 msecs
+<6>[  953.174809] PM: early resume of devices complete after 4.352 msecs
+<6>[  953.183743] wakeup wake lock: pmic8058_xoadc_wakelock
+<6>[  953.184645] lm3560 3-0053: lm356x_resume: Reinit lm356x chip.
+<6>[  953.205160] lm3560 3-0053: lm356x_resume: Resuming LM356X driver.
+<6>[  953.207571] msm_fb_ext_resume: Turning on HPD circuitry
+<6>[  953.217707] PM: resume of devices complete after 42.834 msecs
+<4>[  953.234001] Restarting tasks ... 
+<6>[  953.264096] msm_otg_resume: usb exited from low power mode
+<6>[  953.265875] Charging with 0mA current
+<6>[  953.266379] msm_hsusb msm_hsusb: msm72k_udc: OFFLINE -> ONLINE
+<4>[  953.271654] done.
+<6>[  953.273445] PM: suspend exit 2026-09-11 11:57:06.741586787 UTC
+<6>[  953.273933] suspend: exit suspend, ret = 0 (2026-09-11 11:57:06.742080417 UTC)
+<6>[  953.275498] active wake lock mmc2_detect
+<6>[  953.275927] active wake lock mmc1_detect
+<6>[  953.276643] active wake lock msm_otg
+<6>[  953.277057] active wake lock usb_bus_active
+<6>[  953.277481] active wake lock alarm, time left 494
+<6>[  953.472774] bq24160 3-006b: Charger status: 2
+<6>[  953.493084] android_work: android_work: did not send uevent (0 0   (null))
+<6>[  953.499060] healthd: battery l=93 v=4109 t=38.0 h=2 st=3 c=2 chg=
+<4>[  953.932330] TSENS: Current CPU Temperature is: 43
+<4>[  953.932725] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  953.932937] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  953.933319] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[  954.391650] msm_hsusb msm_hsusb: suspend
+<6>[  954.492244] 
+<6>[  954.492252] *********** Charger Type: might be HOST PC
+<6>[  954.492260] 
+<4>[  954.932418] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  954.932884] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[  954.933339] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[  955.492252] 
+<6>[  955.492262] *********** Charger Type: might be HOST PC
+<6>[  955.492272] 
+<4>[  955.932380] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  955.932839] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[  955.933612] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  956.932356] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  956.932722] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  956.933075] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  957.932361] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  957.932833] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  957.933106] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[  958.402293] msm_hsusb msm_hsusb: msm72k_udc: ONLINE -> OFFLINE
+<6>[  958.402749] Charging with 0mA current
+<6>[  958.403197] android_work: android_work: did not send uevent (0 0   (null))
+<6>[  958.632870] Charging with 0mA current
+<6>[  958.633282] semc_chg_cradle semc_chg_cradle: semc_charger_cradle_is_connected() ret=0
+<6>[  958.633500] entering into lpm
+<6>[  958.663239] bq24160 3-006b: Charger status: 0
+<6>[  958.665787] msm_otg_suspend: usb in low power mode
+<6>[  958.666118] PM: suspend entry 2026-09-11 11:57:12.134276570 UTC
+<6>[  958.672982] healthd: battery l=93 v=4083 t=38.0 h=2 st=3 c=6 chg=
+<4>[  958.677332] Freezing user space processes ... (elapsed 0.04 seconds) done.
+<4>[  958.724305] Freezing remaining freezable tasks ... (elapsed 0.01 seconds) done.
+<4>[  958.744805] Suspending console(s) (use no_console_suspend to debug)
+<6>[  958.757261] msm_fb_ext_suspend: Turning off HPD circuitry
+<6>[  958.763206] lm3560 3-0053: lm356x_suspend: Suspending LM356X driver.
+<6>[  958.774845] PM: suspend of devices complete after 26.466 msecs
+<6>[  958.777801] PM: late suspend of devices complete after 2.923 msecs
+<4>[  958.933601] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  958.933623] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  958.933663] msm_thermal: Limiting core0 max frequency to 1566000
+<3>[  958.974671] bq24160 3-006b: I2C Read error  REG: 0 return: -5
+<6>[  958.977885] PM: noirq suspend of devices complete after 200.050 msecs
+<4>[  958.977905] Disabling non-boot CPUs ...
+<6>[  958.977939] Wakeup IRQ 54 pm_drv pending, suspend aborted
+<6>[  958.979757] PM: noirq resume of devices complete after 1.792 msecs
+<6>[  958.983635] PM: early resume of devices complete after 2.282 msecs
+<6>[  958.990886] wakeup wake lock: pmic8058_xoadc_wakelock
+<6>[  958.991253] lm3560 3-0053: lm356x_resume: Reinit lm356x chip.
+<6>[  959.010238] lm3560 3-0053: lm356x_resume: Resuming LM356X driver.
+<6>[  959.011638] msm_fb_ext_resume: Turning on HPD circuitry
+<6>[  959.017415] PM: resume of devices complete after 33.747 msecs
+<4>[  959.025058] Restarting tasks ... done.
+<6>[  959.043602] PM: suspend exit 2026-09-11 11:57:12.511757898 UTC
+<6>[  959.043920] suspend: exit suspend, ret = -16 (2026-09-11 11:57:12.512082935 UTC)
+<6>[  959.044292] active wake lock mmc2_detect
+<6>[  959.044490] active wake lock mmc1_detect
+<6>[  959.085155] PM: suspend entry 2026-09-11 11:57:12.553298194 UTC
+<4>[  959.089008] Freezing user space processes ... (elapsed 0.04 seconds) done.
+<4>[  959.134229] Freezing remaining freezable tasks ... (elapsed 0.01 seconds) done.
+<4>[  959.154658] Suspending console(s) (use no_console_suspend to debug)
+<6>[  959.167331] msm_fb_ext_suspend: Turning off HPD circuitry
+<6>[  959.171632] lm3560 3-0053: lm356x_suspend: Suspending LM356X driver.
+<4>[  959.936445] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  959.936466] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[  959.936505] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[  960.725418] PM: suspend of devices complete after 1567.022 msecs
+<6>[  960.728371] PM: late suspend of devices complete after 2.920 msecs
+<6>[  960.732429] PM: noirq suspend of devices complete after 4.016 msecs
+<4>[  960.732450] Disabling non-boot CPUs ...
+<6>[  960.732835] msm_pm_enter
+<6>[  960.732835] msm_pm_enter: power collapse
+<6>[  960.732835] msm_mpm_irqs_detectable: cannot monitor 0000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000
+<6>[  960.732835] msm_pm_enter: return
+<6>[  960.736147] PM: noirq resume of devices complete after 2.776 msecs
+<6>[  960.740725] PM: early resume of devices complete after 2.544 msecs
+<6>[  960.748019] wakeup wake lock: pmic8058_xoadc_wakelock
+<6>[  960.748423] lm3560 3-0053: lm356x_resume: Reinit lm356x chip.
+<6>[  960.771522] lm3560 3-0053: lm356x_resume: Resuming LM356X driver.
+<6>[  960.773004] msm_fb_ext_resume: Turning on HPD circuitry
+<6>[  960.778658] PM: resume of devices complete after 37.899 msecs
+<4>[  960.786897] Restarting tasks ... done.
+<6>[  960.805664] PM: suspend exit 2026-09-11 11:57:20.711627425 UTC
+<6>[  960.805987] suspend: exit suspend, ret = 0 (2026-09-11 11:57:20.711957355 UTC)
+<6>[  960.806361] active wake lock mmc2_detect
+<6>[  960.806563] active wake lock mmc1_detect
+<6>[  960.812628] healthd: battery l=93 v=4108 t=38.0 h=2 st=3 c=5 chg=
+<6>[  960.836974] msm_otg_resume: usb exited from low power mode
+<6>[  960.837695] Charging with 0mA current
+<6>[  960.837944] msm_hsusb msm_hsusb: msm72k_udc: OFFLINE -> ONLINE
+<4>[  960.932474] msm_thermal: Thermal Throttled (max)! temp: 4294967237
+<6>[  960.933306] msm_thermal: Limiting core0 max frequency to 384000
+<6>[  961.042651] bq24160 3-006b: Charger status: 2
+<6>[  961.051563] healthd: battery l=93 v=4108 t=38.0 h=2 st=3 c=5 chg=
+<6>[  961.062935] android_work: android_work: did not send uevent (0 0   (null))
+<6>[  961.065907] msm_hsusb msm_hsusb: suspend
+<6>[  961.181014] msm_hsusb msm_hsusb: reset
+<6>[  961.263464] android_work: android_work: sent uevent USB_STATE=CONNECTED
+<6>[  961.349690] android_usb gadget: high-speed config #1: android
+<6>[  961.350644] 
+<6>[  961.350660] *********** Charger Type: HOST PC
+<6>[  961.350680] 
+<6>[  961.351854] 
+<6>[  961.351868] Charger Type: STD DOWNSTREAM PORT
+<6>[  961.353149] Charging with 500mA current
+<6>[  961.354775] Charging with 500mA current
+<6>[  961.361084] bq24160 3-006b: Turning on charger. USB-Host mode
+<6>[  961.361580] bq24160 3-006b: Set init values
+<6>[  961.363180] bq24160 3-006b: Disabling charger
+<6>[  961.364918] bq24160 3-006b: Disable charge current termination
+<6>[  961.366094] bq24160 3-006b: Set safety timer to disable
+<6>[  961.368816] bq24160 3-006b: Setting USB: OTG_Lock OFF, SUPPLY_SEL=USB
+<6>[  961.373300] bq24160 3-006b: Setting input charger current(USB) to 500 mA
+<6>[  961.394847] bq24160 3-006b: Setting charger voltage to 4200 mV
+<6>[  961.396480] bq24160 3-006b: Setting charger current to 1525 mA
+<6>[  961.406463] healthd: battery l=93 v=4109 t=38.0 h=2 st=3 c=5 chg=u
+<6>[  961.412698] android_work: android_work: sent uevent USB_STATE=CONFIGURED
+<6>[  961.672650] bq24160 3-006b: Charger status: 2 (disabling charge interval)
+<6>[  961.852728] bq24160 3-006b: Enabling charger
+<4>[  961.932487] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  961.933290] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[  961.933770] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[  961.982724] bq24160 3-006b: Charger status: 2
+<6>[  961.990830] healthd: battery l=93 v=4109 t=38.0 h=2 st=3 c=5 chg=u
+<6>[  962.062517] Charging with 500mA current
+<6>[  962.919773] mtp_open
+<4>[  962.932293] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  962.932567] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  962.932730] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[  962.966290] msm_hsusb msm_hsusb: suspend
+<6>[  962.966492] Charging with 500mA current
+<6>[  963.079546] msm_hsusb msm_hsusb: reset
+<6>[  963.080550] Charging with 0mA current
+<6>[  963.080819] android_work: android_work: sent uevent USB_STATE=DISCONNECTED
+<6>[  963.081385] adb_release
+<6>[  963.082531] adb_open
+<6>[  963.084268] bq24160 3-006b: Turning off charger
+<6>[  963.086422] mtp_release
+<6>[  963.088520] healthd: battery l=93 v=4094 t=38.0 h=2 st=3 c=5 chg=
+<6>[  963.102464] healthd: battery l=93 v=4094 t=38.0 h=2 st=3 c=5 chg=
+<6>[  963.161267] android_work: android_work: sent uevent USB_STATE=CONNECTED
+<6>[  963.659057] android_usb gadget: high-speed config #1: android
+<6>[  963.659520] 
+<6>[  963.659525] Charger Type: STD DOWNSTREAM PORT
+<6>[  963.659882] Charging with 500mA current
+<6>[  963.662079] bq24160 3-006b: Turning on charger. USB-Host mode
+<6>[  963.662298] bq24160 3-006b: Set init values
+<6>[  963.666580] bq24160 3-006b: Setting USB: OTG_Lock OFF, SUPPLY_SEL=USB
+<6>[  963.667947] bq24160 3-006b: Setting input charger current(USB) to 500 mA
+<6>[  963.668365] bq24160 3-006b: Setting charger voltage to 4200 mV
+<6>[  963.669078] bq24160 3-006b: Setting charger current to 1525 mA
+<6>[  963.669943] healthd: battery l=93 v=4091 t=38.0 h=2 st=3 c=5 chg=u
+<6>[  963.712440] android_work: android_work: sent uevent USB_STATE=CONFIGURED
+<4>[  963.932274] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  963.932512] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  963.932650] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[  964.002413] bq24160 3-006b: Charger status: 2 (disabling charge interval)
+<6>[  964.058915] mtp_open
+<6>[  964.152386] bq24160 3-006b: Enabling charger
+<4>[  964.932262] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  964.932462] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  964.932578] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[  965.032383] bq24160 3-006b: Charger status: 4
+<6>[  965.035887] healthd: battery l=93 v=4087 t=38.0 h=2 st=2 c=5 chg=u
+<4>[  965.932271] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  965.932404] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  965.932607] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  966.932423] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  966.932699] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  966.932857] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  967.932484] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  967.932854] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  967.933061] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  968.932496] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  968.932767] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  968.933179] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  969.932339] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  969.932707] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  969.932922] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[  970.773264] healthd: battery l=93 v=4176 t=37.0 h=2 st=2 c=362 chg=u
+<4>[  970.932496] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  970.932768] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  970.933178] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  971.932365] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  971.932837] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  971.933110] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  972.932401] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  972.932870] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  972.933144] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  973.932415] TSENS: Current CPU Temperature is: 43
+<4>[  973.932711] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  973.933143] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  973.933418] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  974.932385] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  974.932886] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  974.933671] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  975.932367] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  975.933179] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  975.933969] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  976.933874] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  976.934683] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  976.935166] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  977.932427] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  977.932934] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  977.933721] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  978.932436] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  978.933256] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  978.934039] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  979.932412] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  979.933229] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  979.933711] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  980.932438] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  980.932941] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  980.933728] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  981.932299] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  981.932773] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  981.933225] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  982.932428] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  982.933237] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  982.933716] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  983.932392] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  983.932892] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  983.933672] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  984.932533] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  984.933041] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[  984.933833] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  985.932429] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  985.933244] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[  985.933719] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  986.932472] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  986.933269] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[  986.933741] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  987.932428] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  987.932935] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  987.933726] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  988.932411] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  988.933218] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[  988.933698] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  989.932282] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  989.932752] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[  989.933032] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  990.934261] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  990.934768] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  990.935562] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  991.932442] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  991.933253] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  991.933728] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[  992.846201] healthd: battery l=93 v=4182 t=37.0 h=2 st=2 c=342 chg=u
+<4>[  992.934797] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  992.935298] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  992.936088] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  993.932328] TSENS: Current CPU Temperature is: 42
+<4>[  993.933128] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  993.933585] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[  993.934361] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  994.932456] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  994.933269] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  994.933750] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  995.932415] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  995.933227] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[  995.933712] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  996.932471] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  996.932971] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  996.933752] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  997.932337] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  997.932804] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[  997.933080] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  998.932430] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  998.933238] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[  998.933718] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[  999.932438] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[  999.932951] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[  999.933742] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1000.933487] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1000.933888] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1000.934270] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1001.932207] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1001.932443] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1001.932579] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1002.932365] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1002.932540] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1002.932799] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1003.933465] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1003.933834] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1003.934183] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1004.932260] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1004.932631] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1004.932846] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1005.932446] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1005.932954] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1005.933746] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1006.932411] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1006.933220] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1006.934011] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1007.769188] bq27520 3-0055: bq27520_handle_soc_worker() capacity=94 (94) flags=0x138 ctrl_status=0x628d valid=1
+<6>[ 1007.781580] healthd: battery l=94 v=4185 t=37.0 h=2 st=2 c=338 chg=u
+<4>[ 1007.932485] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1007.932779] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1007.933227] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1008.932462] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1008.933268] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1008.933748] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1009.932469] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1009.933274] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1009.933749] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1010.932512] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1010.933011] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1010.933794] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1011.932447] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1011.933256] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1011.933736] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1012.932356] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1012.932821] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1012.933096] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1013.932408] TSENS: Current CPU Temperature is: 42
+<4>[ 1013.932897] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1013.933664] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1013.934136] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1014.932452] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1014.932955] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1014.933736] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1015.932517] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1015.932994] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1015.933445] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1016.932523] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1016.933332] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1016.933810] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1017.932535] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1017.933040] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1017.933822] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1018.932298] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1018.932771] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1018.933224] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1019.932406] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1019.933222] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1019.933699] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1020.932384] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1020.932886] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1020.933664] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1021.932531] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1021.933038] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1021.933823] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1022.932411] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1022.933220] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1022.933698] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1023.932443] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1023.933244] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1023.933720] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1024.932545] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1024.933050] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1024.933837] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1025.932442] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1025.933256] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1025.933731] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1026.932268] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1026.932741] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1026.933016] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1027.932412] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1027.932913] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1027.933685] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1028.932430] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1028.933248] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1028.933724] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1029.932423] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1029.933234] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1029.933716] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1030.932431] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1030.932933] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1030.933726] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1031.932462] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1031.933270] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1031.933747] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1032.932534] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1032.933347] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1032.933836] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1033.932412] TSENS: Current CPU Temperature is: 42
+<4>[ 1033.932900] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1033.933663] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1033.934135] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1034.932337] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1034.932635] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1034.933092] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1035.932433] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1035.933245] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1035.934039] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1036.932411] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1036.933212] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1036.933686] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1037.932519] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1037.933027] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1037.933815] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1038.932423] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1038.933223] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1038.933996] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1039.932458] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1039.933276] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1039.933750] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1040.932511] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1040.933012] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1040.933798] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1041.932444] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1041.932948] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1041.933737] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1042.932277] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1042.932742] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1042.933020] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1043.932419] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1043.933237] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1043.933722] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1044.932432] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1044.932937] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1044.933723] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1045.932425] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1045.933231] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1045.933710] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1046.932401] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1046.933206] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1046.933687] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1047.932460] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1047.932962] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1047.933746] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1048.932520] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1048.933335] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1048.933822] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1049.932443] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1049.933254] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1049.933724] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1050.932506] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1050.933011] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1050.933796] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1051.932420] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1051.933224] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1051.933708] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1052.932339] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1052.932803] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1052.933079] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1053.932434] TSENS: Current CPU Temperature is: 42
+<4>[ 1053.932930] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1053.933702] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1053.934177] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1054.932450] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1054.932953] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1054.933734] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1055.932325] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1055.932794] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1055.933241] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1056.932419] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1056.933224] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1056.933702] msm_thermal: Limiting core0 max frequency to 1566000
+<3>[ 1057.679907] init: untracked pid 2478 exited
+<3>[ 1057.710759] init: untracked pid 15190 exited
+<3>[ 1057.715270] init: untracked pid 15194 exited
+<4>[ 1057.932420] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1057.932789] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1057.933006] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1058.932525] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1058.932775] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1058.933152] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1059.932297] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1059.932768] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1059.933045] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1060.932401] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1060.932768] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1060.932983] msm_thermal: Limiting core0 max frequency to 1566000
+<3>[ 1060.970008] init: untracked pid 15281 exited
+<3>[ 1060.994220] init: untracked pid 15287 exited
+<4>[ 1061.932371] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1061.932843] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1061.933291] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1062.932408] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1062.933218] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1062.933691] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1063.932472] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1063.932769] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1063.933222] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1064.932456] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1064.933267] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1064.934043] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1065.932462] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1065.933270] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1065.933744] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1066.932434] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1066.932942] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1066.933731] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1067.932338] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1067.933159] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1067.933949] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1068.932335] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1068.932805] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1068.933078] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1069.932434] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1069.932939] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1069.933722] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1070.932440] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1070.932940] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1070.933720] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1071.932395] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1071.932865] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1071.933139] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1072.932429] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1072.933239] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1072.933713] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1073.932329] TSENS: Current CPU Temperature is: 42
+<4>[ 1073.932825] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1073.933590] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1073.934060] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1074.932431] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1074.932938] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1074.933727] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1075.932447] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1075.933256] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1075.933730] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1076.932466] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1076.933279] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1076.933753] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1077.932420] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1077.932929] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1077.933721] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1078.932448] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1078.933258] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1078.934049] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1079.932284] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1079.932756] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1079.933032] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1080.932458] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1080.932964] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1080.933760] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1081.932441] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1081.933256] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1081.934037] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1082.932444] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1082.933253] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1082.933736] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1083.932408] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1083.932908] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1083.933696] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1084.932457] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1084.933278] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1084.934070] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1085.932529] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1085.933339] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1085.933823] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1086.932433] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1086.932944] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1086.933726] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1087.932378] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1087.932883] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1087.933336] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1088.932451] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1088.933258] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1088.933741] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1089.932363] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1089.932867] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1089.933651] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1090.932438] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1090.932950] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1090.933732] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1091.932409] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1091.933215] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1091.933687] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1092.932468] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1092.933275] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1092.933752] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1093.932438] TSENS: Current CPU Temperature is: 42
+<4>[ 1093.932932] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1093.933697] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1093.934176] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1093.968072] msm_hsusb msm_hsusb: suspend
+<6>[ 1093.968673] Charging with 500mA current
+<6>[ 1094.052559] msm_hsusb msm_hsusb: msm72k_udc: ONLINE -> OFFLINE
+<6>[ 1094.054280] Charging with 0mA current
+<6>[ 1094.055003] mtp_release
+<6>[ 1094.056721] adb_release
+<6>[ 1094.058634] adb_open
+<6>[ 1094.063450] android_work: android_work: sent uevent USB_STATE=DISCONNECTED
+<6>[ 1094.068256] bq24160 3-006b: Turning off charger
+<6>[ 1094.087775] healthd: battery l=94 v=4192 t=37.0 h=2 st=2 c=-71 chg=
+<6>[ 1094.145885] healthd: battery l=94 v=4192 t=37.0 h=2 st=2 c=-71 chg=
+<6>[ 1094.292608] Charging with 0mA current
+<6>[ 1094.293117] semc_chg_cradle semc_chg_cradle: semc_charger_cradle_is_connected() ret=0
+<6>[ 1094.293892] entering into lpm
+<6>[ 1094.296742] msm_otg_suspend: usb in low power mode
+<6>[ 1094.312622] bq24160 3-006b: Charger status: 0
+<6>[ 1094.330051] healthd: battery l=94 v=4192 t=37.0 h=2 st=3 c=-71 chg=
+<6>[ 1094.622863] bq24160 3-006b: Charger status: 0
+<6>[ 1094.627043] healthd: battery l=94 v=4192 t=37.0 h=2 st=3 c=-71 chg=
+<4>[ 1094.932288] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1094.932581] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1094.932861] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1095.932816] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1095.933092] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1095.933252] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1096.052638] PM: suspend entry 2026-09-11 11:59:35.958597586 UTC
+<4>[ 1096.055741] Freezing user space processes ... (elapsed 0.02 seconds) done.
+<4>[ 1096.332929] Freezing remaining freezable tasks ... (elapsed 0.02 seconds) done.
+<4>[ 1096.354821] Suspending console(s) (use no_console_suspend to debug)
+<6>[ 1096.363534] msm_fb_ext_suspend: Turning off HPD circuitry
+<6>[ 1096.368126] lm3560 3-0053: lm356x_suspend: Suspending LM356X driver.
+<6>[ 1096.744016] PM: suspend of devices complete after 386.660 msecs
+<6>[ 1096.746129] PM: late suspend of devices complete after 2.089 msecs
+<6>[ 1096.748787] PM: noirq suspend of devices complete after 2.638 msecs
+<4>[ 1096.748800] Disabling non-boot CPUs ...
+<6>[ 1096.749105] msm_pm_enter
+<6>[ 1096.749105] msm_pm_enter: power collapse
+<6>[ 1096.749105] msm_mpm_irqs_detectable: cannot monitor 0000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000
+<6>[ 1096.749105] msm_pm_enter: return
+<6>[ 1096.751382] PM: noirq resume of devices complete after 1.946 msecs
+<6>[ 1096.754840] PM: early resume of devices complete after 1.818 msecs
+<6>[ 1096.760964] wakeup wake lock: pmic8058_xoadc_wakelock
+<6>[ 1096.761148] lm3560 3-0053: lm356x_resume: Reinit lm356x chip.
+<6>[ 1096.765037] lm3560 3-0053: lm356x_resume: Resuming LM356X driver.
+<6>[ 1096.765999] msm_fb_ext_resume: Turning on HPD circuitry
+<6>[ 1096.770237] PM: resume of devices complete after 15.374 msecs
+<4>[ 1096.775476] Restarting tasks ... done.
+<6>[ 1096.790166] PM: suspend exit 2026-09-11 11:59:40.704074278 UTC
+<6>[ 1096.790499] suspend: exit suspend, ret = 0 (2026-09-11 11:59:40.704412501 UTC)
+<6>[ 1096.790658] active wake lock mmc2_detect
+<6>[ 1096.790902] active wake lock mmc1_detect
+<6>[ 1096.831142] PM: suspend entry 2026-09-11 11:59:40.745041049 UTC
+<4>[ 1096.838286] Freezing user space processes ... 
+<6>[ 1096.853773] msm_otg_resume: usb exited from low power mode
+<4>[ 1096.863268] (elapsed 0.02 seconds) done.
+<4>[ 1096.863667] Freezing remaining freezable tasks ... 
+<6>[ 1096.864711] active wake lock msm_otg
+<4>[ 1096.865077] 
+<3>[ 1096.865208] Freezing of tasks  aborted
+<4>[ 1096.865344] 
+<4>[ 1096.865474] Restarting kernel threads ... 
+<6>[ 1096.872470] Charging with 0mA current
+<4>[ 1096.872836] done.
+<4>[ 1096.872970] Restarting tasks ... done.
+<6>[ 1096.879403] PM: suspend exit 2026-09-11 11:59:40.793307286 UTC
+<6>[ 1096.879719] suspend: exit suspend, ret = -16 (2026-09-11 11:59:40.793632026 UTC)
+<6>[ 1096.892343] bq24160 3-006b: OTG lock request: 1
+<4>[ 1096.932848] msm_thermal: Thermal Throttled (max)! temp: 4294967237
+<6>[ 1096.933238] msm_thermal: Limiting core0 max frequency to 384000
+<6>[ 1097.000625] msm_hsusb_host msm_hsusb_host.0: Qualcomm On-Chip EHCI Host Controller
+<6>[ 1097.001206] msm_hsusb_host msm_hsusb_host.0: new USB bus registered, assigned bus number 1
+<6>[ 1097.001672] msm_hsusb_host msm_hsusb_host.0: irq 132, io base 0x12500000
+<6>[ 1097.002399] usb usb1: New USB device found, idVendor=1d6b, idProduct=0002
+<6>[ 1097.002841] usb usb1: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+<6>[ 1097.003105] usb usb1: Product: Qualcomm On-Chip EHCI Host Controller
+<6>[ 1097.003527] usb usb1: Manufacturer: Linux 3.4.0-Elite-1.5+ ehci_hcd
+<6>[ 1097.003774] usb usb1: SerialNumber: msm_hsusb_host.0
+<6>[ 1097.011658] hub 1-0:1.0: USB hub found
+<6>[ 1097.011971] hub 1-0:1.0: 1 port detected
+<4>[ 1097.932441] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1097.932913] msm_thermal: Low Thermal Throttling Ended! temp: 41
+<6>[ 1097.933367] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1098.932993] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1098.933811] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1098.934292] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1099.932906] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1099.933157] msm_thermal: Low Thermal Throttling Ended! temp: 41
+<6>[ 1099.933536] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1100.932493] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1100.932998] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1100.933787] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1101.933440] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1101.934303] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1101.935461] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1102.932597] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1102.933098] msm_thermal: Low Thermal Throttling Ended! temp: 41
+<6>[ 1102.933884] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1103.933059] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1103.933571] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1103.934366] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1104.932455] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1104.932929] msm_thermal: Low Thermal Throttling Ended! temp: 41
+<6>[ 1104.933207] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1105.181181] request_suspend_state: wakeup (3->0) at 1105089002209 (2026-09-11 11:59:49.095054986 UTC)
+<3>[ 1105.186360] sys_chown: boostpulse error: -2
+<6>[ 1105.235024] clearpad clearpad: late resume
+<6>[ 1105.235050] clearpad clearpad: power ON
+<6>[ 1105.246084] as3676 3-0040: as3676_late_resume
+<3>[ 1105.352234] sys_chown: boostpulse error: -14
+<6>[ 1105.432468] mipi_renesas_r63306 mipi_renesas_r63306.0: ECO MODE OFF
+<4>[ 1105.437513] mdp4_csc_config: Block type 10 isn't supported by CSC.
+<4>[ 1105.437554] mdp4_csc_config: Block type 8 isn't supported by CSC.
+<6>[ 1105.461194] mdp4_overlay_mdp_perf_upd mdp clk is changed [1] from 0 to 160000000
+<4>[ 1105.504835] Unknown PRIVATE command SETSUSPENDMODE 0 - ignored
+<6>[ 1105.752435] [MPDEC]: CPU[1] was controlled outside of mpdecision! | pausing [10000]ms
+<4>[ 1105.934051] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1105.934836] msm_thermal: Low Thermal Throttling Ended! temp: 42
+<6>[ 1105.935301] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1106.776783] healthd: battery l=94 v=4084 t=38.0 h=2 st=3 c=-187 chg=
+<4>[ 1106.932301] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1106.932454] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1106.932638] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1107.934050] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1107.934835] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1107.935302] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1108.934099] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1108.934584] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1108.935347] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1109.934013] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1109.934801] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1109.935552] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1110.932277] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1110.932532] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1110.932685] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1111.932441] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1111.932930] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1111.933696] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1112.934094] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1112.934887] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1112.935648] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1113.934112] TSENS: Current CPU Temperature is: 43
+<4>[ 1113.934892] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1113.935334] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1113.936086] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1114.934109] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1114.934899] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1114.935364] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1115.932443] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1115.933235] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1115.933703] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1116.779334] [MPDEC]: CPU[1] on->off | Mask=[10] | time online: 1116687
+<6>[ 1116.785817] healthd: battery l=94 v=4055 t=37.0 h=2 st=3 c=-233 chg=
+<4>[ 1116.932294] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1116.932387] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1116.932531] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1117.932646] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1117.933404] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1117.934142] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1118.932537] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1118.933318] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1118.933781] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1119.932472] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1119.932958] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1119.933767] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1120.932846] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1120.933668] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1120.934431] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1121.932548] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1121.933329] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1121.933789] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1122.932249] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1122.932346] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1122.932487] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1123.932381] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1123.932876] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1123.933651] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1124.932537] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1124.933324] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1124.933785] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1125.932537] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1125.933028] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1125.933791] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1126.932576] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1126.933062] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1126.933873] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1127.932314] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1127.933110] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1127.933579] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1128.932560] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1128.933349] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1128.933812] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1129.932334] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1129.932428] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1129.932570] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1130.932533] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1130.933324] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1130.933780] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1131.932543] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1131.933330] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1131.933795] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1132.932497] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1132.932979] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1132.933786] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1133.932523] TSENS: Current CPU Temperature is: 43
+<4>[ 1133.933288] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1133.933729] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1133.934482] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1134.932379] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1134.933170] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1134.933941] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1135.167805] ------------[ cut here ]------------
+<4>[ 1135.168323] WARNING: at /home/deedwar/android/beanstalk-kitkat/kernel/sony/msm8x60/kernel/timer.c:1061 del_timer_sync+0x4c/0x54()
+<4>[ 1135.169398] Modules linked in: bcm4330(O)
+<4>[ 1135.170582] [<c00169cc>] (unwind_backtrace+0x0/0x138) from [<c00935e0>] (warn_slowpath_null+0x3c/0x4c)
+<4>[ 1135.171386] [<c00935e0>] (warn_slowpath_null+0x3c/0x4c) from [<c00a357c>] (del_timer_sync+0x4c/0x54)
+<4>[ 1135.172211] [<c00a357c>] (del_timer_sync+0x4c/0x54) from [<c0025220>] (intelli_plug_input_event+0xc/0x5c)
+<4>[ 1135.172736] [<c0025220>] (intelli_plug_input_event+0xc/0x5c) from [<c04ce5e4>] (input_pass_event+0xcc/0xd0)
+<4>[ 1135.173551] [<c04ce5e4>] (input_pass_event+0xcc/0xd0) from [<c04d0048>] (input_event+0xa8/0xfc)
+<4>[ 1135.174379] [<c04d0048>] (input_event+0xa8/0xfc) from [<c04d7330>] (__pmic8xxx_kp_scan_matrix+0x98/0x14c)
+<4>[ 1135.175215] [<c04d7330>] (__pmic8xxx_kp_scan_matrix+0x98/0x14c) from [<c04d74f8>] (pmic8xxx_kp_irq+0xbc/0x1c8)
+<4>[ 1135.176054] [<c04d74f8>] (pmic8xxx_kp_irq+0xbc/0x1c8) from [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8)
+<4>[ 1135.176884] [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8) from [<c0109080>] (handle_irq_event+0x7c/0xdc)
+<4>[ 1135.177412] [<c0109080>] (handle_irq_event+0x7c/0xdc) from [<c010c4d4>] (handle_level_irq+0xe0/0x168)
+<4>[ 1135.178236] [<c010c4d4>] (handle_level_irq+0xe0/0x168) from [<c01084ec>] (generic_handle_irq+0x28/0x3c)
+<4>[ 1135.179052] [<c01084ec>] (generic_handle_irq+0x28/0x3c) from [<c0431b04>] (pm8xxx_irq_handler+0x34c/0x42c)
+<4>[ 1135.179868] [<c0431b04>] (pm8xxx_irq_handler+0x34c/0x42c) from [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8)
+<4>[ 1135.180680] [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8) from [<c0109080>] (handle_irq_event+0x7c/0xdc)
+<4>[ 1135.181489] [<c0109080>] (handle_irq_event+0x7c/0xdc) from [<c010c4d4>] (handle_level_irq+0xe0/0x168)
+<4>[ 1135.182301] [<c010c4d4>] (handle_level_irq+0xe0/0x168) from [<c01084ec>] (generic_handle_irq+0x28/0x3c)
+<4>[ 1135.182835] [<c01084ec>] (generic_handle_irq+0x28/0x3c) from [<c032bf8c>] (msm_summary_irq_handler+0x78/0xd8)
+<4>[ 1135.183663] [<c032bf8c>] (msm_summary_irq_handler+0x78/0xd8) from [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8)
+<4>[ 1135.184486] [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8) from [<c0109080>] (handle_irq_event+0x7c/0xdc)
+<4>[ 1135.185303] [<c0109080>] (handle_irq_event+0x7c/0xdc) from [<c010c984>] (handle_fasteoi_irq+0xcc/0x1cc)
+<4>[ 1135.186123] [<c010c984>] (handle_fasteoi_irq+0xcc/0x1cc) from [<c01084ec>] (generic_handle_irq+0x28/0x3c)
+<4>[ 1135.186955] [<c01084ec>] (generic_handle_irq+0x28/0x3c) from [<c001031c>] (handle_IRQ+0x50/0xb8)
+<4>[ 1135.187758] [<c001031c>] (handle_IRQ+0x50/0xb8) from [<c0008604>] (gic_handle_irq+0xd4/0x1cc)
+<4>[ 1135.188261] [<c0008604>] (gic_handle_irq+0xd4/0x1cc) from [<c07c07fc>] (__irq_usr+0x3c/0x60)
+<4>[ 1135.189020] Exception stack(0xc8e29fb0 to 0xc8e29ff8)
+<4>[ 1135.189744] 9fa0:                                     5e767010 00000003 420dac08 b4600000
+<4>[ 1135.190229] 9fc0: 58f29a8a 5e795e88 5d13a710 00005770 41643bc0 421c38f0 5e795e74 419fcae0
+<4>[ 1135.191000] 9fe0: 00000070 63787c40 00000000 416457c0 200f0010 ffffffff
+<4>[ 1135.191735] ---[ end trace d0737ebb5ab15f62 ]---
+<4>[ 1135.192197] ------------[ cut here ]------------
+<4>[ 1135.192635] WARNING: at /home/deedwar/android/beanstalk-kitkat/kernel/sony/msm8x60/kernel/timer.c:1061 del_timer_sync+0x4c/0x54()
+<4>[ 1135.193410] Modules linked in: bcm4330(O)
+<4>[ 1135.194853] [<c00169cc>] (unwind_backtrace+0x0/0x138) from [<c00935e0>] (warn_slowpath_null+0x3c/0x4c)
+<4>[ 1135.195657] [<c00935e0>] (warn_slowpath_null+0x3c/0x4c) from [<c00a357c>] (del_timer_sync+0x4c/0x54)
+<4>[ 1135.196171] [<c00a357c>] (del_timer_sync+0x4c/0x54) from [<c0025220>] (intelli_plug_input_event+0xc/0x5c)
+<4>[ 1135.196984] [<c0025220>] (intelli_plug_input_event+0xc/0x5c) from [<c04ce5e4>] (input_pass_event+0xcc/0xd0)
+<4>[ 1135.197802] [<c04ce5e4>] (input_pass_event+0xcc/0xd0) from [<c04d0048>] (input_event+0xa8/0xfc)
+<4>[ 1135.198622] [<c04d0048>] (input_event+0xa8/0xfc) from [<c04d7354>] (__pmic8xxx_kp_scan_matrix+0xbc/0x14c)
+<4>[ 1135.199451] [<c04d7354>] (__pmic8xxx_kp_scan_matrix+0xbc/0x14c) from [<c04d74f8>] (pmic8xxx_kp_irq+0xbc/0x1c8)
+<4>[ 1135.200287] [<c04d74f8>] (pmic8xxx_kp_irq+0xbc/0x1c8) from [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8)
+<4>[ 1135.201103] [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8) from [<c0109080>] (handle_irq_event+0x7c/0xdc)
+<4>[ 1135.201632] [<c0109080>] (handle_irq_event+0x7c/0xdc) from [<c010c4d4>] (handle_level_irq+0xe0/0x168)
+<4>[ 1135.202451] [<c010c4d4>] (handle_level_irq+0xe0/0x168) from [<c01084ec>] (generic_handle_irq+0x28/0x3c)
+<4>[ 1135.203280] [<c01084ec>] (generic_handle_irq+0x28/0x3c) from [<c0431b04>] (pm8xxx_irq_handler+0x34c/0x42c)
+<4>[ 1135.204094] [<c0431b04>] (pm8xxx_irq_handler+0x34c/0x42c) from [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8)
+<4>[ 1135.204925] [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8) from [<c0109080>] (handle_irq_event+0x7c/0xdc)
+<4>[ 1135.205744] [<c0109080>] (handle_irq_event+0x7c/0xdc) from [<c010c4d4>] (handle_level_irq+0xe0/0x168)
+<4>[ 1135.206554] [<c010c4d4>] (handle_level_irq+0xe0/0x168) from [<c01084ec>] (generic_handle_irq+0x28/0x3c)
+<4>[ 1135.207093] [<c01084ec>] (generic_handle_irq+0x28/0x3c) from [<c032bf8c>] (msm_summary_irq_handler+0x78/0xd8)
+<4>[ 1135.207923] [<c032bf8c>] (msm_summary_irq_handler+0x78/0xd8) from [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8)
+<4>[ 1135.208743] [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8) from [<c0109080>] (handle_irq_event+0x7c/0xdc)
+<4>[ 1135.209578] [<c0109080>] (handle_irq_event+0x7c/0xdc) from [<c010c984>] (handle_fasteoi_irq+0xcc/0x1cc)
+<4>[ 1135.210404] [<c010c984>] (handle_fasteoi_irq+0xcc/0x1cc) from [<c01084ec>] (generic_handle_irq+0x28/0x3c)
+<4>[ 1135.211218] [<c01084ec>] (generic_handle_irq+0x28/0x3c) from [<c001031c>] (handle_IRQ+0x50/0xb8)
+<4>[ 1135.212026] [<c001031c>] (handle_IRQ+0x50/0xb8) from [<c0008604>] (gic_handle_irq+0xd4/0x1cc)
+<4>[ 1135.212524] [<c0008604>] (gic_handle_irq+0xd4/0x1cc) from [<c07c07fc>] (__irq_usr+0x3c/0x60)
+<4>[ 1135.213286] Exception stack(0xc8e29fb0 to 0xc8e29ff8)
+<4>[ 1135.213721] 9fa0:                                     5e767010 00000003 420dac08 b4600000
+<4>[ 1135.214505] 9fc0: 58f29a8a 5e795e88 5d13a710 00005770 41643bc0 421c38f0 5e795e74 419fcae0
+<4>[ 1135.215283] 9fe0: 00000070 63787c40 00000000 416457c0 200f0010 ffffffff
+<4>[ 1135.216010] ---[ end trace d0737ebb5ab15f63 ]---
+<4>[ 1135.216496] ------------[ cut here ]------------
+<4>[ 1135.216948] WARNING: at /home/deedwar/android/beanstalk-kitkat/kernel/sony/msm8x60/kernel/timer.c:1061 del_timer_sync+0x4c/0x54()
+<4>[ 1135.217723] Modules linked in: bcm4330(O)
+<4>[ 1135.219176] [<c00169cc>] (unwind_backtrace+0x0/0x138) from [<c00935e0>] (warn_slowpath_null+0x3c/0x4c)
+<4>[ 1135.219975] [<c00935e0>] (warn_slowpath_null+0x3c/0x4c) from [<c00a357c>] (del_timer_sync+0x4c/0x54)
+<4>[ 1135.220497] [<c00a357c>] (del_timer_sync+0x4c/0x54) from [<c0025220>] (intelli_plug_input_event+0xc/0x5c)
+<4>[ 1135.221318] [<c0025220>] (intelli_plug_input_event+0xc/0x5c) from [<c04ce5e4>] (input_pass_event+0xcc/0xd0)
+<4>[ 1135.222135] [<c04ce5e4>] (input_pass_event+0xcc/0xd0) from [<c04d0048>] (input_event+0xa8/0xfc)
+<4>[ 1135.222962] [<c04d0048>] (input_event+0xa8/0xfc) from [<c04d7368>] (__pmic8xxx_kp_scan_matrix+0xd0/0x14c)
+<4>[ 1135.223783] [<c04d7368>] (__pmic8xxx_kp_scan_matrix+0xd0/0x14c) from [<c04d74f8>] (pmic8xxx_kp_irq+0xbc/0x1c8)
+<4>[ 1135.224614] [<c04d74f8>] (pmic8xxx_kp_irq+0xbc/0x1c8) from [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8)
+<4>[ 1135.225137] [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8) from [<c0109080>] (handle_irq_event+0x7c/0xdc)
+<4>[ 1135.225955] [<c0109080>] (handle_irq_event+0x7c/0xdc) from [<c010c4d4>] (handle_level_irq+0xe0/0x168)
+<4>[ 1135.226772] [<c010c4d4>] (handle_level_irq+0xe0/0x168) from [<c01084ec>] (generic_handle_irq+0x28/0x3c)
+<4>[ 1135.227590] [<c01084ec>] (generic_handle_irq+0x28/0x3c) from [<c0431b04>] (pm8xxx_irq_handler+0x34c/0x42c)
+<4>[ 1135.228398] [<c0431b04>] (pm8xxx_irq_handler+0x34c/0x42c) from [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8)
+<4>[ 1135.229204] [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8) from [<c0109080>] (handle_irq_event+0x7c/0xdc)
+<4>[ 1135.230006] [<c0109080>] (handle_irq_event+0x7c/0xdc) from [<c010c4d4>] (handle_level_irq+0xe0/0x168)
+<4>[ 1135.230525] [<c010c4d4>] (handle_level_irq+0xe0/0x168) from [<c01084ec>] (generic_handle_irq+0x28/0x3c)
+<4>[ 1135.231351] [<c01084ec>] (generic_handle_irq+0x28/0x3c) from [<c032bf8c>] (msm_summary_irq_handler+0x78/0xd8)
+<4>[ 1135.232175] [<c032bf8c>] (msm_summary_irq_handler+0x78/0xd8) from [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8)
+<4>[ 1135.233004] [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8) from [<c0109080>] (handle_irq_event+0x7c/0xdc)
+<4>[ 1135.233826] [<c0109080>] (handle_irq_event+0x7c/0xdc) from [<c010c984>] (handle_fasteoi_irq+0xcc/0x1cc)
+<4>[ 1135.234654] [<c010c984>] (handle_fasteoi_irq+0xcc/0x1cc) from [<c01084ec>] (generic_handle_irq+0x28/0x3c)
+<4>[ 1135.235473] [<c01084ec>] (generic_handle_irq+0x28/0x3c) from [<c001031c>] (handle_IRQ+0x50/0xb8)
+<4>[ 1135.235979] [<c001031c>] (handle_IRQ+0x50/0xb8) from [<c0008604>] (gic_handle_irq+0xd4/0x1cc)
+<4>[ 1135.236780] [<c0008604>] (gic_handle_irq+0xd4/0x1cc) from [<c07c07fc>] (__irq_usr+0x3c/0x60)
+<4>[ 1135.237547] Exception stack(0xc8e29fb0 to 0xc8e29ff8)
+<4>[ 1135.237980] 9fa0:                                     5e767010 00000003 420dac08 b4600000
+<4>[ 1135.238763] 9fc0: 58f29a8a 5e795e88 5d13a710 00005770 41643bc0 421c38f0 5e795e74 419fcae0
+<4>[ 1135.239537] 9fe0: 00000070 63787c40 00000000 416457c0 200f0010 ffffffff
+<4>[ 1135.239976] ---[ end trace d0737ebb5ab15f64 ]---
+<6>[ 1135.362503] usb 1-1: new low-speed USB device number 2 using msm_hsusb_host
+<4>[ 1135.492004] ------------[ cut here ]------------
+<4>[ 1135.492834] WARNING: at /home/deedwar/android/beanstalk-kitkat/kernel/sony/msm8x60/kernel/timer.c:1061 del_timer_sync+0x4c/0x54()
+<4>[ 1135.493632] Modules linked in: bcm4330(O)
+<4>[ 1135.494802] [<c00169cc>] (unwind_backtrace+0x0/0x138) from [<c00935e0>] (warn_slowpath_null+0x3c/0x4c)
+<4>[ 1135.495606] [<c00935e0>] (warn_slowpath_null+0x3c/0x4c) from [<c00a357c>] (del_timer_sync+0x4c/0x54)
+<4>[ 1135.496426] [<c00a357c>] (del_timer_sync+0x4c/0x54) from [<c0025220>] (intelli_plug_input_event+0xc/0x5c)
+<4>[ 1135.497258] [<c0025220>] (intelli_plug_input_event+0xc/0x5c) from [<c04ce5e4>] (input_pass_event+0xcc/0xd0)
+<4>[ 1135.498069] [<c04ce5e4>] (input_pass_event+0xcc/0xd0) from [<c04d0048>] (input_event+0xa8/0xfc)
+<4>[ 1135.498588] [<c04d0048>] (input_event+0xa8/0xfc) from [<c04d7330>] (__pmic8xxx_kp_scan_matrix+0x98/0x14c)
+<4>[ 1135.499422] [<c04d7330>] (__pmic8xxx_kp_scan_matrix+0x98/0x14c) from [<c04d74f8>] (pmic8xxx_kp_irq+0xbc/0x1c8)
+<4>[ 1135.500264] [<c04d74f8>] (pmic8xxx_kp_irq+0xbc/0x1c8) from [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8)
+<4>[ 1135.501078] [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8) from [<c0109080>] (handle_irq_event+0x7c/0xdc)
+<4>[ 1135.501896] [<c0109080>] (handle_irq_event+0x7c/0xdc) from [<c010c4d4>] (handle_level_irq+0xe0/0x168)
+<4>[ 1135.502702] [<c010c4d4>] (handle_level_irq+0xe0/0x168) from [<c01084ec>] (generic_handle_irq+0x28/0x3c)
+<4>[ 1135.503519] [<c01084ec>] (generic_handle_irq+0x28/0x3c) from [<c0431b04>] (pm8xxx_irq_handler+0x34c/0x42c)
+<4>[ 1135.504046] [<c0431b04>] (pm8xxx_irq_handler+0x34c/0x42c) from [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8)
+<4>[ 1135.504880] [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8) from [<c0109080>] (handle_irq_event+0x7c/0xdc)
+<4>[ 1135.505697] [<c0109080>] (handle_irq_event+0x7c/0xdc) from [<c010c4d4>] (handle_level_irq+0xe0/0x168)
+<4>[ 1135.506511] [<c010c4d4>] (handle_level_irq+0xe0/0x168) from [<c01084ec>] (generic_handle_irq+0x28/0x3c)
+<4>[ 1135.507348] [<c01084ec>] (generic_handle_irq+0x28/0x3c) from [<c032bf8c>] (msm_summary_irq_handler+0x78/0xd8)
+<4>[ 1135.508175] [<c032bf8c>] (msm_summary_irq_handler+0x78/0xd8) from [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8)
+<4>[ 1135.509006] [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8) from [<c0109080>] (handle_irq_event+0x7c/0xdc)
+<4>[ 1135.509824] [<c0109080>] (handle_irq_event+0x7c/0xdc) from [<c010c984>] (handle_fasteoi_irq+0xcc/0x1cc)
+<4>[ 1135.510352] [<c010c984>] (handle_fasteoi_irq+0xcc/0x1cc) from [<c01084ec>] (generic_handle_irq+0x28/0x3c)
+<4>[ 1135.511183] [<c01084ec>] (generic_handle_irq+0x28/0x3c) from [<c001031c>] (handle_IRQ+0x50/0xb8)
+<4>[ 1135.511984] [<c001031c>] (handle_IRQ+0x50/0xb8) from [<c0008604>] (gic_handle_irq+0xd4/0x1cc)
+<4>[ 1135.512779] [<c0008604>] (gic_handle_irq+0xd4/0x1cc) from [<c07c0640>] (__irq_svc+0x40/0x70)
+<4>[ 1135.513541] Exception stack(0xc0c05f00 to 0xc0c05f48)
+<4>[ 1135.513984] 5f00: 00000000 00000002 00000000 00000000 00000003 c8cca580 00000003 00000003
+<4>[ 1135.514768] 5f20: c0c04000 c0cbc310 00000000 c0cbc2ac 00000000 c0c05f48 c0009cf4 c0078e94
+<4>[ 1135.515233] 5f40: 60000013 ffffffff
+<4>[ 1135.515992] [<c07c0640>] (__irq_svc+0x40/0x70) from [<c0078e94>] (msm_cpuidle_enter+0x80/0x88)
+<4>[ 1135.516512] [<c0078e94>] (msm_cpuidle_enter+0x80/0x88) from [<c05926ec>] (cpuidle_enter+0x14/0x18)
+<4>[ 1135.517317] [<c05926ec>] (cpuidle_enter+0x14/0x18) from [<c0592c68>] (cpuidle_idle_call+0xc0/0x338)
+<4>[ 1135.518122] [<c0592c68>] (cpuidle_idle_call+0xc0/0x338) from [<c00109e4>] (cpu_idle+0x70/0x100)
+<4>[ 1135.518936] [<c00109e4>] (cpu_idle+0x70/0x100) from [<c07a3b68>] (rest_init+0x8c/0xa8)
+<4>[ 1135.519752] [<c07a3b68>] (rest_init+0x8c/0xa8) from [<c0b007d4>] (start_kernel+0x2c8/0x31c)
+<4>[ 1135.520222] ---[ end trace d0737ebb5ab15f65 ]---
+<4>[ 1135.520982] ------------[ cut here ]------------
+<4>[ 1135.521420] WARNING: at /home/deedwar/android/beanstalk-kitkat/kernel/sony/msm8x60/kernel/timer.c:1061 del_timer_sync+0x4c/0x54()
+<4>[ 1135.522198] Modules linked in: bcm4330(O)
+<4>[ 1135.523357] [<c00169cc>] (unwind_backtrace+0x0/0x138) from [<c00935e0>] (warn_slowpath_null+0x3c/0x4c)
+<4>[ 1135.523866] [<c00935e0>] (warn_slowpath_null+0x3c/0x4c) from [<c00a357c>] (del_timer_sync+0x4c/0x54)
+<4>[ 1135.524688] [<c00a357c>] (del_timer_sync+0x4c/0x54) from [<c0025220>] (intelli_plug_input_event+0xc/0x5c)
+<4>[ 1135.525504] [<c0025220>] (intelli_plug_input_event+0xc/0x5c) from [<c04ce5e4>] (input_pass_event+0xcc/0xd0)
+<4>[ 1135.526323] [<c04ce5e4>] (input_pass_event+0xcc/0xd0) from [<c04d0048>] (input_event+0xa8/0xfc)
+<4>[ 1135.527145] [<c04d0048>] (input_event+0xa8/0xfc) from [<c04d7354>] (__pmic8xxx_kp_scan_matrix+0xbc/0x14c)
+<4>[ 1135.527667] [<c04d7354>] (__pmic8xxx_kp_scan_matrix+0xbc/0x14c) from [<c04d74f8>] (pmic8xxx_kp_irq+0xbc/0x1c8)
+<4>[ 1135.528490] [<c04d74f8>] (pmic8xxx_kp_irq+0xbc/0x1c8) from [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8)
+<4>[ 1135.529301] [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8) from [<c0109080>] (handle_irq_event+0x7c/0xdc)
+<4>[ 1135.530133] [<c0109080>] (handle_irq_event+0x7c/0xdc) from [<c010c4d4>] (handle_level_irq+0xe0/0x168)
+<4>[ 1135.530948] [<c010c4d4>] (handle_level_irq+0xe0/0x168) from [<c01084ec>] (generic_handle_irq+0x28/0x3c)
+<4>[ 1135.531762] [<c01084ec>] (generic_handle_irq+0x28/0x3c) from [<c0431b04>] (pm8xxx_irq_handler+0x34c/0x42c)
+<4>[ 1135.532588] [<c0431b04>] (pm8xxx_irq_handler+0x34c/0x42c) from [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8)
+<4>[ 1135.533407] [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8) from [<c0109080>] (handle_irq_event+0x7c/0xdc)
+<4>[ 1135.533932] [<c0109080>] (handle_irq_event+0x7c/0xdc) from [<c010c4d4>] (handle_level_irq+0xe0/0x168)
+<4>[ 1135.534745] [<c010c4d4>] (handle_level_irq+0xe0/0x168) from [<c01084ec>] (generic_handle_irq+0x28/0x3c)
+<4>[ 1135.535574] [<c01084ec>] (generic_handle_irq+0x28/0x3c) from [<c032bf8c>] (msm_summary_irq_handler+0x78/0xd8)
+<4>[ 1135.536402] [<c032bf8c>] (msm_summary_irq_handler+0x78/0xd8) from [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8)
+<4>[ 1135.537219] [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8) from [<c0109080>] (handle_irq_event+0x7c/0xdc)
+<4>[ 1135.538044] [<c0109080>] (handle_irq_event+0x7c/0xdc) from [<c010c984>] (handle_fasteoi_irq+0xcc/0x1cc)
+<4>[ 1135.538854] [<c010c984>] (handle_fasteoi_irq+0xcc/0x1cc) from [<c01084ec>] (generic_handle_irq+0x28/0x3c)
+<4>[ 1135.539376] [<c01084ec>] (generic_handle_irq+0x28/0x3c) from [<c001031c>] (handle_IRQ+0x50/0xb8)
+<4>[ 1135.540178] [<c001031c>] (handle_IRQ+0x50/0xb8) from [<c0008604>] (gic_handle_irq+0xd4/0x1cc)
+<4>[ 1135.540971] [<c0008604>] (gic_handle_irq+0xd4/0x1cc) from [<c07c0640>] (__irq_svc+0x40/0x70)
+<4>[ 1135.541735] Exception stack(0xc0c05f00 to 0xc0c05f48)
+<4>[ 1135.542176] 5f00: 00000000 00000002 00000000 00000000 00000003 c8cca580 00000003 00000003
+<4>[ 1135.542969] 5f20: c0c04000 c0cbc310 00000000 c0cbc2ac 00000000 c0c05f48 c0009cf4 c0078e94
+<4>[ 1135.543733] 5f40: 60000013 ffffffff
+<4>[ 1135.544179] [<c07c0640>] (__irq_svc+0x40/0x70) from [<c0078e94>] (msm_cpuidle_enter+0x80/0x88)
+<4>[ 1135.544985] [<c0078e94>] (msm_cpuidle_enter+0x80/0x88) from [<c05926ec>] (cpuidle_enter+0x14/0x18)
+<4>[ 1135.545797] [<c05926ec>] (cpuidle_enter+0x14/0x18) from [<c0592c68>] (cpuidle_idle_call+0xc0/0x338)
+<4>[ 1135.546304] [<c0592c68>] (cpuidle_idle_call+0xc0/0x338) from [<c00109e4>] (cpu_idle+0x70/0x100)
+<4>[ 1135.547115] [<c00109e4>] (cpu_idle+0x70/0x100) from [<c07a3b68>] (rest_init+0x8c/0xa8)
+<4>[ 1135.547923] [<c07a3b68>] (rest_init+0x8c/0xa8) from [<c0b007d4>] (start_kernel+0x2c8/0x31c)
+<4>[ 1135.548684] ---[ end trace d0737ebb5ab15f66 ]---
+<4>[ 1135.549167] ------------[ cut here ]------------
+<4>[ 1135.549625] WARNING: at /home/deedwar/android/beanstalk-kitkat/kernel/sony/msm8x60/kernel/timer.c:1061 del_timer_sync+0x4c/0x54()
+<4>[ 1135.550411] Modules linked in: bcm4330(O)
+<4>[ 1135.551869] [<c00169cc>] (unwind_backtrace+0x0/0x138) from [<c00935e0>] (warn_slowpath_null+0x3c/0x4c)
+<4>[ 1135.552683] [<c00935e0>] (warn_slowpath_null+0x3c/0x4c) from [<c00a357c>] (del_timer_sync+0x4c/0x54)
+<4>[ 1135.553201] [<c00a357c>] (del_timer_sync+0x4c/0x54) from [<c0025220>] (intelli_plug_input_event+0xc/0x5c)
+<4>[ 1135.554017] [<c0025220>] (intelli_plug_input_event+0xc/0x5c) from [<c04ce5e4>] (input_pass_event+0xcc/0xd0)
+<4>[ 1135.554829] [<c04ce5e4>] (input_pass_event+0xcc/0xd0) from [<c04d0048>] (input_event+0xa8/0xfc)
+<4>[ 1135.555646] [<c04d0048>] (input_event+0xa8/0xfc) from [<c04d7368>] (__pmic8xxx_kp_scan_matrix+0xd0/0x14c)
+<4>[ 1135.556464] [<c04d7368>] (__pmic8xxx_kp_scan_matrix+0xd0/0x14c) from [<c04d74f8>] (pmic8xxx_kp_irq+0xbc/0x1c8)
+<4>[ 1135.557303] [<c04d74f8>] (pmic8xxx_kp_irq+0xbc/0x1c8) from [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8)
+<4>[ 1135.557825] [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8) from [<c0109080>] (handle_irq_event+0x7c/0xdc)
+<4>[ 1135.558651] [<c0109080>] (handle_irq_event+0x7c/0xdc) from [<c010c4d4>] (handle_level_irq+0xe0/0x168)
+<4>[ 1135.559467] [<c010c4d4>] (handle_level_irq+0xe0/0x168) from [<c01084ec>] (generic_handle_irq+0x28/0x3c)
+<4>[ 1135.560290] [<c01084ec>] (generic_handle_irq+0x28/0x3c) from [<c0431b04>] (pm8xxx_irq_handler+0x34c/0x42c)
+<4>[ 1135.561113] [<c0431b04>] (pm8xxx_irq_handler+0x34c/0x42c) from [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8)
+<4>[ 1135.561931] [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8) from [<c0109080>] (handle_irq_event+0x7c/0xdc)
+<4>[ 1135.562737] [<c0109080>] (handle_irq_event+0x7c/0xdc) from [<c010c4d4>] (handle_level_irq+0xe0/0x168)
+<4>[ 1135.563252] [<c010c4d4>] (handle_level_irq+0xe0/0x168) from [<c01084ec>] (generic_handle_irq+0x28/0x3c)
+<4>[ 1135.564089] [<c01084ec>] (generic_handle_irq+0x28/0x3c) from [<c032bf8c>] (msm_summary_irq_handler+0x78/0xd8)
+<4>[ 1135.564919] [<c032bf8c>] (msm_summary_irq_handler+0x78/0xd8) from [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8)
+<4>[ 1135.565738] [<c0108da4>] (handle_irq_event_percpu+0x58/0x2b8) from [<c0109080>] (handle_irq_event+0x7c/0xdc)
+<4>[ 1135.566567] [<c0109080>] (handle_irq_event+0x7c/0xdc) from [<c010c984>] (handle_fasteoi_irq+0xcc/0x1cc)
+<4>[ 1135.567387] [<c010c984>] (handle_fasteoi_irq+0xcc/0x1cc) from [<c01084ec>] (generic_handle_irq+0x28/0x3c)
+<4>[ 1135.568215] [<c01084ec>] (generic_handle_irq+0x28/0x3c) from [<c001031c>] (handle_IRQ+0x50/0xb8)
+<4>[ 1135.568715] [<c001031c>] (handle_IRQ+0x50/0xb8) from [<c0008604>] (gic_handle_irq+0xd4/0x1cc)
+<4>[ 1135.569515] [<c0008604>] (gic_handle_irq+0xd4/0x1cc) from [<c07c0640>] (__irq_svc+0x40/0x70)
+<4>[ 1135.570281] Exception stack(0xc0c05f00 to 0xc0c05f48)
+<4>[ 1135.570726] 5f00: 00000000 00000002 00000000 00000000 00000003 c8cca580 00000003 00000003
+<4>[ 1135.571503] 5f20: c0c04000 c0cbc310 00000000 c0cbc2ac 00000000 c0c05f48 c0009cf4 c0078e94
+<4>[ 1135.572263] 5f40: 60000013 ffffffff
+<4>[ 1135.572710] [<c07c0640>] (__irq_svc+0x40/0x70) from [<c0078e94>] (msm_cpuidle_enter+0x80/0x88)
+<4>[ 1135.573508] [<c0078e94>] (msm_cpuidle_enter+0x80/0x88) from [<c05926ec>] (cpuidle_enter+0x14/0x18)
+<4>[ 1135.574323] [<c05926ec>] (cpuidle_enter+0x14/0x18) from [<c0592c68>] (cpuidle_idle_call+0xc0/0x338)
+<4>[ 1135.575138] [<c0592c68>] (cpuidle_idle_call+0xc0/0x338) from [<c00109e4>] (cpu_idle+0x70/0x100)
+<4>[ 1135.575651] [<c00109e4>] (cpu_idle+0x70/0x100) from [<c07a3b68>] (rest_init+0x8c/0xa8)
+<4>[ 1135.576453] [<c07a3b68>] (rest_init+0x8c/0xa8) from [<c0b007d4>] (start_kernel+0x2c8/0x31c)
+<4>[ 1135.577224] ---[ end trace d0737ebb5ab15f67 ]---
+<6>[ 1135.577743] ncp373_overcur_irq: irq=360 received /FLG interrupt
+<3>[ 1135.712419] hub 1-0:1.0: unable to enumerate USB device on port 1
+<6>[ 1135.782313] ncp373_oc_delay_work: /FLG raise to Hi, return from OC
+<4>[ 1135.932550] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1135.933032] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1135.933838] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1136.932295] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1136.932443] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1136.932584] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1137.932533] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1137.933312] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1137.933778] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1138.932536] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1138.933031] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1138.933791] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1139.932489] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1139.932983] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1139.933743] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1139.942375] usb 1-1: new high-speed USB device number 3 using msm_hsusb_host
+<3>[ 1140.202866] hub 1-0:1.0: unable to enumerate USB device on port 1
+<6>[ 1140.550402] ncp373_overcur_irq: irq=360 received /FLG interrupt
+<6>[ 1140.842429] ncp373_oc_delay_work: /FLG raise to Hi, return from OC
+<4>[ 1140.932490] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1140.933268] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1140.934029] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1140.942374] usb 1-1: new high-speed USB device number 4 using msm_hsusb_host
+<6>[ 1141.102393] usb 1-1: New USB device found, idVendor=090c, idProduct=1000
+<6>[ 1141.102893] usb 1-1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+<6>[ 1141.103640] usb 1-1: Product: QUMO
+<6>[ 1141.104047] usb 1-1: Manufacturer: QUMO
+<6>[ 1141.104755] usb 1-1: SerialNumber: [REDACTED]
+<6>[ 1141.123297] Charging with 0mA current
+<6>[ 1141.127710] scsi0 : usb-storage 1-1:1.0
+<4>[ 1141.932556] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1141.933048] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1141.933810] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1142.198565] usb 1-1: USB disconnect, device number 4
+<6>[ 1142.232554] msm_hsusb_host msm_hsusb_host.0: remove, state 1
+<6>[ 1142.233115] usb usb1: USB disconnect, device number 1
+<3>[ 1142.281806] hub 1-0:1.0: hub_port_status failed (err = -19)
+<3>[ 1142.290008] hub 1-0:1.0: connect-debounce failed, port 1 disabled
+<6>[ 1142.301981] msm_hsusb_host msm_hsusb_host.0: USB bus 1 deregistered
+<6>[ 1142.533830] bq24160 3-006b: OTG lock request: 0
+<6>[ 1142.536272] Charging with 0mA current
+<6>[ 1142.842443] bq24160 3-006b: Charger status: 0
+<6>[ 1142.844592] healthd: battery l=94 v=4061 t=37.0 h=2 st=3 c=-263 chg=
+<4>[ 1142.932389] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1142.933149] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1142.933602] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1143.052506] Charging with 0mA current
+<6>[ 1143.052968] Charging with 0mA current
+<6>[ 1143.053395] semc_chg_cradle semc_chg_cradle: semc_charger_cradle_is_connected() ret=0
+<6>[ 1143.054126] entering into lpm
+<6>[ 1143.056688] msm_otg_suspend: usb in low power mode
+<6>[ 1143.152714] bq24160 3-006b: Charger status: 0
+<6>[ 1143.159436] healthd: battery l=94 v=4061 t=37.0 h=2 st=3 c=-235 chg=
+<4>[ 1143.932318] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1143.932413] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1143.932555] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1144.932354] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1144.933164] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1144.933615] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1145.932551] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1145.933340] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1145.933800] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1146.932398] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1146.932929] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1146.933691] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1147.932541] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1147.933339] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1147.933805] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1148.932489] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1148.933276] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1148.933746] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1149.932571] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1149.933058] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1149.933816] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1150.251928] msm_otg_resume: usb exited from low power mode
+<6>[ 1150.272469] Charging with 0mA current
+<6>[ 1150.292443] bq24160 3-006b: OTG lock request: 1
+<6>[ 1150.402501] msm_hsusb_host msm_hsusb_host.0: Qualcomm On-Chip EHCI Host Controller
+<6>[ 1150.403100] msm_hsusb_host msm_hsusb_host.0: new USB bus registered, assigned bus number 1
+<6>[ 1150.404147] msm_hsusb_host msm_hsusb_host.0: irq 132, io base 0x12500000
+<6>[ 1150.405160] usb usb1: New USB device found, idVendor=1d6b, idProduct=0002
+<6>[ 1150.405614] usb usb1: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+<6>[ 1150.406374] usb usb1: Product: Qualcomm On-Chip EHCI Host Controller
+<6>[ 1150.406809] usb usb1: Manufacturer: Linux 3.4.0-Elite-1.5+ ehci_hcd
+<6>[ 1150.407547] usb usb1: SerialNumber: msm_hsusb_host.0
+<6>[ 1150.419553] hub 1-0:1.0: USB hub found
+<6>[ 1150.420363] hub 1-0:1.0: 1 port detected
+<4>[ 1150.933323] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1150.933765] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1150.934027] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1151.932260] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1151.932353] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1151.932493] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1152.932535] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1152.933325] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1152.934087] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1153.222351] msm_hsusb_host msm_hsusb_host.0: remove, state 1
+<6>[ 1153.222514] usb usb1: USB disconnect, device number 1
+<6>[ 1153.223135] msm_hsusb_host msm_hsusb_host.0: USB bus 1 deregistered
+<6>[ 1153.453701] bq24160 3-006b: OTG lock request: 0
+<6>[ 1153.762770] bq24160 3-006b: Charger status: 0
+<6>[ 1153.769650] healthd: battery l=94 v=4079 t=37.0 h=2 st=3 c=-166 chg=
+<4>[ 1153.932322] TSENS: Current CPU Temperature is: 43
+<4>[ 1153.932785] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1153.933512] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1153.933959] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1153.972496] Charging with 0mA current
+<6>[ 1153.972951] Charging with 0mA current
+<6>[ 1153.973668] semc_chg_cradle semc_chg_cradle: semc_charger_cradle_is_connected() ret=0
+<6>[ 1153.974112] entering into lpm
+<6>[ 1153.976935] msm_otg_suspend: usb in low power mode
+<6>[ 1154.072598] bq24160 3-006b: Charger status: 0
+<6>[ 1154.078989] healthd: battery l=94 v=4079 t=37.0 h=2 st=3 c=-236 chg=
+<4>[ 1154.932478] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1154.933264] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1154.933724] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1155.932428] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1155.932904] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1155.933647] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1156.932322] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1156.932769] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1156.933032] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1157.932522] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1157.933307] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1157.933777] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1158.932280] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1158.932370] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1158.932511] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1159.932367] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1159.933158] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1159.933923] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1160.932413] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1160.933187] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1160.933663] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1161.932620] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1161.933104] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1161.933866] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1162.932454] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1162.933303] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1162.934081] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1163.932572] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1163.933351] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1163.933820] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1164.932575] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1164.933055] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1164.933814] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1165.932201] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1165.932350] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1165.932491] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1166.932416] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1166.933209] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1166.933681] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1167.584064] msm_otg_resume: usb exited from low power mode
+<6>[ 1167.602465] Charging with 0mA current
+<6>[ 1167.622395] bq24160 3-006b: OTG lock request: 1
+<6>[ 1167.728405] msm_hsusb_host msm_hsusb_host.0: Qualcomm On-Chip EHCI Host Controller
+<6>[ 1167.729290] msm_hsusb_host msm_hsusb_host.0: new USB bus registered, assigned bus number 1
+<6>[ 1167.730038] msm_hsusb_host msm_hsusb_host.0: irq 132, io base 0x12500000
+<6>[ 1167.731056] usb usb1: New USB device found, idVendor=1d6b, idProduct=0002
+<6>[ 1167.731812] usb usb1: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+<6>[ 1167.732413] usb usb1: Product: Qualcomm On-Chip EHCI Host Controller
+<6>[ 1167.733163] usb usb1: Manufacturer: Linux 3.4.0-Elite-1.5+ ehci_hcd
+<6>[ 1167.733591] usb usb1: SerialNumber: msm_hsusb_host.0
+<6>[ 1167.747475] hub 1-0:1.0: USB hub found
+<6>[ 1167.747991] hub 1-0:1.0: 1 port detected
+<4>[ 1167.932551] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1167.933040] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1167.933794] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1168.932323] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1168.933111] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1168.933572] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1169.932529] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1169.933013] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1169.933764] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1170.932538] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1170.933030] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1170.933795] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1171.932399] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1171.932554] msm_thermal: Low Thermal Throttling Ended! temp: 43
+<6>[ 1171.932643] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1172.932263] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1172.932413] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1172.932497] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1173.932313] TSENS: Current CPU Temperature is: 45
+<4>[ 1173.932423] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1173.932562] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1173.932651] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1174.932216] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1174.932311] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1174.932451] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1175.932215] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1175.932365] msm_thermal: Low Thermal Throttling Ended! temp: 46
+<6>[ 1175.932451] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1176.275055] [MPDEC]: CPU[1] off->on | Mask=[11]
+<4>[ 1176.932280] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1176.932536] msm_thermal: Low Thermal Throttling Ended! temp: 46
+<6>[ 1176.932773] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1177.932344] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1177.932558] msm_thermal: Low Thermal Throttling Ended! temp: 46
+<6>[ 1177.932664] msm_thermal: Limiting core0 max frequency to 1566000
+<3>[ 1178.069143] mdp4_overlay_req2pipe: downscale on RGB pipe!
+<3>[ 1178.069233] mdp4_overlay_set: mdp4_overlay_req2pipe, ret=-22
+<3>[ 1178.069352] msmfb_overlay_set: ioctl failed, rc=-22
+<6>[ 1178.787277] [MPDEC]: CPU[1] on->off | Mask=[10] | time online: 2513
+<4>[ 1178.932345] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1178.932825] msm_thermal: Low Thermal Throttling Ended! temp: 48
+<6>[ 1178.933573] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1179.932417] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1179.933183] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1179.933927] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1180.932245] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1180.932462] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1180.932585] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1181.558842] ncp373_overcur_irq: irq=360 received /FLG interrupt
+<6>[ 1181.852328] ncp373_oc_delay_work: /FLG raise to Hi, return from OC
+<6>[ 1181.882503] usb 1-1: new high-speed USB device number 2 using msm_hsusb_host
+<4>[ 1181.932545] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1181.933338] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1181.934102] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1182.108696] usb 1-1: New USB device found, idVendor=0951, idProduct=1665
+<6>[ 1182.109493] usb 1-1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+<6>[ 1182.109943] usb 1-1: Product: DataTraveler 2.0
+<6>[ 1182.110657] usb 1-1: Manufacturer: Kingston
+<6>[ 1182.111067] usb 1-1: SerialNumber: [REDACTED]
+<6>[ 1182.120083] Charging with 0mA current
+<6>[ 1182.125454] scsi1 : usb-storage 1-1:1.0
+<4>[ 1182.933286] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1182.934052] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1182.934514] msm_thermal: Limiting core0 max frequency to 1566000
+<5>[ 1183.136554] scsi 1:0:0:0: Direct-Access     Kingston DataTraveler 2.0 0000 PQ: 0 ANSI: 4
+<5>[ 1183.158929] sd 1:0:0:0: [sda] 15280192 512-byte logical blocks: (7.82 GB/7.28 GiB)
+<5>[ 1183.160936] sd 1:0:0:0: [sda] Write Protect is off
+<7>[ 1183.161084] sd 1:0:0:0: [sda] Mode Sense: 23 00 00 00
+<5>[ 1183.162923] sd 1:0:0:0: [sda] Write cache: disabled, read cache: enabled, doesn't support DPO or FUA
+<6>[ 1183.173173]  sda: sda1
+<4>[ 1183.173274] sda: p1 size 4294967295 extends beyond EOD, enabling native capacity
+<6>[ 1183.180921]  sda: sda1
+<4>[ 1183.181076] sda: p1 size 4294967295 extends beyond EOD, truncated
+<5>[ 1183.192822] sd 1:0:0:0: [sda] Attached SCSI removable disk
+<6>[ 1183.285525] [MPDEC]: CPU[1] off->on | Mask=[11]
+<4>[ 1183.932246] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1183.932404] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1183.932492] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1184.932231] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1184.932354] msm_thermal: Low Thermal Throttling Ended! temp: 46
+<6>[ 1184.932535] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1185.291603] [MPDEC]: CPU[1] on->off | Mask=[10] | time online: 2006
+<4>[ 1185.932315] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1185.932468] msm_thermal: Low Thermal Throttling Ended! temp: 48
+<6>[ 1185.932555] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1186.932245] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1186.932344] msm_thermal: Low Thermal Throttling Ended! temp: 46
+<6>[ 1186.932488] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1187.932261] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1187.932448] msm_thermal: Low Thermal Throttling Ended! temp: 46
+<6>[ 1187.932628] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1188.932559] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1188.933361] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1188.933835] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1189.932506] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1189.933001] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1189.933774] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1190.568769] usb 1-1: USB disconnect, device number 2
+<6>[ 1190.595567] Charging with 0mA current
+<4>[ 1190.932281] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1190.932437] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1190.932525] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1191.932584] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1191.933083] msm_thermal: Low Thermal Throttling Ended! temp: 46
+<6>[ 1191.933854] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1192.932448] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1192.932929] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1192.933674] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1193.932244] TSENS: Current CPU Temperature is: 45
+<4>[ 1193.932444] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1193.932543] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1193.932728] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1194.933008] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1194.933810] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1194.934278] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1195.932230] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1195.932387] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1195.932473] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1196.932402] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1196.932892] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1196.933661] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1197.011715] healthd: battery l=94 v=4041 t=38.0 h=2 st=3 c=-171 chg=
+<6>[ 1197.157382] ncp373_overcur_irq: irq=360 received /FLG interrupt
+<6>[ 1197.452555] ncp373_oc_delay_work: /FLG raise to Hi, return from OC
+<6>[ 1197.892535] usb 1-1: new full-speed USB device number 3 using msm_hsusb_host
+<4>[ 1197.932357] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1197.932862] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1197.933653] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1198.065433] usb 1-1: New USB device found, idVendor=25a7, idProduct=fa61
+<6>[ 1198.066249] usb 1-1: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+<6>[ 1198.066713] usb 1-1: Product: 2.4G Receiver
+<6>[ 1198.067446] usb 1-1: Manufacturer: Compx
+<6>[ 1198.077058] Charging with 0mA current
+<6>[ 1198.091898] input: Compx 2.4G Receiver as /devices/platform/msm_hsusb_host.0/usb1/1-1/1-1:1.0/input/input10
+<6>[ 1198.098049] touch dev: Compx 2.4G Receiver
+<6>[ 1198.099675] generic-usb 0003:25A7:FA61.0001: input: USB HID v1.10 Keyboard [Compx 2.4G Receiver] on usb-msm_hsusb_host.0-1/input0
+<6>[ 1198.113023] input: Compx 2.4G Receiver as /devices/platform/msm_hsusb_host.0/usb1/1-1/1-1:1.1/input/input11
+<6>[ 1198.116099] touch dev: Compx 2.4G Receiver
+<6>[ 1198.116209] generic-usb 0003:25A7:FA61.0002: input: USB HID v1.10 Mouse [Compx 2.4G Receiver] on usb-msm_hsusb_host.0-1/input1
+<6>[ 1198.295051] [MPDEC]: CPU[1] off->on | Mask=[11]
+<4>[ 1198.932253] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1198.932413] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1198.932562] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1199.932381] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1199.933181] msm_thermal: Low Thermal Throttling Ended! temp: 48
+<6>[ 1199.933648] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1200.313876] [MPDEC]: CPU[1] on->off | Mask=[10] | time online: 2019
+<4>[ 1200.932251] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1200.932406] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1200.932497] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1201.932310] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1201.932553] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1201.933008] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1202.315178] [MPDEC]: CPU[1] off->on | Mask=[11]
+<4>[ 1202.932235] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1202.932489] msm_thermal: Low Thermal Throttling Ended! temp: 47
+<6>[ 1202.932640] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1203.932243] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1203.932351] msm_thermal: Low Thermal Throttling Ended! temp: 48
+<6>[ 1203.932515] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1204.932230] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1204.932383] msm_thermal: Low Thermal Throttling Ended! temp: 48
+<6>[ 1204.932525] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1205.333885] [MPDEC]: CPU[1] on->off | Mask=[10] | time online: 3018
+<4>[ 1205.932236] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1205.932356] msm_thermal: Low Thermal Throttling Ended! temp: 47
+<6>[ 1205.932545] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1206.932232] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1206.932395] msm_thermal: Low Thermal Throttling Ended! temp: 46
+<6>[ 1206.932549] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1207.932309] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1207.932655] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1207.932845] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1208.932471] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1208.932564] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1208.932705] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1209.126727] bq27520 3-0055: bq27520_handle_soc_worker() capacity=93 (93) flags=0x139 ctrl_status=0x628d valid=1
+<6>[ 1209.133002] healthd: battery l=93 v=4035 t=38.0 h=2 st=3 c=-571 chg=
+<4>[ 1209.932295] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1209.932390] msm_thermal: Low Thermal Throttling Ended! temp: 46
+<6>[ 1209.932477] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1210.932451] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1210.932926] msm_thermal: Low Thermal Throttling Ended! temp: 48
+<6>[ 1210.933672] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1211.932343] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1211.932520] msm_thermal: Low Thermal Throttling Ended! temp: 47
+<6>[ 1211.932609] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1212.932378] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1212.932604] msm_thermal: Low Thermal Throttling Ended! temp: 48
+<6>[ 1212.932696] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1213.932250] TSENS: Current CPU Temperature is: 48
+<4>[ 1213.932347] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1213.932482] msm_thermal: Low Thermal Throttling Ended! temp: 48
+<6>[ 1213.932570] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1214.932306] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1214.932442] msm_thermal: Low Thermal Throttling Ended! temp: 48
+<6>[ 1214.932600] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1215.834589] [MPDEC]: CPU[1] off->on | Mask=[11]
+<4>[ 1215.932228] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1215.932334] msm_thermal: Low Thermal Throttling Ended! temp: 48
+<6>[ 1215.932490] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1216.932276] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1216.932430] msm_thermal: Low Thermal Throttling Ended! temp: 48
+<6>[ 1216.932576] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1217.932307] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1217.932512] msm_thermal: Low Thermal Throttling Ended! temp: 48
+<6>[ 1217.932599] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1218.932274] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1218.932400] msm_thermal: Low Thermal Throttling Ended! temp: 48
+<6>[ 1218.932543] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1219.932293] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1219.932521] msm_thermal: Low Thermal Throttling Ended! temp: 49
+<6>[ 1219.932684] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1220.341186] [MPDEC]: CPU[1] on->off | Mask=[10] | time online: 4507
+<4>[ 1220.932252] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1220.932363] msm_thermal: Low Thermal Throttling Ended! temp: 49
+<6>[ 1220.932532] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1221.932291] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1221.932447] msm_thermal: Low Thermal Throttling Ended! temp: 48
+<6>[ 1221.932594] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1222.932217] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1222.932372] msm_thermal: Low Thermal Throttling Ended! temp: 48
+<6>[ 1222.932462] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1223.932367] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1223.932867] msm_thermal: Low Thermal Throttling Ended! temp: 48
+<6>[ 1223.933637] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1224.932399] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1224.933208] msm_thermal: Low Thermal Throttling Ended! temp: 47
+<6>[ 1224.933979] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1225.932406] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1225.932562] msm_thermal: Low Thermal Throttling Ended! temp: 47
+<6>[ 1225.932651] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1226.932231] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1226.932331] msm_thermal: Low Thermal Throttling Ended! temp: 47
+<6>[ 1226.932476] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1227.029696] healthd: battery l=93 v=4012 t=38.0 h=2 st=3 c=-481 chg=
+<4>[ 1227.932487] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1227.933270] msm_thermal: Low Thermal Throttling Ended! temp: 48
+<6>[ 1227.933728] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1228.932318] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1228.932815] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1228.933578] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1229.337987] usb 1-1: USB disconnect, device number 3
+<6>[ 1229.352375] msm_hsusb_host msm_hsusb_host.0: remove, state 1
+<6>[ 1229.352878] usb usb1: USB disconnect, device number 1
+<3>[ 1229.452613] hub 1-0:1.0: hub_port_status failed (err = -19)
+<3>[ 1229.452739] hub 1-0:1.0: connect-debounce failed, port 1 disabled
+<6>[ 1229.454982] msm_hsusb_host msm_hsusb_host.0: USB bus 1 deregistered
+<6>[ 1229.683337] bq24160 3-006b: OTG lock request: 0
+<6>[ 1229.683749] Charging with 0mA current
+<6>[ 1229.834954] [MPDEC]: CPU[1] off->on | Mask=[11]
+<4>[ 1229.932218] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1229.932372] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1229.932520] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1229.992374] bq24160 3-006b: Charger status: 0
+<6>[ 1229.994903] healthd: battery l=93 v=4048 t=38.0 h=2 st=3 c=-284 chg=
+<6>[ 1230.202304] Charging with 0mA current
+<6>[ 1230.202440] Charging with 0mA current
+<6>[ 1230.202600] semc_chg_cradle semc_chg_cradle: semc_charger_cradle_is_connected() ret=0
+<6>[ 1230.202688] entering into lpm
+<6>[ 1230.204471] msm_otg_suspend: usb in low power mode
+<6>[ 1230.302417] bq24160 3-006b: Charger status: 0
+<6>[ 1230.305051] healthd: battery l=93 v=4048 t=38.0 h=2 st=3 c=-390 chg=
+<6>[ 1230.852333] [MPDEC]: CPU[1] on->off | Mask=[10] | time online: 1018
+<4>[ 1230.932925] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1230.933402] msm_thermal: Low Thermal Throttling Ended! temp: 48
+<6>[ 1230.934150] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1231.932359] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1231.933149] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1231.933611] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1232.932394] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1232.933176] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1232.933637] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1233.932377] TSENS: Current CPU Temperature is: 45
+<4>[ 1233.932856] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1233.933601] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1233.934063] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1234.932390] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1234.932882] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1234.933646] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1235.932421] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1235.933216] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1235.933983] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1236.482557] msm_otg_resume: usb exited from low power mode
+<6>[ 1236.483886] Charging with 0mA current
+<6>[ 1236.484367] msm_hsusb msm_hsusb: msm72k_udc: OFFLINE -> ONLINE
+<6>[ 1236.612590] bq24160 3-006b: Charger status: 2
+<6>[ 1236.619775] healthd: battery l=93 v=4067 t=38.0 h=2 st=3 c=-178 chg=
+<6>[ 1236.712852] android_work: android_work: did not send uevent (0 0   (null))
+<6>[ 1236.715782] msm_hsusb msm_hsusb: suspend
+<6>[ 1236.830592] msm_hsusb msm_hsusb: reset
+<6>[ 1236.929365] android_work: android_work: sent uevent USB_STATE=CONNECTED
+<4>[ 1236.932486] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1236.933239] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1236.933696] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1236.999690] android_usb gadget: high-speed config #1: android
+<6>[ 1236.999826] 
+<6>[ 1236.999828] *********** Charger Type: HOST PC
+<6>[ 1236.999831] 
+<6>[ 1237.000105] 
+<6>[ 1237.000107] Charger Type: STD DOWNSTREAM PORT
+<6>[ 1237.000303] Charging with 500mA current
+<6>[ 1237.000695] Charging with 500mA current
+<6>[ 1237.002615] bq24160 3-006b: Turning on charger. USB-Host mode
+<6>[ 1237.002771] bq24160 3-006b: Set init values
+<6>[ 1237.005828] bq24160 3-006b: Setting USB: OTG_Lock OFF, SUPPLY_SEL=USB
+<6>[ 1237.006951] bq24160 3-006b: Setting input charger current(USB) to 500 mA
+<6>[ 1237.007181] bq24160 3-006b: Setting charger voltage to 4200 mV
+<6>[ 1237.007695] bq24160 3-006b: Setting charger current to 1525 mA
+<6>[ 1237.008272] healthd: battery l=93 v=4065 t=38.0 h=2 st=3 c=-178 chg=u
+<6>[ 1237.034137] healthd: battery l=93 v=4065 t=38.0 h=2 st=3 c=-178 chg=u
+<6>[ 1237.052333] android_work: android_work: sent uevent USB_STATE=CONFIGURED
+<6>[ 1237.191533] mtp_open
+<6>[ 1237.332376] bq24160 3-006b: Charger status: 2 (disabling charge interval)
+<6>[ 1237.494478] bq24160 3-006b: Enabling charger
+<6>[ 1237.712268] Charging with 500mA current
+<4>[ 1237.932280] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1237.932373] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1237.932516] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1238.932424] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1238.933210] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1238.933677] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1239.932470] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1239.933269] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1239.933740] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1240.702567] bq24160 3-006b: Charger status: 4
+<6>[ 1240.710339] healthd: battery l=93 v=4054 t=38.0 h=2 st=2 c=-285 chg=u
+<4>[ 1240.932442] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1240.932927] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1240.933694] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1241.932431] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1241.933219] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1241.933675] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1242.052062] msm_hsusb msm_hsusb: suspend
+<6>[ 1242.052191] Charging with 500mA current
+<6>[ 1242.179686] msm_hsusb msm_hsusb: reset
+<6>[ 1242.180560] Charging with 0mA current
+<6>[ 1242.180709] android_work: android_work: sent uevent USB_STATE=DISCONNECTED
+<6>[ 1242.181034] adb_release
+<6>[ 1242.181684] adb_open
+<6>[ 1242.185096] bq24160 3-006b: Turning off charger
+<6>[ 1242.196065] mtp_release
+<6>[ 1242.198871] healthd: battery l=93 v=4141 t=38.0 h=2 st=2 c=195 chg=
+<6>[ 1242.214008] healthd: battery l=93 v=4141 t=38.0 h=2 st=2 c=195 chg=
+<6>[ 1242.261612] android_work: android_work: sent uevent USB_STATE=CONNECTED
+<6>[ 1242.492576] bq24160 3-006b: Charger status: 2
+<6>[ 1242.500199] healthd: battery l=93 v=4141 t=38.0 h=2 st=3 c=195 chg=
+<6>[ 1242.761073] android_usb gadget: high-speed config #1: android
+<6>[ 1242.765062] 
+<6>[ 1242.765081] Charger Type: STD DOWNSTREAM PORT
+<6>[ 1242.765904] Charging with 500mA current
+<6>[ 1242.769490] bq24160 3-006b: Turning on charger. USB-Host mode
+<6>[ 1242.769963] bq24160 3-006b: Set init values
+<6>[ 1242.777499] bq24160 3-006b: Setting USB: OTG_Lock OFF, SUPPLY_SEL=USB
+<6>[ 1242.779721] bq24160 3-006b: Setting input charger current(USB) to 500 mA
+<6>[ 1242.780725] bq24160 3-006b: Setting charger voltage to 4200 mV
+<6>[ 1242.781836] bq24160 3-006b: Setting charger current to 1525 mA
+<6>[ 1242.786275] healthd: battery l=93 v=4141 t=38.0 h=2 st=3 c=195 chg=u
+<6>[ 1242.822333] android_work: android_work: sent uevent USB_STATE=CONFIGURED
+<6>[ 1242.851723] mtp_open
+<4>[ 1242.932357] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1242.933145] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1242.933613] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1243.262381] bq24160 3-006b: Enabling charger
+<6>[ 1243.572410] bq24160 3-006b: Charger status: 4
+<6>[ 1243.575661] healthd: battery l=93 v=4144 t=38.0 h=2 st=2 c=-274 chg=u
+<4>[ 1243.932361] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1243.933133] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1243.933590] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1244.932274] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1244.932426] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1244.932511] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1245.932375] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1245.932872] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1245.933634] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1246.932365] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1246.933154] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1246.933622] msm_thermal: Limiting core0 max frequency to 1566000
+<6>[ 1247.045500] healthd: battery l=93 v=4135 t=37.0 h=2 st=2 c=121 chg=u
+<4>[ 1247.932475] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1247.932964] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1247.933727] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1248.934303] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1248.934729] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1248.934984] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1249.932453] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1249.933239] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1249.933705] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1250.932440] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1250.932930] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1250.933694] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1251.932443] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1251.933227] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1251.933696] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1252.932297] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1252.932449] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1252.932537] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1253.932445] TSENS: Current CPU Temperature is: 45
+<4>[ 1253.932921] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1253.933660] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1253.934118] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1254.932451] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1254.932941] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1254.933710] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1255.932442] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1255.933232] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1255.933999] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1256.935064] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1256.935510] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1256.935773] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1257.934498] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1257.934714] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1257.935049] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1258.934985] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1258.935427] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1258.935857] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1259.932330] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1259.932484] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1259.932569] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1260.932425] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1260.932910] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1260.933670] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1261.932370] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1261.933156] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1261.933909] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1262.932363] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1262.933154] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1262.933625] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1263.932419] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1263.932896] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1263.933644] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1264.932293] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1264.932571] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1264.932999] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1265.932376] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1265.933154] msm_thermal: Low Thermal Throttling Ended! temp: 44
+<6>[ 1265.933613] msm_thermal: Limiting core0 max frequency to 1566000
+<4>[ 1266.932396] msm_thermal: ERROR! pre_throttled_max=0, falling back to 1566000
+<4>[ 1266.932493] msm_thermal: Low Thermal Throttling Ended! temp: 45
+<6>[ 1266.932634] msm_thermal: Limiting core0 max frequency to 1566000
