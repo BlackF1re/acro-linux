@@ -69,7 +69,8 @@ if [[ $require_display_bringup == 1 ]]; then
   "$repo_root/scripts/check-hikari-display.sh" --config "$kernel_build/.config" --dtb "$dtb_display"
 fi
 if [[ $require_charging == 1 ]]; then
-  "$repo_root/scripts/check-hikari-charging.sh" --config "$kernel_build/.config" --dtb "$dtb_display"
+  KERNEL_TREE="$kernel_src" "$repo_root/scripts/check-hikari-charging.sh" \
+    --config "$kernel_build/.config" --dtb "$dtb_display"
 fi
 "$repo_root/scripts/check-hikari-board-hardware.sh" --config "$kernel_build/.config" --dtb "$dtb_display"
 

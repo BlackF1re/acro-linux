@@ -65,3 +65,6 @@
 0066-mfd-qcom-pm8xxx-add-PM8901-support.patch
 0067-dt-bindings-power-supply-add-BQ24160-OTG-guard.patch
 0068-power-supply-bq24160-coordinate-USB-OTG-lock.patch
+0069-pinctrl-qcom-map-PM8901-MPP-interrupts.patch
+0070-pinctrl-qcom-ssbi-mpp-honor-output-state.patch
+0071-pinctrl-qcom-use-PM8901-MPP-register-base.patch

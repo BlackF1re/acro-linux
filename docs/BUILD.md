@@ -452,6 +452,54 @@ acceptance test.
 
 ## Hikari USB/OTG/charging successor
 
+Build 0075 physically verified High-Speed USB device operation and
+disconnect/reconnect, then exposed an OTG teardown deadlock: the kernel console
+and immediately respawned shell both held `ttyGS0` while ChipIdea tried to
+remove the UDC. Build 0076 fixed that deadlock: it completed three host-mode
+entries/removals and returned to the High-Speed serial gadget. However, its
+host VBUS remained absent and no peripheral enumerated. Debugfs showed PM8901
+MPP1 still configured as a bidirectional digital pin, despite the regulator
+consumer requesting an output.
+
+Build 0077 proved that the logical host sequence completed but still supplied
+no physical VBUS. PM8901 regmap readback showed MPP1 register `0x27` remained
+at `0x30` (output low), because the generic driver used PM8058's MPP base
+`0x50`. The current successor, build 0078, contains patch 0071 selecting the
+Sony-backed PM8901 MPP base `0x27`:
+
+```text
+/home/paul/xperia/build/hikari-artifacts-usb-otg-0078/display/hikari-display-fastboot.elf
+size:   13,390,021 bytes
+SHA-256 35ba338b8e8bd95ce3cae33fd3aadc6c959e2b5d1278ac23893518534d60b46a
+```
+
+It retains patch 0070's GPIO direction/value correction and all physically
+verified display and USB-role work. `SHA256SUMS`, Sony ELF structure,
+first-boot memory-layout checks and the complete build/static gate suite pass.
+This artifact has not been deployed. USB device mode must be regression-tested;
+in host mode register `0x27` must read `0x31`, VBUS must be measured, a low-risk
+peripheral must enumerate and transfer real data, and the phone must return to
+device mode. Positive-current charging with a battery below 3.9 V remains a
+separate required acceptance test.
+
+Build 0079 physically verified the corrected PM8901 register base and complete
+OTG cycle: external VBUS powered a Mercusys adapter, EHCI enumerated its
+Realtek `2c4e:0102` interface at High Speed, teardown completed, and the gadget
+returned to device role. Build 0083 is the accepted successor, adding a small
+ARM EABI console launcher so CDC ACM receives a controlling tty, canonical
+signals, working Ctrl-C, EOF respawn and reliable repeated host reopens:
+
+```text
+/home/paul/xperia/build/hikari-artifacts-usb-otg-0083/display/hikari-display-fastboot.elf
+size:   13,393,307 bytes
+SHA-256 611668745691aff4a0a038a7addaa3f137dedd276938e43ef0d9a7d66b108160
+```
+
+The complete build/static gate suite passed before deployment. The physical
+records are `usb-otg-0079-device-test/README.md` and
+`usb-console-0083-device-test/README.md`. USB OTG and the diagnostic terminal
+are `VERIFIED_DEVICE`; positive-current charging remains a separate test.
+
 The 63-patch series, ending at patch 0068, adds PM8901 support and the
 source-backed BQ24160/dual-role USB power path while retaining the physically
 verified 0066 display stack. The final **not deployed** display artifact is:

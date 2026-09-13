@@ -56,7 +56,9 @@
 		regulator-min-microvolt = <5000000>;
 		regulator-max-microvolt = <5000000>;
 		vin-supply = <&usb_otg_guard>;
-		gpio = <&pm8901_mpps 0 GPIO_ACTIVE_HIGH>;
+		/* The BQ24160 parent driver registers this child regulator. */
+		post-init-providers = <&usb_otg_guard>;
+		gpio = <&pm8901_mpps 1 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 		pinctrl-names = "default";
 		pinctrl-0 = <&hikari_ext_5v_enable>;
@@ -178,10 +180,10 @@
 
 /* PM8058 GPIO22 is the Hikari microSD card-detect input, active low. */
 &pm8058_gpio {
-	/* PM8058 GPIO30: USB ID, low in A-cable/host mode. */
+	/* PM8058 GPIO31: USB ID, legacy zero-based index 30. */
 	hikari_usb_id: usb-id-state {
 		pinconf {
-			pins = "gpio30";
+			pins = "gpio31";
 			function = "normal";
 			input-enable;
 			bias-pull-up;
@@ -248,9 +250,9 @@
 };
 
 &pm8058_mpps {
-	/* PM8058 MPP10 is the active-low connector VBUS comparator output. */
+	/* PM8058 MPP11: VBUS detect, legacy zero-based index 10. */
 	hikari_usb_vbus_detect: usb-vbus-detect-state {
-		pins = "mpp10";
+		pins = "mpp11";
 		function = "digital";
 		input-enable;
 		power-source = <PM8058_MPP_S3>;

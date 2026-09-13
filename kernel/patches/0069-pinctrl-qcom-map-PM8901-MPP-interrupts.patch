@@ -1,0 +1,53 @@
+From d960d7b6521de9c4ec9e1843aacbe1c832c37bcd Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Fri, 11 Sep 2026 16:23:40 +0700
+Subject: [PATCH 69/69] pinctrl: qcom: map PM8901 MPP interrupts
+
+PM8901 has only 72 interrupt sources and places MPP1 through MPP4 at
+bits 0 through 3 of interrupt block 6.  Do not use the generic PM8xxx
+MPP offset of 0x80: the resulting parent IRQ is outside the PM8901
+domain and prevents the complete MPP GPIO chip from registering.
+
+The MPP GPIO provider is needed by Hikari's external 5 V regulator and
+therefore by both USB role detection and protected host VBUS.
+
+Signed-off-by: BlackF1re <plevickij57@gmail.com>
+---
+ drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c b/drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c
+index 26f364413..01641f22b 100644
+--- a/drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c
++++ b/drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c
+@@ -764,6 +764,19 @@ static int pm8821_mpp_child_to_parent_hwirq(struct gpio_chip *chip,
+ 	return 0;
+ }
+ 
++static int pm8901_mpp_child_to_parent_hwirq(struct gpio_chip *chip,
++					    unsigned int child_hwirq,
++					    unsigned int child_type,
++					    unsigned int *parent_hwirq,
++					    unsigned int *parent_type)
++{
++	/* PM8901 places MPP1..4 at bits 0..3 of interrupt block 6. */
++	*parent_hwirq = child_hwirq + 48;
++	*parent_type = child_type;
++
++	return 0;
++}
++
+ static int pm8xxx_mpp_child_to_parent_hwirq(struct gpio_chip *chip,
+ 					    unsigned int child_hwirq,
+ 					    unsigned int child_type,
+@@ -904,6 +917,8 @@ static int pm8xxx_mpp_probe(struct platform_device *pdev)
+ 	girq->parent_domain = parent_domain;
+ 	if (of_device_is_compatible(pdev->dev.of_node, "qcom,pm8821-mpp"))
+ 		girq->child_to_parent_hwirq = pm8821_mpp_child_to_parent_hwirq;
++	else if (of_device_is_compatible(pdev->dev.of_node, "qcom,pm8901-mpp"))
++		girq->child_to_parent_hwirq = pm8901_mpp_child_to_parent_hwirq;
+ 	else
+ 		girq->child_to_parent_hwirq = pm8xxx_mpp_child_to_parent_hwirq;
+ 	girq->populate_parent_alloc_arg = gpiochip_populate_parent_fwspec_twocell;
+-- 
+2.53.0

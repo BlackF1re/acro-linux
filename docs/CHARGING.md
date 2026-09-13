@@ -118,11 +118,59 @@ either 5 V switch can turn on. Host disable removes the lock and schedules an
 immediate normal policy update. It therefore makes source and sink modes
 mutually exclusive without importing the Android charger framework.
 
-This correction has compiled and passed the DT/config/source guards, but it
-has not run on the phone. Charging remains `PARTIAL`: acceptance still needs
-stable device-mode USB, no current USB-supply fault, positive battery current
-and rising state of charge. OTG-source operation is a separate acceptance test
-and must not be counted as charging success.
+The complete 0073 display/GPU/safe bundle has compiled and passed the
+DT/config/source guards. Its compiled display DTB contains physical one-based
+PM8901 MPP1 for `ext_5v_en`, the then-assumed PM8058 MPP10 for VBUS detection, and the
+BQ24160 post-init dependency needed to break the regulator probe cycle. The
+display ELF SHA-256 is
+`59a77176ffaf9090d56b91129f52e521363900485728e1b32409d07a288593f3`.
+The 0073 image physically booted and BQ24160 saw the attached USB input as
+`USB_READY` (`raw=0x2b`), but a separate PM8058 GPIO numbering error falsely
+selected host mode and disabled `ttyGS0` at about 2.25 seconds. The local DT
+initially changed USB ID to 30. A source recheck then proved Sony's GPIO30 and
+MPP10 values are zero-based indices, requiring physical GPIO31 and MPP11 in
+mainline; the current local DT uses those physical specifiers. Charging
+remains `PARTIAL`: acceptance still needs stable device-mode USB, positive
+battery current and rising state of charge. OTG-source operation is a separate
+acceptance test and must not be counted as charging success.
+
+The final GPIO31/MPP11 correction is build 0075. On the phone it sustained
+High-Speed gadget traffic and a physical disconnect/reconnect. With notebook
+power attached, both the USB charger and BQ24160 reported online while the
+gauge measured 4.080--4.096 V, 96--97% and about -0.25 A. The lack of positive
+charge current at that voltage is expected: Sony's source-backed revision-23
+safety policy stops charging above 4.0 V and releases the hold only at or below
+3.9 V. Thus input detection is physically verified, but positive-current
+charging and a voltage/SOC rise below the restart threshold remain unverified.
+
+The failed 0075 OTG attempt did not reach host-controller registration: the
+retained log shows ChipIdea blocked while freeing an open diagnostic serial
+port. Build 0076 corrected that independent role-switch teardown defect by
+disabling the `ttyGS0` kernel console and preventing shell respawn until a
+complete disconnect. The physical 0076 run entered and removed EHCI host mode
+three times and returned to the serial gadget. It still supplied no VBUS.
+Debugfs showed PM8901 MPP1 inherited as `digital bi-dir`: the generic SSBI MPP
+output callback did not clear input mode or honor the requested GPIO value, so
+the logical `ext-5v` regulator enable never asserted its physical enable pin.
+Patch 0070 corrected that generic output-state defect for build 0077. Its
+physical test exposed a second source-mode defect: the driver used PM8058's
+MPP register base `0x50`, while PM8901 MPP1 is register `0x27`; direct readback
+showed it still at output-low value `0x30`. Patch 0071 selects the Sony-backed
+PM8901 base for build 0078. These source-mode fixes do not change the
+conservative sink-charging policy or constitute positive-current charging
+evidence.
+
+## Sony-derived Android control measurement
+
+The physical control run on 2026-09-11 verifies that the phone and current
+USB cable can deliver useful charge. With the notebook disconnected the
+fuel-gauge current was about -0.16--0.28 A and BQ24160 reported
+`Discharging`. After reconnect, the legacy stack identified a standard
+downstream port, selected a 500 mA input limit, reported `Charging`, measured
++0.31--0.36 A into the battery, and advanced SOC from 93% to 94%. This is a
+legacy-baseline result only; target Linux remains `PARTIAL` until it passes
+the same transition test. Cradle charging remains `NOT_VERIFIED` because the
+available cradle appears defective.
 
 ## Required physical acceptance test
 

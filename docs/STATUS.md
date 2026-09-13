@@ -302,9 +302,87 @@ releases `OTG_LOCK` at probe, removes a blocking raw ttyGS write from the
 reconnect supervisor, changes HSUSB1 to a GPIO-driven role switch, and adds
 the exact PM8901 MPP1/NCP373 VBUS source chain. Host enable takes the charger
 OTG lock and disables charging before energizing either 5 V switch. The full
-kernel/DTB/initramfs/ELF build and static gates pass. Nothing in this successor
-has yet been deployed: USB device remains `REGRESSION`, charging remains
-`PARTIAL`, and USB OTG is now `IMPLEMENTING`, pending physical acceptance.
+kernel/DTB/initramfs/ELF build and static gates pass. At that point nothing in
+this successor had been deployed: USB device was still `REGRESSION`, charging
+was `PARTIAL`, and USB OTG had entered `IMPLEMENTING`. The later 0075 results
+below supersede that interim USB-device status.
+
+A later Sony-derived Android control run established the working hardware
+baseline. Removing USB changed the fuel-gauge current from positive to
+roughly -0.16--0.28 A and the charger to `Discharging`. Reconnecting the
+notebook selected a standard downstream port at 500 mA; BQ24160 returned to
+`Charging`, battery current reached +0.31--0.36 A, voltage rose from about
+4.09 V to 4.18 V, and SOC advanced 93% to 94%. OTG independently enumerated
+QUMO `090c:1000`, Kingston DataTraveler `0951:1665`, and a `25a7:fa61`
+keyboard/mouse receiver. PM8901 MPP1 and TLMM28 asserted together and NCP373
+fault recovered high. Cradle charging was not tested because the available
+cradle appears defective.
+
+The 0072 target log then isolated a DT numbering defect: both MPP GPIO chips
+registered, but the PM8901 MPP1 consumer used specifier 0. The SSBI MPP driver
+uses physical one-based MPP numbers, so its translation rejected 0 and the
+fixed regulator remained at `-EPROBE_DEFER`. Changing PM8901 index 0 to
+physical MPP1 fixed that consumer, but the first pass incorrectly treated the
+Sony PM8058 indices as physical numbers.
+
+The resulting 0073 display/GPU/safe bundle builds cleanly and passes the USB,
+charging, board-hardware, display, GPU, diagnostic, memory-layout and artifact
+gates. The compiled display DTB was independently checked for MPP1, the
+then-assumed MPP10 and
+the BQ24160 post-init dependency. The display fastboot ELF is 13,388,993 bytes
+with SHA-256
+`59a77176ffaf9090d56b91129f52e521363900485728e1b32409d07a288593f3`.
+The 0073 image was then physically booted with the notebook cable attached.
+Display and PID 1 remained alive, and BQ24160 reported `raw=0x2b`, current
+state `USB_READY` with a stale fault-history field. However, `ttyGS0` was
+disabled at about 2.25 seconds and ChipIdea registered its EHCI host
+controller. Therefore the missing host enumeration was a target role-selection
+failure, not merely a WSL forwarding failure.
+
+The retained 0073 `last_kmsg` exposed a second one-based PMIC GPIO error.
+PM8058 GPIO consumers use physical one-based specifiers, while USB ID was
+encoded as 29. Reading that wrong line low made the connector falsely select
+host mode with a normal notebook cable. The first correction used 30 and the
+0074 image did not enumerate on either Windows or WSL. Rechecking Sony's
+`board-msm8660.h` then established that its PMIC namespace explicitly starts
+at zero: Sony GPIO index 30 is physical mainline GPIO31, and Sony MPP index 10
+is physical mainline MPP11. PM8901 index 0 remains physical MPP1. The local DT
+and compiled-DTB gate now encode and check GPIO31, MPP11 and MPP1.
+The retained 0074 `last_kmsg` confirms the intermediate image still selected
+EHCI host with the notebook cable: `g_serial` became ready at 1.03 seconds,
+`ttyGS0` was disabled at 2.37 seconds and ChipIdea registered EHCI immediately
+afterward. The final GPIO31/MPP11 correction is build 0075. On the phone it
+enumerated the `g_serial` CDC ACM gadget at High Speed, carried bidirectional
+root-shell traffic and repeated that result after a physical notebook-cable
+disconnect/reconnect. USB device mode is therefore `WORKING` and
+`VERIFIED_DEVICE`. The same run detected notebook power at both the USB
+charger and BQ24160, but the battery was already at 4.080--4.096 V and the
+Sony revision-23 policy correctly held charging off above 4.0 V. Positive
+battery current below the 3.9 V restart threshold remains to be tested.
+
+The attempted 0075 OTG transition supplied no observable VBUS and the gadget
+did not return. The retained `last_kmsg` makes the failure narrower than the
+power path: `ci_otg_work` blocked for more than 122 seconds in
+`gserial_free_port()` while removing the UDC, before EHCI registered. Both the
+kernel console and the immediately respawned diagnostic shell held `ttyGS0`
+open. Build 0076 removed both holds. The physical run then registered and
+removed EHCI three times and returned to the High-Speed serial gadget, proving
+the dual-role transition itself no longer deadlocks. There was still no VBUS
+or peripheral enumeration. Debugfs exposed PM8901 MPP1 as inherited
+`digital bi-dir`; the generic SSBI MPP output callback failed to clear input
+mode and ignored the requested value. Patch 0070 corrects those output-state
+semantics in build 0077. The 0077 physical test completed the logical host
+sequence but still supplied no power. Raw PM8901 readback made the cause
+unambiguous: MPP1 register `0x27` remained `0x30`, while the generic driver
+addressed the PM8058 MPP base `0x50`. Sony's PM8901 source specifies base
+`0x27`; patch 0071 applies that compatible-specific base in build 0078.
+Build 0079 supplied the missing physical result. The owner observed source
+power at a Mercusys Wi-Fi adapter; retained `last_kmsg` records EHCI
+registration, High-Speed enumeration of the Realtek `2c4e:0102` `802.11n NIC`,
+its disconnect, EHCI removal, and return to USB device role. Target USB OTG is
+therefore `WORKING` with `VERIFIED_DEVICE` evidence for role switching, VBUS,
+enumeration/control traffic and teardown. Wi-Fi network traffic through that
+adapter remains a separate untested function.
 
 ## Current display boundary: DSI PLL start
 

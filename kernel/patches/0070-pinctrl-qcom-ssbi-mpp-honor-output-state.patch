@@ -1,0 +1,53 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Sat, 12 Sep 2026 16:20:00 +0700
+Subject: [PATCH 70/70] pinctrl: qcom: ssbi-mpp: honor GPIO output state
+
+The SSBI MPP driver populates its software state from the bootloader.  When
+an MPP is inherited as a bidirectional digital pin, selecting output mode
+does not clear the input flag.  The update path consequently keeps encoding
+the pin as bidirectional, and a requested output value is ignored.  The
+GPIO direction callback also ignores its value argument.
+
+This is observable on Sony Hikari, where PM8901 MPP1 is inherited in
+bidirectional mode and controls the external 5 V source for USB host VBUS.
+The regulator core reports the supply enabled while the physical enable pin
+remains low.
+
+Make both generic output configuration paths select output-only mode and
+record the requested value before programming the MPP.
+
+Signed-off-by: BlackF1re <plevickij57@gmail.com>
+---
+ drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c b/drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c
+index 45d94932d..645a0f8fb 100644
+--- a/drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c
++++ b/drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c
+@@ -390,4 +390,5 @@ static int pm8xxx_pin_config_set(struct pinctrl_dev *pctldev,
+ 		case PIN_CONFIG_LEVEL:
++			pin->input = false;
+ 			pin->output = true;
+ 			pin->output_value = !!arg;
+ 			break;
+@@ -453,6 +454,7 @@ static int pm8xxx_mpp_direction_output(struct gpio_chip *chip,
+ 
+ 	switch (pin->mode) {
+ 	case PM8XXX_MPP_DIGITAL:
++		pin->input = false;
+ 		pin->output = true;
+ 		break;
+ 	case PM8XXX_MPP_ANALOG:
+@@ -465,6 +467,8 @@ static int pm8xxx_mpp_direction_output(struct gpio_chip *chip,
+ 		break;
+ 	}
+ 
++	pin->output_value = !!value;
++
+ 	pm8xxx_mpp_update(pctrl, pin);
+ 
+ 	return 0;
+-- 
+2.53.0
