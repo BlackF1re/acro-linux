@@ -16,6 +16,11 @@ mount -t devtmpfs devtmpfs /dev
 mkdir -p /run /newroot
 mount -t tmpfs -o mode=0755 tmpfs /run
 
+# Keep ttyGS0 allocated across ChipIdea gadget/host transitions.  The helper
+# registers a configfs composite driver once; it automatically rebinds when
+# the UDC returns after host mode.
+/usr/sbin/hikari-usb-gadget || log 'HIKARI USB GADGET SETUP FAILED'
+
 root_spec=LABEL=HIKARI_ROOT
 root_type=ext4
 root_opts=rw

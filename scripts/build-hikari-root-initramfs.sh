@@ -46,12 +46,15 @@ archive="$output_dir/hikari-root.cpio"
 		'dir /bin 0755 0 0' 'dir /dev 0755 0 0' 'dir /newroot 0755 0 0' \
 		'dir /proc 0755 0 0' 'dir /run 0755 0 0' 'dir /sbin 0755 0 0' \
 		'dir /sys 0755 0 0' 'dir /usr 0755 0 0' 'dir /usr/bin 0755 0 0' \
+		'dir /usr/sbin 0755 0 0' \
 		'nod /dev/console 0600 0 0 c 5 1' 'nod /dev/null 0666 0 0 c 1 3'
 	printf 'file /bin/busybox %s 0755 0 0\n' "$busybox_build/busybox"
-	for applet in cat mount mountpoint mkdir setsid sh sleep switch_root; do
+	for applet in cat ln mount mountpoint mkdir setsid sh sleep switch_root; do
 		printf 'slink /bin/%s busybox 0777 0 0\n' "$applet"
 	done
 	printf 'file /init %s 0755 0 0\n' "$repo_root/initramfs/hikari-root/init"
+	printf 'file /usr/sbin/hikari-usb-gadget %s 0755 0 0\n' \
+		"$repo_root/initramfs/common/usr/sbin/hikari-usb-gadget"
 } >"$list"
 "$gen_init_cpio" -t 0 "$list" >"$archive"
 gzip -n -9 -f "$archive"

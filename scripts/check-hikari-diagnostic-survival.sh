@@ -37,7 +37,7 @@ for option in \
   CONFIG_USB=y CONFIG_USB_GADGET=y \
   CONFIG_USB_CHIPIDEA=y CONFIG_USB_CHIPIDEA_UDC=y \
   CONFIG_USB_CHIPIDEA_MSM=y CONFIG_PHY_QCOM_USB_HS=y \
-  CONFIG_USB_G_SERIAL=y \
+  CONFIG_CONFIGFS_FS=y CONFIG_USB_CONFIGFS=y CONFIG_USB_CONFIGFS_ACM=y \
   CONFIG_USB_U_SERIAL=y CONFIG_USB_F_ACM=y CONFIG_USB_LIBCOMPOSITE=y; do
   grep -qx "$option" "$config" || {
     echo "HIKARI_DIAG_SURVIVAL=FAIL missing built-in $option" >&2
@@ -70,6 +70,14 @@ grep -Eq '^CONFIG_CMDLINE=".*console=tty0 .*driver_async_probe=mdp4,msm_dsi.*"$'
 }
 grep -qx '# CONFIG_U_SERIAL_CONSOLE is not set' "$config" || {
   echo 'HIKARI_DIAG_SURVIVAL=FAIL ttyGS0 kernel console blocks OTG switching' >&2
+  exit 1
+}
+grep -qx '# CONFIG_USB_G_SERIAL is not set' "$config" || {
+  echo 'HIKARI_DIAG_SURVIVAL=FAIL legacy g_serial deadlocks OTG while ttyGS0 is open' >&2
+  exit 1
+}
+grep -Fq '/usr/sbin/hikari-usb-gadget' "$init" || {
+  echo 'HIKARI_DIAG_SURVIVAL=FAIL persistent configfs ACM setup is absent' >&2
   exit 1
 }
 

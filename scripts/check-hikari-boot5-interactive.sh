@@ -24,7 +24,8 @@ for option in \
   CONFIG_USB_CHIPIDEA_MSM=y CONFIG_PHY_QCOM_USB_HS=y \
   CONFIG_USB_ROLE_SWITCH=y CONFIG_USB_CONN_GPIO=y \
   CONFIG_REGULATOR_QCOM_RPM=y \
-  CONFIG_USB_GADGET=y CONFIG_USB_G_SERIAL=y \
+  CONFIG_USB_GADGET=y CONFIG_CONFIGFS_FS=y \
+  CONFIG_USB_CONFIGFS=y CONFIG_USB_CONFIGFS_ACM=y \
   CONFIG_USB_U_SERIAL=y CONFIG_USB_F_ACM=y CONFIG_USB_LIBCOMPOSITE=y; do
   grep -qx "$option" "$config" || {
     echo "BOOT5_USB_CONFIG=FAIL missing $option" >&2
@@ -33,6 +34,10 @@ for option in \
 done
 grep -qx '# CONFIG_U_SERIAL_CONSOLE is not set' "$config" || {
   echo 'BOOT5_USB_CONFIG=FAIL ttyGS0 kernel console blocks OTG role teardown' >&2
+  exit 1
+}
+grep -qx '# CONFIG_USB_G_SERIAL is not set' "$config" || {
+  echo 'BOOT5_USB_CONFIG=FAIL legacy g_serial blocks an open ttyGS0 role transition' >&2
   exit 1
 }
 

@@ -20,7 +20,7 @@ contains the `qcom,ci-hdrc` ChipIdea controller and the exact
 
 ```text
 USB connector -> HSUSB1 ChipIdea @ 0x12500000 -> ULPI HS PHY
-              -> built-in g_serial CDC ACM -> /dev/ttyGS0
+              -> persistent configfs CDC ACM -> /dev/ttyGS0
 ```
 
 The DT node supplies HSUSB1 XCVR/iface clocks, the HSUSB1 reset, ULPI PHY,
@@ -28,9 +28,44 @@ and the two evidenced PM8058 rails. The downstream VDDCX vote is not yet
 represented by the current PHY binding; this, and physical confirmation of
 vendor ULPI initialization, remain the main device-mode risks.
 
-## BOOT #5 gadget
+## Current configfs gadget
 
-All controller, PHY and gadget components are built in.  BOOT #5 deliberately
+The production-oriented Debian initramfs no longer uses the legacy built-in
+`g_serial` driver.  `/usr/sbin/hikari-usb-gadget` creates a single configfs
+ACM function and keeps that function instance, and therefore `ttyGS0`, alive
+while ChipIdea temporarily removes its UDC during a device-to-host transition.
+The gadget automatically rebinds when the controller returns to device mode.
+The diagnostic identity remains `0525:a4a7`; it is not a unique production
+identity.
+
+This is required even with `CONFIG_U_SERIAL_CONSOLE` disabled.  A Debian
+`agetty` legitimately keeps `ttyGS0` open.  The 2026-09-15 negative-control
+run with legacy `g_serial` blocked in:
+
+```text
+ci_otg_work -> udc_stop -> usb_del_gadget_udc -> gs_unbind
+            -> acm_free_instance -> gserial_free_line
+            -> gserial_free_port -> wait_event(close_wait)
+```
+
+The role worker consequently never finished entering host mode and could not
+return to peripheral mode.  The build gates now require built-in configfs ACM,
+reject `CONFIG_USB_G_SERIAL`, and reject the ttyGS kernel console.
+
+`VERIFIED_DEVICE` (2026-09-15): the replacement image booted Debian with the
+gadget `device/configured`, then completed a physical device-host-device cycle.
+In host mode, EHCI enumerated keyboard `04f3:0103`, registered its HID keyboard
+and auxiliary input interfaces, and real keystrokes entered a command on the
+fbcon terminal.  After OTG removal, EHCI deregistered and the same running
+kernel returned to `device/configured`; the PC again enumerated `0525:a4a7`
+and `/dev/ttyACM0` carried shell traffic.  At 389 seconds uptime the log had
+zero matches for `hung_task`, `gserial_free_port`, `gserial_free_line`,
+`acm_free_instance`, or `gs_unbind`.  This verifies the exercised role cycle;
+repeated-cycle endurance and suspend/resume remain separate tests.
+
+## Historical BOOT #5 gadget
+
+All controller, PHY and gadget components were built in. BOOT #5 deliberately
 uses the static legacy `g_serial` composite rather than userspace configfs:
 its default `use_acm=true` binds one CDC ACM function when the UDC appears,
 without waiting for PID 1 to create a gadget.  The expected gadget identity is

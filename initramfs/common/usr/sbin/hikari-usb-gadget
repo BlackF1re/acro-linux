@@ -1,0 +1,52 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Configure a persistent configfs ACM function.  Unlike legacy g_serial, the
+# function instance (and ttyGS0) survives removal of the dual-role UDC while
+# ChipIdea changes to host mode.
+
+log()
+{
+	printf '%s\n' "$*" >/dev/kmsg 2>/dev/null || true
+}
+
+config_root=/sys/kernel/config
+gadget=$config_root/usb_gadget/hikari
+
+mkdir -p "$config_root"
+if ! mountpoint -q "$config_root"; then
+	mount -t configfs configfs "$config_root" || {
+		log 'HIKARI USB CONFIGFS MOUNT FAILED'
+		exit 1
+	}
+fi
+
+mkdir -p "$gadget"
+printf '0x0525\n' >"$gadget/idVendor"
+printf '0xa4a7\n' >"$gadget/idProduct"
+mkdir -p "$gadget/strings/0x409"
+printf 'Linux\n' >"$gadget/strings/0x409/manufacturer"
+printf 'Hikari USB console\n' >"$gadget/strings/0x409/product"
+mkdir -p "$gadget/configs/c.1/strings/0x409"
+printf 'CDC ACM console\n' >"$gadget/configs/c.1/strings/0x409/configuration"
+printf '250\n' >"$gadget/configs/c.1/MaxPower"
+mkdir -p "$gadget/functions/acm.usb0"
+if [ ! -e "$gadget/configs/c.1/acm.usb0" ]; then
+	ln -s "$gadget/functions/acm.usb0" "$gadget/configs/c.1/acm.usb0"
+fi
+
+tries=0
+while [ "$tries" -lt 20 ]; do
+	for node in /sys/class/udc/*; do
+		[ -e "$node" ] || continue
+		udc=${node##*/}
+		if printf '%s\n' "$udc" >"$gadget/UDC"; then
+			log "HIKARI USB CONFIGFS ACM READY udc=$udc"
+			exit 0
+		fi
+	done
+	tries=$((tries + 1))
+	sleep 1
+done
+
+log 'HIKARI USB CONFIGFS ACM FAILED no UDC'
+exit 1

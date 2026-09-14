@@ -111,6 +111,8 @@ archive="$initramfs_build/${initramfs_name%.gz}"
   done
   printf 'file /usr/sbin/hikari-console-launch %s 0755 0 0\n' \
     "$console_launcher"
+  printf 'file /usr/sbin/hikari-usb-gadget %s 0755 0 0\n' \
+    "$repo_root/initramfs/common/usr/sbin/hikari-usb-gadget"
 } > "$list"
 
 "$gen_init_cpio" -t "$source_date_epoch" "$list" > "$archive"
