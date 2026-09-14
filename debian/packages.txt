@@ -1,0 +1,13 @@
+# One package per line. Keep this list deliberately small and explain additions
+# in docs/DEBIAN.md. Dependencies are resolved by apt/debootstrap.
+apt
+ca-certificates
+e2fsprogs
+iproute2
+iputils-ping
+kexec-tools
+kmod
+less
+systemd-sysv
+udev
+util-linux

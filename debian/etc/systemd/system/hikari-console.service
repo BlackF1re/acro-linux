@@ -1,0 +1,16 @@
+[Unit]
+Description=Hikari bring-up console on USB CDC ACM
+After=dev-ttyGS0.device
+BindsTo=dev-ttyGS0.device
+
+[Service]
+ExecStart=-/sbin/agetty --autologin root --noclear 115200 ttyGS0 vt100
+Restart=always
+RestartSec=2
+TTYPath=/dev/ttyGS0
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=no
+
+[Install]
+WantedBy=multi-user.target

@@ -453,3 +453,26 @@ physical test: native 720x1280 fbcon remained visible and the captured boot log
 showed physical scanout with no underrun or kernel fault. It is `VERIFIED` with
 `VERIFIED_DEVICE` evidence; artifact 0066 remains the rollback control. See
 [the cleanup record](../research/device/current/boot/display-patch-cleanup.md).
+
+## Debian and modular update architecture (2026-09-14)
+
+The known-good display, USB dual-role path, charging coordination, storage,
+ext4 and recovery console now form a built-in rescue boundary. A small
+initramfs waits for an ext4 filesystem labelled `HIKARI_ROOT` and switches to a
+minimal Debian 13 `armhf` userspace. Wi-Fi, Bluetooth, NFC, RMI4 touch and
+motion sensors are built as modules with modversions; unrelated modules from
+the multi-board default configuration are pruned. The canonical kernel build,
+rootfs and boot artifact are each updated in place instead of creating
+timestamped trees.
+
+The kernel, DTB and initramfs pass their static gates. The packaged Sony ELF is
+12,858,228 bytes, below the 20,971,520-byte p3 limit, with SHA-256
+`08bceef5fd9f02ce20938906438a05e268a13070d6575cf3d36d91c86fe54750`.
+The signed-release-verified Debian root tree completed with 110 package records,
+no unpacked packages, 20 stripped modules exactly matching `modules.order`, and
+207 MiB host disk use. A single in-tree driver-directory build was exercised
+without dirtying the kernel source tree or leaving an `updates/` duplicate.
+These results are `IMPLEMENTING`, not device acceptance. Debian-on-microSD,
+module loading and ARM kexec remain `UNKNOWN` until the physical tests in
+[TESTING.md](TESTING.md) pass. No eMMC partition or phone was written while
+preparing this architecture.

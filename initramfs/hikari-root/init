@@ -1,0 +1,54 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Small, device-specific bootstrap. It keeps the proven Hikari USB terminal
+# available, mounts a labelled Debian filesystem and hands PID 1 to systemd.
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+log()
+{
+	printf '%s\n' "$*" >/dev/kmsg 2>/dev/null || true
+	printf '%s\n' "$*" >/dev/console 2>/dev/null || true
+}
+
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mkdir -p /run /newroot
+mount -t tmpfs -o mode=0755 tmpfs /run
+
+root_spec=LABEL=HIKARI_ROOT
+root_type=ext4
+root_opts=rw
+for arg in $(cat /proc/cmdline); do
+	case "$arg" in
+		hikari.root=*) root_spec=${arg#hikari.root=} ;;
+		rootfstype=*) root_type=${arg#rootfstype=} ;;
+		ro) root_opts=ro ;;
+		rw) root_opts=rw ;;
+	esac
+done
+
+log "HIKARI ROOT WAIT spec=$root_spec type=$root_type opts=$root_opts"
+tries=0
+while [ "$tries" -lt 60 ]; do
+	if mount -t "$root_type" -o "$root_opts" "$root_spec" /newroot 2>/dev/null; then
+		break
+	fi
+	tries=$((tries + 1))
+	sleep 1
+done
+
+if ! mountpoint -q /newroot || [ ! -x /newroot/sbin/init ]; then
+	log "HIKARI ROOT FAILED spec=$root_spec"
+	log 'Connect USB CDC ACM; emergency shell is active.'
+	setsid sh -c 'exec sh </dev/ttyGS0 >/dev/ttyGS0 2>&1' &
+	exec sh </dev/console >/dev/console 2>&1
+fi
+
+log "HIKARI ROOT READY spec=$root_spec"
+mkdir -p /newroot/proc /newroot/sys /newroot/dev /newroot/run
+mount --move /proc /newroot/proc
+mount --move /sys /newroot/sys
+mount --move /dev /newroot/dev
+mount --move /run /newroot/run
+exec switch_root /newroot /sbin/init
