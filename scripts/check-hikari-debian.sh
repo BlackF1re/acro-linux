@@ -19,18 +19,22 @@ for setting in \
 	CONFIG_MMC=y CONFIG_MMC_BLOCK=y CONFIG_EXT4_FS=y \
 	CONFIG_DRM_MSM=y CONFIG_DRM_MSM_MDP4=y \
 	CONFIG_USB_CHIPIDEA=y CONFIG_USB_CHIPIDEA_HOST=y \
-	CONFIG_USB_CHIPIDEA_UDC=y CONFIG_USB_G_SERIAL=y \
+	CONFIG_USB_CHIPIDEA_UDC=y CONFIG_CONFIGFS_FS=y \
+	CONFIG_USB_CONFIGFS=y CONFIG_USB_CONFIGFS_ACM=y \
 	CONFIG_NFC=m CONFIG_BRCMFMAC=m CONFIG_BT=m \
 	CONFIG_RMI4_CORE=m CONFIG_MPU3050_I2C=m CONFIG_BMA180=m
 do
 	require_config "$setting"
 done
 
+require_config '# CONFIG_USB_G_SERIAL is not set'
+
 test -s "$kernel_build/arch/arm/boot/zImage"
 test -s "$kernel_build/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb"
 test -s "$archive"
 archive_list=$(gzip -dc "$archive" | cpio -it 2>/dev/null)
-for member in init bin/busybox bin/mount bin/switch_root bin/setsid; do
+for member in init bin/busybox bin/mount bin/switch_root bin/setsid \
+	usr/sbin/hikari-usb-gadget; do
 	grep -qx "$member" <<<"$archive_list" || { echo "missing initramfs member: $member" >&2; exit 1; }
 done
 

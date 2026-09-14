@@ -33,17 +33,19 @@ CONFIG_SERIAL_MSM_CONSOLE=y
 CONFIG_SERIAL_EARLYCON=y
 CONFIG_REGULATOR_QCOM_RPM=y
 
-# Hikari HSUSB device debugging: every component used before userspace is
-# built in.  The legacy g_serial gadget binds one CDC ACM function as soon as
-# the UDC appears, avoiding a userspace configfs choreography for the first
-# physical enumeration.  ECM stays out of BOOT #5 so a composite setup cannot
-# hide ttyGS0.
+# Hikari HSUSB device debugging: every component used before the real rootfs is
+# built in.  Initramfs creates one persistent configfs ACM function.  Keeping
+# its function instance allocated across UDC removal avoids the legacy
+# g_serial free-line deadlock during gadget-to-host transitions.
 CONFIG_USB=y
 CONFIG_USB_CHIPIDEA=y
 CONFIG_USB_CHIPIDEA_UDC=y
 CONFIG_USB_CHIPIDEA_MSM=y
 CONFIG_PHY_QCOM_USB_HS=y
 CONFIG_USB_GADGET=y
-CONFIG_USB_G_SERIAL=y
+CONFIG_CONFIGFS_FS=y
+CONFIG_USB_CONFIGFS=y
+CONFIG_USB_CONFIGFS_ACM=y
+# CONFIG_USB_G_SERIAL is not set
 # CONFIG_U_SERIAL_CONSOLE is not set
 # CONFIG_DEBUG_INFO is not set

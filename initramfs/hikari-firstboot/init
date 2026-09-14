@@ -31,6 +31,8 @@ log "HIKARI RUN MOUNT rc=$?"
 /bin/mount -t debugfs debugfs /sys/kernel/debug
 log "HIKARI DEBUGFS MOUNT rc=$?"
 
+/usr/sbin/hikari-usb-gadget || log 'HIKARI USB GADGET SETUP FAILED'
+
 log "HIKARI BOOT5 INIT START"
 log "HIKARI BOOT5 DEV READY"
 

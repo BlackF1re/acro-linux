@@ -72,7 +72,8 @@ done
 if [[ "$require_usb_debug" == 1 ]]; then
   for required in CONFIG_USB_CHIPIDEA_MSM=y CONFIG_USB_CHIPIDEA_UDC=y \
     CONFIG_PHY_QCOM_USB_HS=y \
-    CONFIG_USB_GADGET=y CONFIG_USB_G_SERIAL=y CONFIG_USB_U_SERIAL=y; do
+    CONFIG_USB_GADGET=y CONFIG_CONFIGFS_FS=y CONFIG_USB_CONFIGFS=y \
+    CONFIG_USB_CONFIGFS_ACM=y CONFIG_USB_U_SERIAL=y; do
     grep -qx "$required" "$build_dir/.config" || {
       echo "Hikari BOOT #5 build requires $required" >&2
       exit 1
@@ -80,6 +81,10 @@ if [[ "$require_usb_debug" == 1 ]]; then
   done
   grep -qx '# CONFIG_U_SERIAL_CONSOLE is not set' "$build_dir/.config" || {
     echo 'Hikari OTG build must not hold ttyGS0 open as a kernel console' >&2
+    exit 1
+  }
+  grep -qx '# CONFIG_USB_G_SERIAL is not set' "$build_dir/.config" || {
+    echo 'Hikari OTG build must not use role-switch-blocking legacy g_serial' >&2
     exit 1
   }
 fi
@@ -132,7 +137,8 @@ if [[ -n "$initramfs_source" ]]; then
   if [[ "$require_usb_debug" == 1 ]]; then
     for required in CONFIG_USB_CHIPIDEA_MSM=y CONFIG_USB_CHIPIDEA_UDC=y \
       CONFIG_PHY_QCOM_USB_HS=y \
-      CONFIG_USB_GADGET=y CONFIG_USB_G_SERIAL=y CONFIG_USB_U_SERIAL=y; do
+      CONFIG_USB_GADGET=y CONFIG_CONFIGFS_FS=y CONFIG_USB_CONFIGFS=y \
+      CONFIG_USB_CONFIGFS_ACM=y CONFIG_USB_U_SERIAL=y; do
       grep -qx "$required" "$build_dir/.config" || {
         echo "Hikari BOOT #5 build lost $required" >&2
         exit 1
@@ -140,6 +146,10 @@ if [[ -n "$initramfs_source" ]]; then
     done
     grep -qx '# CONFIG_U_SERIAL_CONSOLE is not set' "$build_dir/.config" || {
       echo 'Hikari OTG build enabled the role-switch-blocking ttyGS0 kernel console' >&2
+      exit 1
+    }
+    grep -qx '# CONFIG_USB_G_SERIAL is not set' "$build_dir/.config" || {
+      echo 'Hikari OTG build enabled role-switch-blocking legacy g_serial' >&2
       exit 1
     }
   fi
