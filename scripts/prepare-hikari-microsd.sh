@@ -54,7 +54,14 @@ lsblk -o NAME,MODEL,SERIAL,SIZE,TYPE,RM,MOUNTPOINTS "$device"
 printf 'label: dos; start=4 MiB; filesystem: ext4 LABEL=HIKARI_ROOT\n'
 
 printf 'label: dos\nstart=8192, type=83, bootable\n' | sfdisk --wipe always "$device"
-partprobe "$device"
+if command -v partprobe >/dev/null 2>&1; then
+	partprobe "$device"
+else
+	# sfdisk already asks the kernel to re-read the table.  Keep working on
+	# minimal WSL/host installations where the optional parted package is not
+	# installed, and explicitly retry the same ioctl when blockdev is present.
+	command -v blockdev >/dev/null 2>&1 && blockdev --rereadpt "$device" || true
+fi
 udevadm settle
 case "$device" in
 	*[0-9]) partition="${device}p1" ;;
