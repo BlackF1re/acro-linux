@@ -1,0 +1,41 @@
+#!/bin/sh
+# Load or execute the next Hikari kernel kept on the root filesystem. Nothing
+# happens unless --load or --exec is explicitly supplied.
+set -eu
+
+boot_dir=${HIKARI_BOOT_DIR:-/boot/hikari-next}
+cmdline=${HIKARI_CMDLINE:-"console=tty0 driver_async_probe=mdp4,msm_dsi hikari.root=LABEL=HIKARI_ROOT rootfstype=ext4 rootwait rw"}
+action=${1:---check}
+
+kernel="$boot_dir/zImage"
+dtb="$boot_dir/qcom-msm8260-sony-hikari.dtb"
+initrd="$boot_dir/hikari-root.cpio.gz"
+sums="$boot_dir/SHA256SUMS"
+
+for file in "$kernel" "$dtb" "$initrd" "$sums"; do
+	[ -s "$file" ] || { echo "missing kexec input: $file" >&2; exit 1; }
+done
+(cd "$boot_dir" && sha256sum -c SHA256SUMS)
+
+case "$action" in
+--check)
+	echo "Hikari next kernel is complete and checksum-valid."
+	;;
+--load)
+	exec kexec --load "$kernel" --dtb="$dtb" --initrd="$initrd" --append="$cmdline"
+	;;
+--exec)
+	# Require a separately loaded image. This avoids combining validation and
+	# an irreversible runtime transition in one command.
+	[ -e /sys/kernel/kexec_loaded ] && [ "$(cat /sys/kernel/kexec_loaded)" = 1 ] || {
+		echo 'no kexec image is loaded; run hikari-kexec --load first' >&2
+		exit 1
+	}
+	sync
+	exec systemctl kexec
+	;;
+*)
+	echo "usage: ${0##*/} [--check|--load|--exec]" >&2
+	exit 2
+	;;
+esac

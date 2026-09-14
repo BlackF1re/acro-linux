@@ -11,6 +11,8 @@ jobs=${JOBS:-"$(nproc)"}
 targets=${TARGETS:-"zImage qcom/qcom-msm8260-sony-hikari.dtb qcom/qcom-msm8260-sony-hikari-gpu.dtb qcom/qcom-msm8260-sony-hikari-safe.dtb"}
 initramfs_source=${INITRAMFS_SOURCE:-}
 kernel_fragment=${KERNEL_FRAGMENT:-"$repo_root/kernel/configs/hikari-boot6-display.fragment"}
+kernel_extra_fragments=${KERNEL_EXTRA_FRAGMENTS:-}
+prune_default_modules=${PRUNE_DEFAULT_MODULES:-0}
 require_usb_debug=${REQUIRE_USB_DEBUG:-0}
 require_display_bringup=${REQUIRE_DISPLAY_BRINGUP:-0}
 require_charging=${REQUIRE_CHARGING:-0}
@@ -31,7 +33,19 @@ build_dir=$(realpath -m -- "$build_dir")
 case "$build_dir" in "$hikari_build_root"/*) ;; *) echo "BUILD_DIR must be below HIKARI_BUILD_ROOT=$hikari_build_root" >&2; exit 1;; esac
 "$repo_root/scripts/prepare-hikari-kernel-tree.sh" "$kernel_src"
 make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" qcom_defconfig
-"$kernel_src/scripts/kconfig/merge_config.sh" -m -O "$build_dir" "$build_dir/.config" "$kernel_fragment"
+if [[ $prune_default_modules == 1 ]]; then
+  # qcom_defconfig intentionally contains modules for many unrelated Qualcomm
+  # generations. Start the device profile with none of those and let the
+  # Hikari fragments below re-enable only their declared leaf drivers and
+  # automatically selected dependencies.
+  sed -E -i 's/^(CONFIG_[A-Z0-9_]+)=m$/# \1 is not set/' "$build_dir/.config"
+fi
+read -r -a extra_fragments <<<"$kernel_extra_fragments"
+for fragment in "${extra_fragments[@]}"; do
+  test -f "$fragment" || { echo "missing extra kernel fragment: $fragment" >&2; exit 1; }
+done
+"$kernel_src/scripts/kconfig/merge_config.sh" -m -O "$build_dir" "$build_dir/.config" \
+  "$kernel_fragment" "${extra_fragments[@]}"
 make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" olddefconfig
 
 grep -qx 'CONFIG_ARCH_QCOM_RESERVE_SMEM=y' "$build_dir/.config" || {

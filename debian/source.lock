@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Reproducible input policy for the native Hikari userspace.
+DEBIAN_SUITE=trixie
+DEBIAN_ARCH=armhf
+DEBIAN_MIRROR_DEFAULT=https://mirror.yandex.ru/debian
+DEBIAN_MIRROR=${DEBIAN_MIRROR:-$DEBIAN_MIRROR_DEFAULT}
+DEBIAN_VARIANT=minbase

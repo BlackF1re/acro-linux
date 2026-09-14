@@ -531,3 +531,9 @@ decompressor-overlap gates pass. DT schema checking has no new USB/PM8901/
 BQ24160/NCP373 error; the remaining warnings predate this change and concern
 other board nodes. The build reused only A220 firmware whose pinned SHA-256
 matched `firmware/a220/source.lock`. No device was flashed or rebooted.
+# Debian rootfs and incremental kernel development
+
+The current native-userspace workflow is documented in [DEBIAN.md](DEBIAN.md).
+It deliberately reuses `linux-hikari-current`, `busybox-hikari-current`,
+`hikari-root-initramfs-current` and `hikari-rootfs-current`. Do not introduce
+per-attempt build directories.

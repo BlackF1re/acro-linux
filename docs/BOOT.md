@@ -138,6 +138,12 @@ and repeated cold-boot tests under target Linux. During the 2026-09-14 live
 audit only the soldered eMMC (`mmcblk0`) was present; microSD boot is therefore
 feasible architecture, not yet `VERIFIED_DEVICE`.
 
+The implementation and its exact built-in/module boundary are maintained in
+[DEBIAN.md](DEBIAN.md). The p3 kernel is a complete rescue-capable kernel, not
+a disposable first-stage kernel. Its small initramfs performs `switch_root`;
+only the later, separately verified kexec path transfers control to another
+kernel stored on the root filesystem.
+
 ## Sources
 
 - [Historical LT26 custom boot ELF change](https://android.googlesource.com/device/sony/lt26/%2B/b644924c93b3c89e0e6f3aeeb85fb9a23147350f%5E%21/)
