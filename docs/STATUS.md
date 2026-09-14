@@ -476,3 +476,25 @@ These results are `IMPLEMENTING`, not device acceptance. Debian-on-microSD,
 module loading and ARM kexec remain `UNKNOWN` until the physical tests in
 [TESTING.md](TESTING.md) pass. No eMMC partition or phone was written while
 preparing this architecture.
+
+The first physical microSD boot refined that result. Retained TWRP
+`/proc/last_kmsg` proves that mainline discovered the card as `mmcblk0`, mounted
+its labelled ext4 partition read/write, printed `HIKARI ROOT READY`, executed
+Debian systemd as PID 1, and remained alive for at least 64 seconds. The card,
+root switch and Debian userspace therefore reach `BOOTS` with
+`VERIFIED_DEVICE` evidence; module and kexec acceptance remain pending.
+
+That same log explains the black screen without speculation. MDP4 read its
+v4.1 revision, then emitted `no IOMMU, bailing out`, failed KMS with `-ENODEV`,
+and never created fb0. The Debian build had used the historical external kernel
+tree, in which the physically verified contiguous-scanout patch 0065 and other
+late patches were absent, while its build gate checked only Kconfig. The
+canonical tree has been repaired with 0057, 0058, 0062 and 0065--0071. The
+build now runs the display source gate before configuration, so a source tree
+without the no-IOMMU implementation cannot produce another candidate. The
+replacement ELF is locally validated but is not a device result until booted.
+It is 12,859,620 bytes with SHA-256
+`fab8742c1ee5d25e2da6f360060dd5065f7db57afc26b407e6ebbdd88f64e3c7`.
+The previously unexported final DSI-transfer corrections are now a separate
+post-correction patch series, and a reconstruction check reproduced the active
+source files byte-for-byte.

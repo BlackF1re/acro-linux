@@ -1,0 +1,457 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Paul Levickij <plevickij57@gmail.com>
+Date: Mon, 14 Sep 2026 23:50:49 +0700
+Subject: [PATCH] drm/msm: finalize Hikari DSI transfer path
+
+Preserve the final source-backed MSM8x60 display corrections used by the
+active Hikari tree: the DSI byte-clock root, system/MMSS fabric path and FPB
+votes, low-address per-transfer command DMA mapping, Sony PLL register order,
+and non-continuous panel clock policy.
+
+This patch is intentionally applied after the project's strict historical
+source transforms, because its preimage includes those corrections.
+
+Signed-off-by: Paul Levickij <plevickij57@gmail.com>
+---
+ drivers/clk/qcom/mmcc-msm8660.c               |  30 +++-
+ drivers/gpu/drm/msm/dsi/dsi.h                 |   8 +-
+ drivers/gpu/drm/msm/dsi/dsi_cfg.h             |   5 +-
+ drivers/gpu/drm/msm/dsi/dsi_host.c            | 144 +++++++++++++++---
+ drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c    |  16 +-
+ .../panel/panel-renesas-r63306-tmd-mdv22.c    |  10 +-
+ drivers/interconnect/qcom/msm8660.c           |   3 +-
+ 7 files changed, 179 insertions(+), 37 deletions(-)
+
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+index fda2dabda..83dd9e740 100644
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -623,7 +623,14 @@ static struct clk_branch dsi1_clk = {
+ static struct clk_branch dsi1_byte_clk = {
+ 	.halt_check = BRANCH_HALT_DELAY,
+ 	.clkr = {
+-		.enable_reg = 0x0058,
++		/*
++		 * Unlike the escape clock branches in MISC_CC_REG, the DSI byte
++		 * clock is an RCG whose root enable is MISC_CC2_REG bit 2.  The
++		 * downstream MSM8x60 clock driver models the same register as its
++		 * ns_reg and root_en_mask.  Bits 27:24 hold the divider and bit 0
++		 * selects the DSI PHY PLL; probe initializes those to /1 and PLL.
++		 */
++		.enable_reg = 0x005c,
+ 		.enable_mask = BIT(2),
+ 		.hw.init = &(struct clk_init_data){
+ 			.name = "dsi1_byte_clk",
+@@ -2946,6 +2953,7 @@ static int mmcc_msm8660_unhalt_fabric_ports(struct device *dev)
+ 	struct qcom_rpm *rpm;
+ 	/* halt_data[0]=0 = CLK_UNHALT for all bits; halt_data[1] = port mask */
+ 	u32 mmss_halt[2] = {0, GENMASK(13, 0)};
++	u32 sys_halt[2] = {0, BIT(13)};
+ 	int rc;
+ 
+ 	rpm_node = of_find_compatible_node(NULL, NULL, "qcom,rpm-msm8660");
+@@ -2981,8 +2989,24 @@ static int mmcc_msm8660_unhalt_fabric_ports(struct device *dev)
+ 			    QCOM_RPM_MM_FABRIC_HALT, mmss_halt, 2);
+ 	if (rc)
+ 		dev_err(dev, "MMSS fabric unhalt failed: %d\n", rc);
+-	else
+-		dev_info(dev, "MMSS fabric: unhalted all master ports (0-13)\n");
++	else {
++		/*
++		 * DSI command DMA is an AHB master behind the MMSS FPB.  Its
++		 * memory reads leave MMSS through system-fabric master port 13,
++		 * rather than through one of the multimedia AXI master ports
++		 * above.  The downstream bus driver unhalts this port when the
++		 * MMSS-FPB path is requested; the DSI V2 binding has no ICC path,
++		 * so make that legacy requirement explicit here for bring-up.
++		 */
++		rc = qcom_rpm_write(rpm, QCOM_RPM_ACTIVE_STATE,
++				    QCOM_RPM_SYS_FABRIC_HALT, sys_halt, 2);
++		if (rc)
++			dev_err(dev, "system MMSS-FPB master unhalt failed: %d\n",
++				rc);
++		else
++			dev_info(dev,
++				 "MMSS fabric ports and system MMSS-FPB master unhalted\n");
++	}
+ 
+ 	put_device(&rpm_pdev->dev);
+ 
+diff --git a/drivers/gpu/drm/msm/dsi/dsi.h b/drivers/gpu/drm/msm/dsi/dsi.h
+index 9b3433d3f..1a2bcce96 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi.h
++++ b/drivers/gpu/drm/msm/dsi/dsi.h
+@@ -118,8 +118,12 @@ void *dsi_tx_buf_get_6g(struct msm_dsi_host *msm_host);
+ void *dsi_tx_buf_get_v2(struct msm_dsi_host *msm_host);
+ void dsi_tx_buf_put_6g(struct msm_dsi_host *msm_host);
+ void msm_dsi_tx_buf_free(struct mipi_dsi_host *mipi_host);
+-int dsi_dma_base_get_6g(struct msm_dsi_host *msm_host, uint64_t *iova);
+-int dsi_dma_base_get_v2(struct msm_dsi_host *msm_host, uint64_t *iova);
++int dsi_dma_base_get_6g(struct msm_dsi_host *msm_host, uint64_t *iova,
++			size_t len);
++int dsi_dma_base_get_v2(struct msm_dsi_host *msm_host, uint64_t *iova,
++			size_t len);
++void dsi_dma_base_put_v2(struct msm_dsi_host *msm_host, uint64_t iova,
++			 size_t len);
+ int dsi_clk_init_v2(struct msm_dsi_host *msm_host);
+ int dsi_clk_init_6g_v2(struct msm_dsi_host *msm_host);
+ int dsi_clk_init_6g_v2_9(struct msm_dsi_host *msm_host);
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_cfg.h b/drivers/gpu/drm/msm/dsi/dsi_cfg.h
+index 3fb4bf7b1..f71a87733 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_cfg.h
++++ b/drivers/gpu/drm/msm/dsi/dsi_cfg.h
+@@ -60,7 +60,10 @@ struct msm_dsi_host_cfg_ops {
+ 	int (*tx_buf_alloc)(struct msm_dsi_host *msm_host, int size);
+ 	void* (*tx_buf_get)(struct msm_dsi_host *msm_host);
+ 	void (*tx_buf_put)(struct msm_dsi_host *msm_host);
+-	int (*dma_base_get)(struct msm_dsi_host *msm_host, uint64_t *iova);
++	int (*dma_base_get)(struct msm_dsi_host *msm_host, uint64_t *iova,
++			    size_t len);
++	void (*dma_base_put)(struct msm_dsi_host *msm_host, uint64_t iova,
++			     size_t len);
+ 	int (*calc_clk_rate)(struct msm_dsi_host *msm_host, bool is_bonded_dsi);
+ };
+ 
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
+index 32b1ff27d..15edb2af1 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -8,6 +8,7 @@
+ #include <linux/dma-mapping.h>
+ #include <linux/err.h>
+ #include <linux/interrupt.h>
++#include <linux/interconnect.h>
+ #include <linux/mfd/syscon.h>
+ #include <linux/of.h>
+ #include <linux/of_graph.h>
+@@ -164,6 +165,8 @@ struct msm_dsi_host {
+ 	u8 *rx_buf;
+ 
+ 	struct regmap *sfpb;
++	struct icc_path *dma_mem_path;
++	struct clk_bulk_data fpb_clks[3];
+ 
+ 	struct drm_display_mode *mode;
+ 	struct drm_dsc_config *dsc;
+@@ -1003,10 +1006,9 @@ static void dsi_ctrl_enable(struct msm_dsi_host *msm_host,
+ 	 */
+ 	if (!cfg_hnd->cfg->quiesce_msm8x60_boot_state)
+ 		data |= DSI_TRIG_CTRL_TE;
+-	if (cfg_hnd->cfg->quiesce_msm8x60_boot_state)
+-		data |= DSI_TRIG_CTRL_MDP_TRIGGER(TRIGGER_SW);
+-	else
+-		data |= DSI_TRIG_CTRL_MDP_TRIGGER(TRIGGER_NONE);
++	data |= DSI_TRIG_CTRL_MDP_TRIGGER(
++		cfg_hnd->cfg->quiesce_msm8x60_boot_state ?
++		TRIGGER_SW : TRIGGER_NONE);
+ 	data |= DSI_TRIG_CTRL_DMA_TRIGGER(TRIGGER_SW);
+ 	data |= DSI_TRIG_CTRL_STREAM(msm_host->channel);
+ 	if ((cfg_hnd->major == MSM_DSI_VER_MAJOR_6G) &&
+@@ -1044,8 +1046,7 @@ static void dsi_ctrl_enable(struct msm_dsi_host *msm_host,
+ 	dsi_write(msm_host, REG_DSI_LANE_SWAP_CTRL,
+ 		  DSI_LANE_SWAP_CTRL_DLN_SWAP_SEL(msm_host->dlane_swap));
+ 
+-	if (!(flags & MIPI_DSI_CLOCK_NON_CONTINUOUS) &&
+-	    !cfg_hnd->cfg->quiesce_msm8x60_boot_state) {
++	if (!(flags & MIPI_DSI_CLOCK_NON_CONTINUOUS)) {
+ 		lane_ctrl = dsi_read(msm_host, REG_DSI_LANE_CTRL);
+ 
+ 		if (msm_dsi_phy_set_continuous_clock(phy, true))
+@@ -1391,10 +1392,13 @@ int dsi_tx_buf_alloc_6g(struct msm_dsi_host *msm_host, int size)
+ 
+ int dsi_tx_buf_alloc_v2(struct msm_dsi_host *msm_host, int size)
+ {
+-	struct device *dev = &msm_host->pdev->dev;
+-
+-	msm_host->tx_buf = dma_alloc_coherent(dev, size,
+-					&msm_host->tx_buf_paddr, GFP_KERNEL);
++	/*
++	 * The MSM8x60 DSI command-DMA master cannot consume the high CMA address
++	 * returned by dma_alloc_coherent() on Hikari.  The downstream driver used
++	 * an ordinary buffer and mapped it for each transfer; reproduce that DMA
++	 * ownership model so the mapping comes from DMA-reachable low memory.
++	 */
++	msm_host->tx_buf = kmalloc(size, GFP_KERNEL);
+ 	if (!msm_host->tx_buf)
+ 		return -ENOMEM;
+ 
+@@ -1425,9 +1429,7 @@ void msm_dsi_tx_buf_free(struct mipi_dsi_host *host)
+ 	}
+ 
+ 	if (msm_host->tx_buf)
+-		dma_free_coherent(&msm_host->pdev->dev, msm_host->tx_size,
+-			msm_host->tx_buf,
+-			msm_host->tx_buf_paddr);
++		kfree(msm_host->tx_buf);
+ }
+ 
+ void *dsi_tx_buf_get_6g(struct msm_dsi_host *msm_host)
+@@ -1544,7 +1546,8 @@ static int dsi_long_read_resp(u8 *buf, const struct mipi_dsi_msg *msg)
+ 	return msg->rx_len;
+ }
+ 
+-int dsi_dma_base_get_6g(struct msm_dsi_host *msm_host, uint64_t *dma_base)
++int dsi_dma_base_get_6g(struct msm_dsi_host *msm_host, uint64_t *dma_base,
++			size_t len)
+ {
+ 	struct drm_device *dev = msm_host->dev;
+ 	struct msm_drm_private *priv = dev->dev_private;
+@@ -1556,15 +1559,32 @@ int dsi_dma_base_get_6g(struct msm_dsi_host *msm_host, uint64_t *dma_base)
+ 				priv->kms->vm, dma_base);
+ }
+ 
+-int dsi_dma_base_get_v2(struct msm_dsi_host *msm_host, uint64_t *dma_base)
++int dsi_dma_base_get_v2(struct msm_dsi_host *msm_host, uint64_t *dma_base,
++			 size_t len)
+ {
++	dma_addr_t mapped;
++
+ 	if (!dma_base)
+ 		return -EINVAL;
+ 
+-	*dma_base = msm_host->tx_buf_paddr;
++	/* The MSM8x60 vendor driver maps exactly the padded command length. */
++	mapped = dma_map_single(&msm_host->pdev->dev, msm_host->tx_buf, len,
++				DMA_TO_DEVICE);
++	if (dma_mapping_error(&msm_host->pdev->dev, mapped))
++		return -EIO;
++
++	msm_host->tx_buf_paddr = mapped;
++	*dma_base = mapped;
+ 	return 0;
+ }
+ 
++void dsi_dma_base_put_v2(struct msm_dsi_host *msm_host, uint64_t dma_base,
++			 size_t len)
++{
++	dma_unmap_single(&msm_host->pdev->dev, dma_base, len, DMA_TO_DEVICE);
++	msm_host->tx_buf_paddr = 0;
++}
++
+ static int dsi_cmd_dma_tx(struct msm_dsi_host *msm_host, int len)
+ {
+ 	const struct msm_dsi_cfg_handler *cfg_hnd = msm_host->cfg_hnd;
+@@ -1572,7 +1592,7 @@ static int dsi_cmd_dma_tx(struct msm_dsi_host *msm_host, int len)
+ 	uint64_t dma_base;
+ 	bool triggered;
+ 
+-	ret = cfg_hnd->ops->dma_base_get(msm_host, &dma_base);
++	ret = cfg_hnd->ops->dma_base_get(msm_host, &dma_base, len);
+ 	if (ret) {
+ 		pr_err("%s: failed to get iova: %d\n", __func__, ret);
+ 		return ret;
+@@ -1637,6 +1657,9 @@ static int dsi_cmd_dma_tx(struct msm_dsi_host *msm_host, int len)
+ 		ret = len;
+ 	}
+ 
++	if (cfg_hnd->ops->dma_base_put)
++		cfg_hnd->ops->dma_base_put(msm_host, dma_base, len);
++
+ 	return ret;
+ }
+ 
+@@ -2148,6 +2171,30 @@ static int dsi_host_parse_dt(struct msm_dsi_host *msm_host)
+ 		}
+ 	}
+ 
++	if (of_property_present(np, "interconnects")) {
++		msm_host->dma_mem_path = devm_of_icc_get(dev, "dma-mem");
++		if (IS_ERR(msm_host->dma_mem_path)) {
++			ret = PTR_ERR(msm_host->dma_mem_path);
++			goto err;
++		}
++	}
++
++	/*
++	 * The MSM8x60 system and multimedia FPBs are separately RPM-clocked AHB
++	 * fabrics. Sony's msm_bus driver enabled both SFPB contexts for paths that
++	 * crossed msm_sys_fpb. In addition, msm8660_clock_late_init() kept the
++	 * active MMFPB context at a minimum 64 MHz globally. The upstream MSM8660
++	 * ICC topology does not own these legacy votes, so let affected boards
++	 * provide them directly to the DSI host.
++	 */
++	msm_host->fpb_clks[0].id = "sfpb";
++	msm_host->fpb_clks[1].id = "sfpb_a";
++	msm_host->fpb_clks[2].id = "mmfpb_a";
++	ret = devm_clk_bulk_get_optional(dev, ARRAY_SIZE(msm_host->fpb_clks),
++					 msm_host->fpb_clks);
++	if (ret)
++		goto err;
++
+ err:
+ 	of_node_put(endpoint);
+ 
+@@ -2365,10 +2412,22 @@ int msm_dsi_host_xfer_prepare(struct mipi_dsi_host *host,
+ 		dsi_set_tx_power_mode(0, msm_host);
+ 
+ 	msm_host->dma_cmd_ctrl_restore = dsi_read(msm_host, REG_DSI_CTRL);
+-	dsi_write(msm_host, REG_DSI_CTRL,
+-		msm_host->dma_cmd_ctrl_restore |
+-		DSI_CTRL_CMD_MODE_EN |
+-		DSI_CTRL_ENABLE);
++	if (cfg_hnd->cfg->quiesce_msm8x60_boot_state) {
++		/*
++		 * Sony initializes MSM8x60 video panels while the controller is in
++		 * command mode, then selects video mode after the panel commands.
++		 * DRM's bridge ordering reaches panel prepare with video mode already
++		 * selected, so temporarily reproduce that initial Sony state here.
++		 * The saved value is restored after each transfer.
++		 */
++		dsi_write(msm_host, REG_DSI_CTRL,
++			(msm_host->dma_cmd_ctrl_restore & ~DSI_CTRL_VID_MODE_EN) |
++			DSI_CTRL_CMD_MODE_EN | DSI_CTRL_ENABLE);
++	} else {
++		dsi_write(msm_host, REG_DSI_CTRL,
++			msm_host->dma_cmd_ctrl_restore |
++			DSI_CTRL_CMD_MODE_EN | DSI_CTRL_ENABLE);
++	}
+ 	/* MSM8x60 requires command mode to reach hardware before DMA setup. */
+ 	wmb();
+ 	(void)dsi_read(msm_host, REG_DSI_CTRL);
+@@ -2689,12 +2748,43 @@ int msm_dsi_host_power_on(struct mipi_dsi_host *host,
+ 
+ 	msm_dsi_sfpb_config(msm_host, true);
+ 
++	/*
++	 * MSM8x60 command DMA reaches DDR through the MMSS FPB gateway. The
++	 * downstream display stack installed a high fabric vote before issuing
++	 * the first panel command; vote the actual DSI route explicitly when DT
++	 * describes it, before the engine can fetch its command buffer.
++	 */
++	ret = icc_set_bw(msm_host->dma_mem_path, 0, MBps_to_icc(850));
++	if (ret) {
++		pr_err("%s: failed to enable DMA interconnect. ret=%d\n",
++		       __func__, ret);
++		goto fail_disable_sfpb;
++	}
++
++	/* Match Sony's global MSM8x60 active-context MMFPB floor. */
++	if (msm_host->fpb_clks[2].clk) {
++		ret = clk_set_rate(msm_host->fpb_clks[2].clk, 64000000);
++		if (ret) {
++			pr_err("%s: failed to set MMFPB active rate. ret=%d\n",
++			       __func__, ret);
++			goto fail_disable_icc;
++		}
++	}
++
++	ret = clk_bulk_prepare_enable(ARRAY_SIZE(msm_host->fpb_clks),
++				      msm_host->fpb_clks);
++	if (ret) {
++		pr_err("%s: failed to enable system FPB clocks. ret=%d\n",
++		       __func__, ret);
++		goto fail_disable_icc;
++	}
++
+ 	ret = regulator_bulk_enable(msm_host->cfg_hnd->cfg->num_regulators,
+ 				    msm_host->supplies);
+ 	if (ret) {
+ 		pr_err("%s:Failed to enable vregs.ret=%d\n",
+ 			__func__, ret);
+-		goto unlock_ret;
++		goto fail_disable_fpb_clk;
+ 	}
+ 
+ 	pm_runtime_get_sync(&msm_host->pdev->dev);
+@@ -2729,6 +2819,13 @@ int msm_dsi_host_power_on(struct mipi_dsi_host *host,
+ fail_disable_reg:
+ 	regulator_bulk_disable(msm_host->cfg_hnd->cfg->num_regulators,
+ 			       msm_host->supplies);
++fail_disable_fpb_clk:
++	clk_bulk_disable_unprepare(ARRAY_SIZE(msm_host->fpb_clks),
++				   msm_host->fpb_clks);
++fail_disable_icc:
++	icc_set_bw(msm_host->dma_mem_path, 0, 0);
++fail_disable_sfpb:
++	msm_dsi_sfpb_config(msm_host, false);
+ unlock_ret:
+ 	mutex_unlock(&msm_host->dev_mutex);
+ 	return ret;
+@@ -2755,6 +2852,9 @@ int msm_dsi_host_power_off(struct mipi_dsi_host *host)
+ 	regulator_bulk_disable(msm_host->cfg_hnd->cfg->num_regulators,
+ 			       msm_host->supplies);
+ 
++	clk_bulk_disable_unprepare(ARRAY_SIZE(msm_host->fpb_clks),
++				   msm_host->fpb_clks);
++	icc_set_bw(msm_host->dma_mem_path, 0, 0);
+ 	msm_dsi_sfpb_config(msm_host, false);
+ 
+ 	DBG("-");
+diff --git a/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c b/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
+index 0f9e366a6..1f5da440d 100644
+--- a/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
++++ b/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
+@@ -107,17 +107,12 @@ static int dsi_45nm_enable(struct msm_dsi_phy *phy,
+ 	if (!hikari_rate_is_supported(clk_req->bitclk_rate))
+ 		return -EINVAL;
+ 
+-	/* Exact MDV22 host clock-lane timing from Sony's Hikari panel data. */
++	/* Exact Sony MDV22 panel timings; consumed by DSI_CLKOUT_TIMING_CTRL. */
+ 	phy->timing.shared_timings.clk_post = 0x04;
+ 	phy->timing.shared_timings.clk_pre = 0x1b;
+ 	phy->timing.shared_timings.clk_pre_inc_by_2 = false;
+ 	phy->timing.shared_timings.byte_intf_clk_div_2 = false;
+ 
+-	/* Sony applies the analog pre-enable controls before PHY programming. */
+-	writel(0x050, base + PHY_REG(0x214));
+-	writel(0x00f, base + PHY_REG(0x258));
+-	writel(0, base + PHY_REG(0x25c));
+-
+ 	/* Same reset/calibration sequencing as the exact MSM8x60 BSP. */
+ 	writel(1, base + PHY_REG(0x128));
+ 	wmb();
+@@ -143,6 +138,15 @@ static int dsi_45nm_enable(struct msm_dsi_phy *phy,
+ 	/* Legacy hardware requires PLL_CTRL_0 to be committed last. */
+ 	write_table(base, PHY_REG(0x204), &hikari_pll[1], ARRAY_SIZE(hikari_pll) - 1);
+ 	dsi_45nm_program_hikari_dividers(base);
++	/*
++	 * Sony's power-on helper writes PLL_CTRL_5 = 0x50 before phy_init(),
++	 * but the MDV22 PLL table loaded by phy_init() subsequently replaces it
++	 * with 0x2f.  Do not reverse that ordering: 0x2f is also the value read
++	 * from the working vendor display after initialization.
++	 */
++	writel(hikari_pll[5], base + PHY_REG(0x214));
++	writel(0x00f, base + PHY_REG(0x258));
++	writel(0, base + PHY_REG(0x25c));
+ 	/*
+ 	 * Sony enables the 45 nm PLL separately from programming its table.
+ 	 * Fixed-rate CCF providers describe the two outputs but cannot turn the
+diff --git a/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c b/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
+index 0935a49bf..1c4f7b62b 100644
+--- a/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
++++ b/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
+@@ -115,8 +115,14 @@ static int mdv22_probe(struct mipi_dsi_device *dsi)
+ 	mipi_dsi_set_drvdata(dsi, m);
+ 	dsi->lanes = 4;
+ 	dsi->format = MIPI_DSI_FMT_RGB888;
+-	/* Fuji MDV22 specifies non-burst synchronous-event, with HSA/HE pulses. */
+-	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_HSE;
++	/*
++	 * Fuji MDV22 specifies non-burst synchronous-event, with HSA/HE pulses.
++	 * Sony also leaves force_clk_lane_hs disabled for this panel; model that
++	 * here so the MSM8x60 host does not assert CLKLN_HS_FORCE_REQUEST before
++	 * the first command transfer.
++	 */
++	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_HSE |
++			  MIPI_DSI_CLOCK_NON_CONTINUOUS;
+ 	ret = mipi_dsi_attach(dsi);
+ 	if (ret)
+ 		return dev_err_probe(&dsi->dev, ret, "failed to attach DSI host\n");
+diff --git a/drivers/interconnect/qcom/msm8660.c b/drivers/interconnect/qcom/msm8660.c
+index 13105e7bc..e032ae493 100644
+--- a/drivers/interconnect/qcom/msm8660.c
++++ b/drivers/interconnect/qcom/msm8660.c
+@@ -508,11 +508,12 @@ static struct msm8660_icc_node sfab_mas_lpass = {
+ 
+ static struct msm8660_icc_node sfab_mas_mmss_fpb = {
+ 	.name = "sfab_mas_mmss_fpb",
+-	.num_links = 0,
++	.num_links = 1,
+ 	.buswidth = 8,
+ 	.mas_port = 13,
+ 	.slv_port = -1,
+ 	.mas_tier = ARB_TIER2,
++	.link_nodes = { &sfab_to_appss },
+ };
+ 
+ static struct msm8660_icc_node sfab_mas_adm1_ci = {

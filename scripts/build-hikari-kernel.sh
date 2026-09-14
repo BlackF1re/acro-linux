@@ -32,6 +32,13 @@ hikari_build_root=$(realpath -m -- "$hikari_build_root")
 build_dir=$(realpath -m -- "$build_dir")
 case "$build_dir" in "$hikari_build_root"/*) ;; *) echo "BUILD_DIR must be below HIKARI_BUILD_ROOT=$hikari_build_root" >&2; exit 1;; esac
 "$repo_root/scripts/prepare-hikari-kernel-tree.sh" "$kernel_src"
+if [[ "$require_display_bringup" == 1 ]]; then
+  # Kconfig alone cannot prove that Hikari's physically verified no-IOMMU
+  # scanout implementation is present.  The legacy external worktree once
+  # lost patch 0065 while still satisfying every config check, producing a
+  # kernel which booted Debian but could never register DRM/fb0.
+  python3 "$repo_root/scripts/check-hikari-display-source.py" "$kernel_src"
+fi
 make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" qcom_defconfig
 if [[ $prune_default_modules == 1 ]]; then
   # qcom_defconfig intentionally contains modules for many unrelated Qualcomm

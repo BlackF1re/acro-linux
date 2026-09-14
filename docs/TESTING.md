@@ -2,6 +2,15 @@
 
 ## Debian migration checkpoint
 
+The first attempt completed the storage portion of steps 1--3: the retained
+kernel log showed `mmcblk0p1` mounted read/write, `HIKARI ROOT READY`, and
+systemd running from Debian. It failed the display portion before userspace
+because DRM/MSM returned `-ENODEV` when the build accidentally omitted the
+required physical-scanout source patch. The corrected build has a source-code
+gate in addition to its Kconfig/DTB gates. Repeat the sequence below with the
+replacement artifact; do not treat the prior black boot as a card/rootfs
+failure.
+
 Host builds and static checks do not verify hardware. The next test uses a
 separate microSD and preserves the verified p3 rollback image. Before any
 flash, record the card identity and confirm that the prepared filesystem is

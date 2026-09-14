@@ -1,0 +1,40 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Paul Levickij <plevickij57@gmail.com>
+Date: Tue, 8 Sep 2026 20:18:46 +0700
+Subject: [PATCH] drm/msm/mdp4: rearm Hikari DSI timing generator
+
+MSM8x60 downstream starts the DSI timing generator after the mixer state is
+committed. Toggle and flush the interface enable at encoder start so recovery
+handoff cannot retain stale timing state.
+
+Signed-off-by: Paul Levickij <plevickij57@gmail.com>
+---
+ drivers/gpu/drm/msm/disp/mdp4/mdp4_dsi_encoder.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/drivers/gpu/drm/msm/disp/mdp4/mdp4_dsi_encoder.c b/drivers/gpu/drm/msm/disp/mdp4/mdp4_dsi_encoder.c
+index 74dafe710..d17de995e 100644
+--- a/drivers/gpu/drm/msm/disp/mdp4/mdp4_dsi_encoder.c
++++ b/drivers/gpu/drm/msm/disp/mdp4/mdp4_dsi_encoder.c
+@@ -122,7 +122,21 @@ static void mdp4_dsi_encoder_enable(struct drm_encoder *encoder)
+ 
+ 	mdp4_crtc_set_intf(encoder->crtc, INTF_DSI_VIDEO, 0);
+ 
++	/*
++	 * MSM8x60 downstream starts the DSI timing generator only after the
++	 * mixer state has been committed.  Explicitly take it through the
++	 * disabled state here so a boot-loader/recovery hand-off cannot leave
++	 * the enable bit latched against stale timing state.
++	 */
++	mdp4_write(mdp4_kms, REG_MDP4_DSI_ENABLE, 0);
++	wmb();
++	mdp4_read(mdp4_kms, REG_MDP4_DSI_ENABLE);
+ 	mdp4_write(mdp4_kms, REG_MDP4_DSI_ENABLE, 1);
++	wmb();
++	DRM_INFO("Hikari MDP4 DSI start: intf=%08x enable=%08x status=%08x\n",
++		 mdp4_read(mdp4_kms, REG_MDP4_DISP_INTF_SEL),
++		 mdp4_read(mdp4_kms, REG_MDP4_DSI_ENABLE),
++		 mdp4_read(mdp4_kms, REG_MDP4_DISP_STATUS));
+ 
+ 	mdp4_dsi_encoder->enabled = true;
+ }
