@@ -13,12 +13,10 @@ out=${1:-/home/paul/xperia/src/linux-hikari-materialized}
 # shellcheck disable=SC1090
 source "$lock"
 series="$repo_root/$PATCH_SERIES"
-post_series="$repo_root/$POST_PATCH_SERIES"
 linux_source=${LINUX_SOURCE_CACHE:-$LINUX_REMOTE}
 
 command -v git >/dev/null || { echo 'git is required' >&2; exit 1; }
 [[ -r $series ]] || { echo "missing patch series: $series" >&2; exit 1; }
-[[ -r $post_series ]] || { echo "missing post-correction patch series: $post_series" >&2; exit 1; }
 
 mapfile -t patches < <(sed -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' "$series")
 if (( ${#patches[@]} == 0 )); then
@@ -134,28 +132,6 @@ GIT_COMMITTER_EMAIL=hikari-materializer@localhost \
 GIT_COMMITTER_DATE=2026-09-04T18:20:00+03:00 \
 git -C "$out" commit -q -m $'leds: as3676: expose Hikari button and RGB outputs\n\nKeep LCD sinks 1/2/6 and add the exact Sony Hikari button RGB1/2/3 group plus notification sinks 41/42/43 through the Linux LED class.\n\nSigned-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>'
 
-# A small set of later display corrections is based on the fully transformed
-# project tree above, rather than directly on the pinned upstream base. Apply
-# it only here so a clean materialization cannot silently lose the exact DSI
-# transfer path used by the active device tree.
-mapfile -t post_patches < <(sed -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' "$post_series")
-if (( ${#post_patches[@]} == 0 )); then
-  echo 'Hikari post-correction patch series is empty.' >&2
-  exit 8
-fi
-for rel in "${post_patches[@]}"; do
-  patch="$repo_root/kernel/post-patches/$rel"
-  [[ -r $patch ]] || { echo "post series references missing patch: $patch" >&2; exit 1; }
-  echo "Applying post-correction $rel"
-  if ! git -C "$out" am --3way --keep-cr --committer-date-is-author-date "$patch"; then
-    git -C "$out" am --abort >/dev/null 2>&1 || true
-    if ! git -C "$out" am --keep-cr --committer-date-is-author-date "$patch"; then
-      echo "failed while applying post-correction $rel" >&2
-      exit 8
-    fi
-  fi
-done
-
 "$repo_root/scripts/check-msm8660-mmcc-source.sh" "$out"
 python3 "$repo_root/scripts/check-hikari-display-source.py" "$out"
 "$repo_root/scripts/check-hikari-as3676-source.sh" "$out"
@@ -166,4 +142,3 @@ printf 'Base: %s\n' "$LINUX_BASE"
 printf 'HEAD: %s\n' "$(git -C "$out" rev-parse HEAD)"
 printf 'Tree: %s\n' "$out"
 printf 'Imported patches: %d\n' "${#patches[@]}"
-printf 'Post-correction patches: %d\n' "${#post_patches[@]}"
