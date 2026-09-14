@@ -11,6 +11,13 @@ gate in addition to its Kconfig/DTB gates. Repeat the sequence below with the
 replacement artifact; do not treat the prior black boot as a card/rootfs
 failure.
 
+The next candidate corrected that KMS omission and proved the Debian/rootfs
+and USB-console path, but not the panel. DRM registered a connected 720x1280
+connector and fb0 while the physical display stayed black because the first
+MDV22 command DMA transfer returned `-ETIMEDOUT`; blank/unblank reproduced it.
+The late streaming-DMA experiment is therefore rejected. Retest with the
+physically accepted coherent DSI command-buffer path restored.
+
 Host builds and static checks do not verify hardware. The next test uses a
 separate microSD and preserves the verified p3 rollback image. Before any
 flash, record the card identity and confirm that the prepared filesystem is

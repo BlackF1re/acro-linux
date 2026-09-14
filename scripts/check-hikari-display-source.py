@@ -97,17 +97,20 @@ def main() -> int:
     require(dsi_branch.group(1), ".halt_check = BRANCH_HALT_SKIP,", "MSM8x60 DSI halt-poll workaround")
 
     require(host, "enum dsi_rgb_swap rgb_swap;", "DSI RGB-swap state")
-    # Hikari's V2 command engine cannot fetch the high CMA address returned by
-    # a permanently coherent allocation.  Sony maps the actual padded command
-    # buffer for each transfer, which also gives the DMA API ownership of the
-    # cache transition and a reachable bus address.
-    require(host, "msm_host->tx_buf = kmalloc(size, GFP_KERNEL);", "MSM8x60 command buffer")
+    # The physically accepted 0066/0068/0073 kernels allocate the V2 command
+    # buffer coherently from the DSI device. A later per-transfer streaming
+    # mapping deterministically timed out on the first MDV22 command and left
+    # the physical panel black even though DRM and fb0 registered normally.
     require(
         host,
-        "dma_map_single(&msm_host->pdev->dev, msm_host->tx_buf, len,",
-        "MSM8x60 per-transfer command DMA mapping",
+        "struct device *dev = &msm_host->pdev->dev;",
+        "MSM8x60 V2 command DMA allocated from the DSI device",
     )
-    require(host, "dma_unmap_single(&msm_host->pdev->dev", "MSM8x60 command DMA unmap")
+    require(
+        host,
+        "dma_alloc_coherent(dev, size,",
+        "physically accepted MSM8x60 coherent command DMA",
+    )
     require(host, "DSI_VID_CFG1_RGB_SWAP(msm_host->rgb_swap)", "video RGB swap")
     require(host, "DSI_CMD_CFG0_RGB_SWAP(msm_host->rgb_swap)", "command RGB swap")
     require(host, '"sony,hikari-r63306-tmd-mdv22"', "Hikari panel quirk")
@@ -121,12 +124,7 @@ def main() -> int:
         ".clk_init_ver = dsi_clk_init_v2,",
         "MSM8x60 V2 DSI source-clock acquisition",
     )
-    require(
-        host,
-        "cfg_hnd->cfg->quiesce_msm8x60_boot_state ?\n"
-        "\t\tTRIGGER_SW : TRIGGER_NONE",
-        "Hikari software MDP trigger",
-    )
+    require(host, "data |= DSI_TRIG_CTRL_MDP_TRIGGER(TRIGGER_SW);", "Hikari software MDP trigger")
     require(
         phy,
         "phy->timing.shared_timings.clk_post = 0x04;",
@@ -137,12 +135,17 @@ def main() -> int:
         "phy->timing.shared_timings.clk_pre = 0x1b;",
         "Hikari MDV22 T_CLK_PRE",
     )
-    pll_table = phy.index(
-        "write_table(base, PHY_REG(0x204), &hikari_pll[1]",
+    require(
+        host,
+        "!cfg_hnd->cfg->quiesce_msm8x60_boot_state) {",
+        "Hikari clock-lane force suppression",
     )
-    pll_ctrl_5 = phy.index("writel(hikari_pll[5], base + PHY_REG(0x214));")
-    if pll_ctrl_5 < pll_table:
-        raise SystemExit("Hikari operational PLL_CTRL_5 value precedes the PLL table")
+    analog_pre = phy.index("writel(0x050, base + PHY_REG(0x214));")
+    pll_table = phy.index(
+        "write_table(base, PHY_REG(0x204), &hikari_pll[1]", analog_pre
+    )
+    if analog_pre > pll_table:
+        raise SystemExit("Hikari PLL_CTRL_5 pre-enable occurs after the operational PLL table")
     require(
         cfg,
         ".cmd_dma_irq_timeout_nonfatal = true,",
@@ -176,8 +179,7 @@ def main() -> int:
     # DRM/MSM this is VIDEO without VIDEO_SYNC_PULSE, plus HSE for HSA/HE.
     require(
         panel,
-        "dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_HSE |\n"
-        "\t\t\t  MIPI_DSI_CLOCK_NON_CONTINUOUS;",
+        "dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_HSE;",
         "MDV22 DSI traffic mode",
     )
     if "dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_SYNC_PULSE" in panel:

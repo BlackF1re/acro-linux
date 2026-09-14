@@ -492,9 +492,17 @@ late patches were absent, while its build gate checked only Kconfig. The
 canonical tree has been repaired with 0057, 0058, 0062 and 0065--0071. The
 build now runs the display source gate before configuration, so a source tree
 without the no-IOMMU implementation cannot produce another candidate. The
-replacement ELF is locally validated but is not a device result until booted.
-It is 12,859,620 bytes with SHA-256
+first replacement ELF was then booted on the device. It is 12,859,620 bytes
+with SHA-256
 `fab8742c1ee5d25e2da6f360060dd5065f7db57afc26b407e6ebbdd88f64e3c7`.
-The previously unexported final DSI-transfer corrections are now a separate
-post-correction patch series, and a reconstruction check reproduced the active
-source files byte-for-byte.
+It successfully mounted the card as `/dev/mmcblk1p1`, reached a running Debian
+systemd with no failed units, and provided a reconnectable root shell over
+`ttyGS0`. DRM selected contiguous scanout and registered fb0, but the physical
+screen remained black: the first 12-byte MDV22 command deterministically timed
+out both at boot and after blank/unblank. The unverified late DSI experiments
+that introduced that regression have been retired from the production path;
+the next candidate restores the coherent command-DMA implementation used by
+the physically accepted 0066/0068/0073 kernels while retaining no-IOMMU
+scanout and USB/OTG work. That candidate is 12,856,868 bytes with SHA-256
+`f2775bde961ebe2444cd8667ab56af85878033a317181e40ea1b9d90a3220c23`;
+it has passed host gates but remains unverified on the device.
