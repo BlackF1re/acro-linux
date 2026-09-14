@@ -5,6 +5,7 @@
 LINUX_REMOTE=https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
 LINUX_BASE=786262be6048deab760f68c8acc2c85607165894
 PATCH_SERIES=kernel/patches/series
+POST_PATCH_SERIES=kernel/post-patches/series
 
 # The base above is the Linus revision recorded by the project for the
 # current 7.3-rc1 Hikari bring-up line.  Project and third-party commits that
