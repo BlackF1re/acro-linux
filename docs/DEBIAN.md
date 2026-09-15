@@ -136,10 +136,27 @@ loader is not rebuilt during ordinary driver work.
 ## Minimal userspace policy
 
 The package manifest intentionally contains systemd/udev, kmod, kexec-tools,
-basic storage and network diagnostics, CA certificates and apt. SSH and a
-graphical desktop are not installed yet. During bring-up, root has no password
-and is available only on local framebuffer/USB consoles; this must be removed
-before networking is treated as production-ready.
+basic storage and network diagnostics, CA certificates and apt. `iw` is the
+minimal cfg80211 acceptance tool; `wireless-regdb` supplies the maintained
+regulatory database; and `wpasupplicant` supplies ordinary WPA networking.
+No persistent Wi-Fi manager is enabled by the image builder: association and
+DHCP remain explicitly configured during bring-up. SSH and a graphical desktop
+are not installed yet. During bring-up, root has no password and is available
+only on local framebuffer/USB consoles; this must be removed before networking
+is treated as production-ready.
+
+The BCM4330 firmware and Hikari calibration are proprietary inputs from the
+owner's stock Sony installation and are not committed or redistributed. With
+that stock system mounted read-only, install them into a rootfs using:
+
+```sh
+sudo scripts/materialize-hikari-bcm4330-firmware.sh \
+  /mnt/stock-system /home/paul/xperia/build/hikari-rootfs-current
+```
+
+The helper does not print calibration contents or device identifiers. The
+board-specific file remains mode `0600`. Its presence makes a locally built
+rootfs usable on this phone but does not make the binary redistributable.
 
 Build outputs have apt indexes and package archives removed. The host package
 cache is shared rather than copied into each rootfs.
