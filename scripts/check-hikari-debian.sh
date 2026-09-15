@@ -41,6 +41,20 @@ done
 if [[ -e $rootfs/.hikari-debootstrap-complete ]]; then
 	test -x "$rootfs/sbin/init"
 	test -x "$rootfs/usr/local/sbin/hikari-kexec"
+	test ! -e "$rootfs/etc/systemd/system/multi-user.target.wants/wpa_supplicant.service"
+	while IFS= read -r package; do
+		sudo awk -v wanted="$package" '
+			$1 == "Package:" { current = $2 }
+			$1 == "Status:" && current == wanted && $0 == "Status: install ok installed" {
+				installed = 1
+			}
+			END { exit !installed }
+		' "$rootfs/var/lib/dpkg/status" || {
+			echo "missing rootfs package: $package" >&2
+			exit 1
+		}
+	done < <(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' \
+		"$(dirname -- "${BASH_SOURCE[0]}")/../debian/packages.txt")
 	test ! -d "$rootfs/lib/modules/$release/updates"
 	diff -u \
 		<(sort "$rootfs/lib/modules/$release/modules.order") \

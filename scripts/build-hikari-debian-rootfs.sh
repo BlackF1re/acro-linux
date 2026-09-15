@@ -60,6 +60,32 @@ if [[ ! -e "$rootfs/.hikari-debootstrap-complete" ]]; then
 	sudo touch "$rootfs/.hikari-debootstrap-complete"
 fi
 
+# Converge an already-created canonical rootfs when the explicit package
+# manifest grows. This keeps one tree reusable instead of forcing another
+# debootstrap copy. Avoid apt I/O entirely when every requested package is
+# already installed.
+missing_packages=()
+while IFS= read -r package; do
+	if ! sudo awk -v wanted="$package" '
+		$1 == "Package:" { current = $2 }
+		$1 == "Status:" && current == wanted && $0 == "Status: install ok installed" {
+			installed = 1
+		}
+		END { exit !installed }
+	' "$rootfs/var/lib/dpkg/status"; then
+		missing_packages+=("$package")
+	fi
+done < <(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$repo_root/debian/packages.txt")
+if ((${#missing_packages[@]})); then
+	sudo install -m 0755 "$qemu_arm" "$rootfs/usr/bin/qemu-arm-static"
+	sudo chroot "$rootfs" /usr/bin/qemu-arm-static \
+		/usr/bin/apt-get update
+	sudo env DEBIAN_FRONTEND=noninteractive \
+		chroot "$rootfs" /usr/bin/qemu-arm-static \
+		/usr/bin/apt-get install --no-install-recommends -y \
+		"${missing_packages[@]}"
+fi
+
 sudo install -D -m 0644 "$repo_root/debian/etc/hostname" "$rootfs/etc/hostname"
 sudo install -D -m 0644 "$repo_root/debian/etc/fstab" "$rootfs/etc/fstab"
 sudo install -D -m 0644 "$repo_root/debian/etc/systemd/system/hikari-console.service" \
@@ -67,6 +93,12 @@ sudo install -D -m 0644 "$repo_root/debian/etc/systemd/system/hikari-console.ser
 sudo install -D -m 0755 "$repo_root/debian/usr/local/sbin/hikari-kexec" \
 	"$rootfs/usr/local/sbin/hikari-kexec"
 sudo ln -sfn ../hikari-console.service "$rootfs/etc/systemd/system/multi-user.target.wants/hikari-console.service"
+# Debian enables the system-wide supplicant during package configuration.
+# Bring-up networking is explicit and on-demand, so retain the binary and
+# D-Bus activation metadata but remove boot-time service enablement.
+sudo rm -f \
+	"$rootfs/etc/systemd/system/multi-user.target.wants/wpa_supplicant.service" \
+	"$rootfs/etc/systemd/system/dbus-fi.w1.wpa_supplicant1.service"
 printf 'hikari\n' | sudo tee "$rootfs/etc/hostname" >/dev/null
 printf '127.0.0.1 localhost\n127.0.1.1 hikari\n' | sudo tee "$rootfs/etc/hosts" >/dev/null
 printf 'deb %s %s main\n' "$DEBIAN_MIRROR_DEFAULT" "$DEBIAN_SUITE" | \
@@ -76,7 +108,7 @@ printf 'deb %s %s main\n' "$DEBIAN_MIRROR_DEFAULT" "$DEBIAN_SUITE" | \
 # password. Network login is not installed or enabled by this manifest.
 sudo sed -i 's#^root:[^:]*:#root::#' "$rootfs/etc/shadow"
 sudo rm -f "$rootfs/usr/bin/qemu-arm-static"
-sudo find "$rootfs/var/cache/apt/archives" "$rootfs/var/lib/apt/lists" \
+sudo find "$rootfs/var/cache/apt" "$rootfs/var/lib/apt/lists" \
 	-mindepth 1 -delete
 sudo find "$rootfs/var/log" -type f -exec truncate -s 0 {} +
 printf 'rootfs: %s\n' "$rootfs"

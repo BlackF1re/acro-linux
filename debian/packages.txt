@@ -5,9 +5,12 @@ ca-certificates
 e2fsprogs
 iproute2
 iputils-ping
+iw
 kexec-tools
 kmod
 less
 systemd-sysv
 udev
 util-linux
+wireless-regdb
+wpasupplicant
