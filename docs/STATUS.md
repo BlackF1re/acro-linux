@@ -472,17 +472,18 @@ The signed-release-verified Debian root tree completed with 110 package records,
 no unpacked packages, 20 stripped modules exactly matching `modules.order`, and
 207 MiB host disk use. A single in-tree driver-directory build was exercised
 without dirtying the kernel source tree or leaving an `updates/` duplicate.
-These results are `IMPLEMENTING`, not device acceptance. Debian-on-microSD,
-module loading and ARM kexec remain `UNKNOWN` until the physical tests in
-[TESTING.md](TESTING.md) pass. No eMMC partition or phone was written while
-preparing this architecture.
+These results were an `IMPLEMENTING` host-only checkpoint, not device
+acceptance. Debian-on-microSD, module loading and ARM kexec were still
+`UNKNOWN` at that point. No eMMC partition or phone was written while preparing
+that checkpoint.
 
 The first physical microSD boot refined that result. Retained TWRP
 `/proc/last_kmsg` proves that mainline discovered the card as `mmcblk0`, mounted
 its labelled ext4 partition read/write, printed `HIKARI ROOT READY`, executed
 Debian systemd as PID 1, and remained alive for at least 64 seconds. The card,
 root switch and Debian userspace therefore reach `BOOTS` with
-`VERIFIED_DEVICE` evidence; module and kexec acceptance remain pending.
+`VERIFIED_DEVICE` evidence; module and kexec acceptance remained pending at
+that stage.
 
 That same log explains the black screen without speculation. MDP4 read its
 v4.1 revision, then emitted `no IOMMU, bailing out`, failed KMS with `-ENODEV`,
@@ -506,3 +507,19 @@ the physically accepted 0066/0068/0073 kernels while retaining no-IOMMU
 scanout and USB/OTG work. That candidate is 12,856,868 bytes with SHA-256
 `f2775bde961ebe2444cd8667ab56af85878033a317181e40ea1b9d90a3220c23`;
 it has passed host gates but remains unverified on the device.
+
+The development boot architecture is now physically verified. An SMP kernel
+correctly rejected kexec with `EINVAL` because upstream MSM8x60 can start CPU1
+but cannot prove it fully powered down; a physical offline/online probe also
+failed to restore CPU1. A deliberately single-core p3 loader avoids that unsafe
+path by leaving CPU1 in bootloader reset. The phone completed two checksum-
+verified kexec transitions from this loader into the full SMP kernel stored on
+`HIKARI_ROOT`; both second stages brought CPUs 0-1 online and mounted Debian
+read/write. A normal reboot returned to the loader between the two passes, and
+the ACM console re-enumerated after every transition. Kernel/DT development now
+needs a normal reboot through the loader, but no routine fastboot or TWRP cycle.
+See the [kexec acceptance record](../research/device/current/boot/kexec-loader-acceptance.md).
+The second-stage `/lib/modules` tree matched its kernel release and 15 Hikari
+modules were live, including RMI4, NFC, Bluetooth UART and both motion-sensor
+drivers. This verifies module ABI/loading only; the associated real-world
+hardware functions retain their separate acceptance states.

@@ -88,8 +88,20 @@ fastboot flash is required.
 
 ## Kernel and DT updates without fastboot
 
-The Debian profile enables ARM kexec and installs `hikari-kexec`. The safe
-sequence on the phone is:
+The Debian profile enables ARM kexec and installs `hikari-kexec`. MSM8x60's
+upstream SMP implementation can start CPU1 but cannot completely power it down,
+so an SMP first-stage kernel is deliberately rejected by ARM kexec. The stable
+p3 rescue/loader kernel is therefore built with `CONFIG_SMP=n`: CPU1 remains in
+the bootloader's reset state until the second-stage SMP kernel starts it through
+the normal SCM path. Build that loader in the same source and output trees:
+
+```sh
+scripts/build-hikari-kexec-loader.sh
+OUTPUT=/home/paul/xperia/build/hikari-debian-current/hikari-kexec-loader.elf \
+    scripts/build-hikari-debian-elf.sh
+```
+
+The safe sequence on the phone is:
 
 ```sh
 hikari-kexec --check
@@ -98,15 +110,28 @@ hikari-kexec --exec
 ```
 
 The commands validate `/boot/hikari-next/SHA256SUMS` before loading. Execution
-is deliberately separate from loading. This remains `UNVERIFIED` on MSM8260;
-the known-good p3 image stays untouched until repeated kexec boots, cold boots
-and failure recovery pass on the physical Hikari.
+is deliberately separate from loading. On 2026-09-15 the physical Hikari passed
+two complete loader-to-SMP transitions, with both CPUs online in the second
+stage and a normal reboot returning to the loader between them. The USB ACM
+console re-enumerated on every transition. See the
+[acceptance record](../research/device/current/boot/kexec-loader-acceptance.md).
+
+The SMP stage still cannot safely kexec directly because it cannot prove CPU1
+powered down. For each new candidate, atomically replace the files and
+`SHA256SUMS` in `/boot/hikari-next`, reboot normally into the loader, and use
+the three commands above. This needs reboots, but no boot flash or recovery
+cycle. Keep the prior working p3 ELF as an offline rollback artifact.
 
 Changing DT never takes effect by merely replacing a module. It needs a reboot
 into a kernel using the new DTB. Changes to core kernel ABI may require a full
 incremental kernel build and a matching `/lib/modules/<release>` tree. `make`
 still reuses unchanged objects; neither case justifies cloning the source or
 build directory.
+
+After building the loader, run `scripts/build-hikari-debian-kernel.sh` once to
+return the shared host `O=` directory to the normal SMP profile. Future builds
+then remain incremental and produce second-stage candidates. The flashed
+loader is not rebuilt during ordinary driver work.
 
 ## Minimal userspace policy
 

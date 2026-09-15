@@ -105,7 +105,7 @@ boot_chain:
     custom_rom_previously_installed: MoKee
     current_root_reported: true
     notes: Owner-provided historical evidence, not an automatically read bootloader attestation.
-  current_legacy_p3:
+  legacy_p3_reference:
     physical:
       evidence: VERIFIED_DEVICE
       format: Sony-style ELF32 ARM
@@ -114,6 +114,15 @@ boot_chain:
       rpm_load_address: "0x00020000"
       cmdline_segment: ABSENT
       notes: Extracted offline only from the private golden backup. Addresses are verified legacy starting candidates; a target artifact must validate decompressor, DTB, initramfs, firmware and reserved-memory compatibility. Exact cmdline handling remains UNKNOWN.
+  kexec_loader:
+    implementation: VERIFIED
+    evidence: VERIFIED_DEVICE
+    installed_in_p3: true
+    artifact_size: 12630460
+    artifact_sha256: 6bd74c112d879b0074c2415ccaebbd2eae8cbf2915445fa3c3f0c3b9419b801a
+    first_stage: "single-core mainline rescue kernel in p3"
+    second_stage: "full SMP mainline kernel, DTB and initramfs on HIKARI_ROOT"
+    notes: "On 2026-09-15 two complete loader-to-SMP transitions passed, separated by a normal reboot back to the loader. The loader exposed only CPU0; each kexec load set kexec_loaded=1; each second stage brought CPUs 0-1 online and mounted Debian from microSD read/write. USB ACM re-enumerated after every transition. Direct kexec from the SMP stage remains intentionally unsupported because MSM8x60 cannot prove CPU1 fully powered down."
   recovery:
     physical:
       evidence: VERIFIED_DEVICE
@@ -125,9 +134,9 @@ boot_chain:
       rollback_route: VERIFIED_DEVICE
       notes: The bootloader-level p3 restore route was physically used after the first failed native-Linux attempt; TWRP storage and independence from p3 remain UNKNOWN.
 subsystems:
-  cpu_smp: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: VERIFIED, evidence: VERIFIED_DEVICE, notes: "BOOT #4 post-mortem identified two CPU bring-up; BOOT #5.1 remains live on both CPUs." } }
+  cpu_smp: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: VERIFIED, evidence: VERIFIED_DEVICE, notes: "BOOT #4 post-mortem identified two CPU bring-up; BOOT #5.1 remained live on both CPUs. On 2026-09-15 the single-core p3 loader twice kexeced the full kernel, whose normal SCM path brought CPUs 0-1 online. Runtime offlining CPU1 succeeded but onlining it again failed EIO, so direct SMP-stage kexec remains correctly blocked rather than faking CPU-kill support." } }
   storage_emmc: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
-  storage_microsd: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: WORKING, notes: Separate mmcblk1/mmcblk1p1 SD path was mounted, wrote the C2 raw-backup stream, and its parts passed hash validation. }, target_linux: { implementation: BOOTS, evidence: VERIFIED_DEVICE, notes: "Physical Debian migration boots discovered the 29.5 GiB card, mounted HIKARI_ROOT read/write, printed HIKARI ROOT READY, switched to Debian systemd and remained alive with no failed units. The corrected KMS build exposed it as mmcblk1p1 and provided a reconnectable root USB console. Sustained storage I/O, removal handling and kexec remain unverified." } }
+  storage_microsd: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: WORKING, notes: Separate mmcblk1/mmcblk1p1 SD path was mounted, wrote the C2 raw-backup stream, and its parts passed hash validation. }, target_linux: { implementation: BOOTS, evidence: VERIFIED_DEVICE, notes: "Physical Debian migration boots discovered the 29.5 GiB card, mounted HIKARI_ROOT read/write, printed HIKARI ROOT READY, switched to Debian systemd and remained alive with no failed units. On 2026-09-15 it supplied two checksum-verified SMP kexec boots and stayed the read/write Debian root. Its node varied among mmcblk0p1, mmcblk1p1 and mmcblk2p1 across boots, validating label-based discovery. Sustained storage I/O and removal handling remain unverified." } }
   display: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: WORKING }, target_linux: { implementation: VERIFIED, evidence: VERIFIED_DEVICE, notes: "Physical 0066 produced readable native 720x1280 fbcon with repeating HIKARI DISPLAY ALIVE output confirmed by the owner, active DRM CRTC/plane, contiguous CMA scanout at 0x7bd00000, advancing MDP/DSI IRQs, and no underrun, kernel fault, or hung task through at least 867 seconds. Display suspend/resume, brightness policy and accelerated GPU remain separate acceptance domains." } }
   touchscreen: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   gpu: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
