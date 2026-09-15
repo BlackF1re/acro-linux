@@ -126,17 +126,20 @@ display/USB-capable bootstrap Sony ELF in p3 and make it mount the Debian root
 from the removable card. Rootfs and application changes can then be made by
 editing the card, with no recovery or fastboot cycle.
 
-Kernel/DT experiments still require replacing p3 unless the bootstrap gains a
-second-stage mechanism. The preferred later workflow is a stable rescue kernel
-in p3 which loads a test kernel, DTB and initramfs from microSD and enters it
-with ARM `kexec`. That capability is a design target and must be verified on
-MSM8260 before it is relied upon. It reduces ordinary development reflashes
-without introducing an Android dependency or altering the partition table.
+Kernel/DT experiments no longer require replacing p3. The physically verified
+design uses a stable single-core rescue kernel in p3 which loads a full SMP
+kernel, DTB and initramfs from microSD and enters it with ARM `kexec`. Keeping CPU1 in
+bootloader reset avoids the unsupported and unsafe attempt to hot-unplug a
+running MSM8x60 Scorpion core. Two complete transitions passed on 2026-09-15,
+including a normal reboot back to the loader between them. Ordinary kernel and
+DT experiments now require a normal reboot through the loader, but neither
+fastboot nor recovery. See the
+[physical acceptance record](../research/device/current/boot/kexec-loader-acceptance.md).
 
-The removable-card controller must first pass physical detection, read/write
-and repeated cold-boot tests under target Linux. During the 2026-09-14 live
-audit only the soldered eMMC (`mmcblk0`) was present; microSD boot is therefore
-feasible architecture, not yet `VERIFIED_DEVICE`.
+The removable card now boots Debian read/write and supplies the verified
+second-stage kernel. Its Linux node varied across boots, so the initramfs uses
+the stable filesystem label `HIKARI_ROOT`. Card removal/failure recovery,
+sustained I/O and repeated cold-boot endurance remain separate tests.
 
 The implementation and its exact built-in/module boundary are maintained in
 [DEBIAN.md](DEBIAN.md). The p3 kernel is a complete rescue-capable kernel, not

@@ -37,8 +37,12 @@ Acceptance sequence:
    Wi-Fi traffic, Bluetooth transfer, NFC exchange or sensor readings.
 7. Validate `hikari-kexec --check`, then `--load`, then `--exec`. Confirm the
    new kernel release and matching `/lib/modules` tree after the transition.
-8. Repeat one kexec cycle and one cold boot while retaining working display,
-   USB terminal and the documented fastboot/recovery route.
+   This passed twice on 2026-09-15: the loader exposed only CPU0, each load set
+   `kexec_loaded=1`, and each SMP stage brought CPUs 0-1 online from microSD.
+8. A normal reboot from the first SMP stage returned to the loader and the USB
+   ACM console re-enumerated; the second transition then passed. A true
+   power-off cold boot, card-absent rescue behavior and display observation
+   across the transition remain to be tested separately.
 
 On root-mount failure, the initramfs must print `HIKARI ROOT FAILED` and retain
 an emergency shell on the display console; `ttyGS0` is also attempted. Failure

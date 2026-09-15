@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Stable p3 rescue/loader profile.  Keep CPU1 in the bootloader's reset state
+# so ARM kexec never has to hot-unplug a running MSM8x60 Scorpion core.
+# The second-stage kernel loaded from microSD remains the normal SMP build.
+# CONFIG_SMP is not set
+# CONFIG_HOTPLUG_CPU is not set
+CONFIG_KEXEC=y
