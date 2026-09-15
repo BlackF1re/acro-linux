@@ -26,25 +26,23 @@ for option in \
 	CONFIG_KEYBOARD_PMIC8XXX=y \
 	CONFIG_KEYBOARD_GPIO=y \
 	CONFIG_RTC_DRV_PM8XXX=y \
-	CONFIG_QCOM_PM8XXX_XOADC=y \
-	CONFIG_NFC=y \
-	CONFIG_NFC_HCI=y \
-	CONFIG_NFC_SHDLC=y \
-	CONFIG_NFC_PN544_I2C=y \
-	CONFIG_CFG80211=y \
-	CONFIG_BRCMFMAC=y \
-	CONFIG_BRCMFMAC_SDIO=y \
-	CONFIG_BT=y \
-	CONFIG_BT_HCIUART=y \
-	CONFIG_BT_HCIUART_SERDEV=y \
-	CONFIG_BT_HCIUART_BCM=y \
-	CONFIG_BT_HCIUART_H4=y \
-	CONFIG_RMI4_CORE=y \
-	CONFIG_RMI4_I2C=y \
-	CONFIG_RMI4_F11=y \
-	CONFIG_MPU3050_I2C=y \
-	CONFIG_BMA180=y; do
+	CONFIG_QCOM_PM8XXX_XOADC=y; do
 	grep -qx "$option" "$config" || { echo "missing $option" >&2; exit 1; }
+done
+
+# Leaf hardware is built in for diagnostic initramfs profiles and as modules
+# for Debian. Both forms satisfy this board-description gate.
+for symbol in \
+	CONFIG_NFC CONFIG_NFC_HCI CONFIG_NFC_SHDLC CONFIG_NFC_PN544_I2C \
+	CONFIG_CFG80211 CONFIG_BRCMFMAC CONFIG_BRCMFMAC_SDIO \
+	CONFIG_BT CONFIG_BT_HCIUART CONFIG_BT_HCIUART_SERDEV \
+	CONFIG_BT_HCIUART_BCM CONFIG_BT_HCIUART_H4 \
+	CONFIG_RMI4_CORE CONFIG_RMI4_I2C CONFIG_RMI4_F11 \
+	CONFIG_MPU3050_I2C CONFIG_BMA180; do
+	grep -Eq "^${symbol}=[ym]$" "$config" || {
+		echo "missing ${symbol}=y/m" >&2
+		exit 1
+	}
 done
 
 emmc=/soc/amba-bus/mmc@12400000
@@ -114,27 +112,41 @@ read -r _provider fw_index fw_flags <<<"$(fdtget -tu "$dtb" "$nfc" firmware-gpio
 [[ $en_index -eq 16 && $en_flags -eq 0 ]]
 [[ $fw_index -eq 26 && $fw_flags -eq 0 ]]
 
-# BCM4330 WLAN: SDCC4 four-bit/48 MHz, PM8058 S3 1.8 V, reset 130, host-wake 128.
+# BCM4330 WLAN: SDCC4 four-bit/48 MHz; its physical supply is PM8058 S3 at
+# 1.8 V, but the incomplete shared-rail model must not program S3 yet. Sony's
+# downstream host advertises the 2.7-2.9 V OCR bits despite that physical rail,
+# represented here by a logical fixed 2.8 V child supply. PM8058 GPIO38 FUNC2
+# supplies the BCM4330 32.768 kHz sleep clock. Sony bcmdhd directly drives
+# WL_RST_N GPIO130 and uses GPIO128 as its OOB HOST_WAKE interrupt. SDIO DAT1
+# IRQ cannot be advertised until the PL18x host implements enable_sdio_irq().
+wifi_vdd=/wifi-vdd-regulator
+[[ $(fdtget -ts "$dtb" "$wifi_vdd" compatible) == regulator-fixed ]]
+[[ $(fdtget -tu "$dtb" "$wifi_vdd" regulator-min-microvolt) -eq 2800000 ]]
+[[ $(fdtget -tu "$dtb" "$wifi_vdd" regulator-max-microvolt) -eq 2800000 ]]
+fdtget -p "$dtb" "$wifi_vdd" | grep -qx regulator-always-on
+! fdtget -p "$dtb" "$wifi_vdd" | grep -qx vin-supply
+wifi_sleep_clk="$pmic/gpio@150/wifi-sleep-clk-state"
+[[ $(fdtget -ts "$dtb" "$wifi_sleep_clk" pins) == gpio38 ]]
+[[ $(fdtget -ts "$dtb" "$wifi_sleep_clk" function) == func2 ]]
+[[ $(fdtget -tu "$dtb" "$wifi_sleep_clk" power-source) -eq 2 ]]
+[[ $(fdtget -tu "$dtb" "$wifi_sleep_clk" qcom,drive-strength) -eq 3 ]]
+fdtget -p "$dtb" "$wifi_sleep_clk" | grep -qx output-high
 [[ $(fdtget -ts "$dtb" "$wifi_host" status) == okay ]]
 [[ $(fdtget -tu "$dtb" "$wifi_host" bus-width) -eq 4 ]]
 [[ $(fdtget -tu "$dtb" "$wifi_host" max-frequency) -eq 48000000 ]]
 fdtget -p "$dtb" "$wifi_host" | grep -qx non-removable
-fdtget -p "$dtb" "$wifi_host" | grep -qx cap-sdio-irq
-[[ $(fdtget -tu "$dtb" "$rpm/regulators-1/s3" regulator-min-microvolt) -eq 1800000 ]]
-[[ $(fdtget -tu "$dtb" "$rpm/regulators-1/s3" regulator-max-microvolt) -eq 1800000 ]]
+! fdtget -p "$dtb" "$wifi_host" | grep -qx cap-sdio-irq
+fdtget -p "$dtb" "$wifi_host" | grep -qx mmc-pwrseq
 [[ $(fdtget -ts "$dtb" "$wifi_pwrseq" compatible) == mmc-pwrseq-simple ]]
+fdtget -p "$dtb" "$wifi_pwrseq" | grep -qx pinctrl-0
 read -r _provider wifi_reset_index wifi_reset_flags <<<"$(fdtget -tu "$dtb" "$wifi_pwrseq" reset-gpios)"
 [[ $wifi_reset_index -eq 130 && $wifi_reset_flags -eq 1 ]]
+[[ $(fdtget -tu "$dtb" "$wifi_pwrseq" post-power-on-delay-ms) -eq 200 ]]
 [[ $(fdtget -ts "$dtb" "$wifi" compatible) == 'brcm,bcm4330-fmac brcm,bcm4329-fmac' ]]
 [[ $(fdtget -tu "$dtb" "$wifi" reg) -eq 1 ]]
 [[ $(fdtget -ts "$dtb" "$wifi" interrupt-names) == host-wake ]]
-read -r wifi_irq_parent wifi_irq_index wifi_irq_flags <<<"$(fdtget -tu "$dtb" "$wifi" interrupts-extended 2>/dev/null || true)"
-if [[ -n ${wifi_irq_index:-} ]]; then
-	[[ $wifi_irq_index -eq 128 && $wifi_irq_flags -eq 4 ]]
-else
-	read -r wifi_irq_index wifi_irq_flags <<<"$(fdtget -tu "$dtb" "$wifi" interrupts)"
-	[[ $wifi_irq_index -eq 128 && $wifi_irq_flags -eq 4 ]]
-fi
+read -r wifi_irq_index wifi_irq_flags <<<"$(fdtget -tu "$dtb" "$wifi" interrupts)"
+[[ $wifi_irq_index -eq 128 && $wifi_irq_flags -eq 4 ]]
 
 # BCM4330 Bluetooth: GSBI6 UARTDM + hci_bcm serdev and exact Sony control GPIOs.
 [[ $(fdtget -tu "$dtb" "$bt_gsbi" qcom,mode) -eq 4 ]]
