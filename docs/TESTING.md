@@ -44,6 +44,22 @@ Acceptance sequence:
    power-off cold boot, card-absent rescue behavior and display observation
    across the transition remain to be tested separately.
 
+## Internal Wi-Fi
+
+Run the privacy-preserving physical gate on the phone:
+
+```sh
+scripts/check-hikari-wifi.sh --scan
+```
+
+It verifies the BCM4330 SDIO IDs, loaded `brcmfmac`, `wlan0` and at least one
+active-scan result while printing no SSID, BSSID or MAC address. The scan gate
+passed repeatedly on 2026-09-16 (six to nine BSSes) and establishes `PARTIAL`.
+After explicitly associating with an authorized test network and obtaining an
+address, add `--traffic-target` with a controlled reachable endpoint. Only a
+successful packet test plus reconnect and suspend/resume coverage can promote
+Wi-Fi to `VERIFIED`.
+
 On root-mount failure, the initramfs must print `HIKARI ROOT FAILED` and retain
 an emergency shell on the display console; `ttyGS0` is also attempted. Failure
 of that rescue path blocks adoption of the new p3 image. Internal eMMC rootfs

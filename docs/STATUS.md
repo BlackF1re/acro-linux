@@ -523,3 +523,23 @@ The second-stage `/lib/modules` tree matched its kernel release and 15 Hikari
 modules were live, including RMI4, NFC, Bluetooth UART and both motion-sensor
 drivers. This verifies module ABI/loading only; the associated real-world
 hardware functions retain their separate acceptance states.
+
+## Internal Wi-Fi bring-up (2026-09-16)
+
+The BCM4330 now enumerates natively on SDCC4 in the current 7.3-rc1 SMP stage.
+The decisive missing board fact was the 32.768 kHz sleep clock: Sony routes it
+through physical PM8058 GPIO38 alternate function 2. Attaching that pinctrl
+state to the MMC power sequence before releasing active-low WL_RST_N on
+TLMM130 produced physical SDIO `02d0:4330`. An experimental explicit PM8058 S3
+regulator was removed because S3 is shared and its complete constraints are
+not yet modelled; the accepted change leaves that physical rail in its
+established bootloader/RPM state.
+
+With owner-supplied stock BCM4330 B2 firmware and private board calibration,
+mainline `brcmfmac` creates `wlan0` and repeated active scans found between six
+and nine BSSes. This is `PARTIAL` with `VERIFIED_DEVICE` evidence, not yet
+`VERIFIED`: association, DHCP and real packet traffic have not passed. CLM and
+txcap blobs are absent, and deterministic device MAC provisioning, regulatory
+handling, reconnect endurance and suspend/resume remain open. Proprietary and
+device-specific contents are neither printed nor committed. See the
+[sanitized Wi-Fi record](../research/device/current/boot/internal-wifi-bringup-2026-09-16.md).

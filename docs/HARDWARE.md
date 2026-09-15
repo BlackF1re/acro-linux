@@ -46,6 +46,17 @@ provenance is in [SOURCES.md](SOURCES.md).
 | HDMI | platform hdmi_msm.* | hdmi_msm | MSM8x60 HDMI block; external PHY/controller unknown | VERIFIED_DEVICE / UNKNOWN |
 | USB | platform msm_otg, msm_hsusb* | legacy MSM OTG/host | MSM8x60 integrated USB path; exact PHY die unknown | VERIFIED_DEVICE / UNKNOWN |
 
+The BCM4330 WLAN half is soldered to MSM SDCC4 with a four-bit bus running up
+to 48 MHz. `HISTORICAL_SOURCE` Sony-generation board data identifies TLMM130 as
+active-low `WL_RST_N`, TLMM128 as the out-of-band `WL_HOST_WAKEUP`, and physical
+PM8058 GPIO38 alternate function 2 as the 32.768 kHz sleep clock. It also names
+PM8058 S3 at 1.8 V as the physical SDCC4 rail while advertising the 2.7--2.9 V
+MMC OCR bits. The current DT therefore uses a logical fixed OCR adapter but
+does not program shared S3 until all consumers and RPM constraints are known.
+On 2026-09-16 `VERIFIED_DEVICE` evidence showed SDIO `02d0:4330`, a loaded
+native `brcmfmac` interface, and repeated active scans. See the
+[sanitized bring-up record](../research/device/current/boot/internal-wifi-bringup-2026-09-16.md).
+
 The exact Fuji/Hikari USB connector wiring is `HISTORICAL_SOURCE` from the
 OpenSEMC Sony-generation board code uses explicitly zero-based PMIC indices:
 index 30 is physical PM8058 GPIO31 ID with a 1.5 kOhm S3 pull-up; index 10 is
