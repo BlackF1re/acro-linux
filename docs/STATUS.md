@@ -537,9 +537,14 @@ established bootloader/RPM state.
 
 With owner-supplied stock BCM4330 B2 firmware and private board calibration,
 mainline `brcmfmac` creates `wlan0` and repeated active scans found between six
-and nine BSSes. This is `PARTIAL` with `VERIFIED_DEVICE` evidence, not yet
-`VERIFIED`: association, DHCP and real packet traffic have not passed. CLM and
-txcap blobs are absent, and deterministic device MAC provisioning, regulatory
-handling, reconnect endurance and suspend/resume remain open. Proprietary and
-device-specific contents are neither printed nor committed. See the
+and nine BSSes. The phone then associated to an authorized network, acquired
+DHCP and a default route, resolved DNS, and passed real packet traffic. A
+forced supplicant stop plus address removal was followed by successful
+reassociation, fresh DHCP and another traffic pass. This is now `WORKING` with
+`VERIFIED_DEVICE` network evidence, not subsystem-level `VERIFIED`: CLM and
+txcap blobs are absent, and deterministic device MAC provisioning, complete
+regulatory handling, power measurement and suspend/resume remain open. The
+legacy firmware also cannot create the optional P2P interface; disabling P2P
+in the transient supplicant configuration avoids that non-STA error.
+Proprietary and device-specific contents are neither printed nor committed. See the
 [sanitized Wi-Fi record](../research/device/current/boot/internal-wifi-bringup-2026-09-16.md).

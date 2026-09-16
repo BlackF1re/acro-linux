@@ -54,7 +54,12 @@ PM8058 S3 at 1.8 V as the physical SDCC4 rail while advertising the 2.7--2.9 V
 MMC OCR bits. The current DT therefore uses a logical fixed OCR adapter but
 does not program shared S3 until all consumers and RPM constraints are known.
 On 2026-09-16 `VERIFIED_DEVICE` evidence showed SDIO `02d0:4330`, a loaded
-native `brcmfmac` interface, and repeated active scans. See the
+native `brcmfmac` interface, repeated active scans, association to an
+authorized network, DHCP/default-route acquisition, DNS and bidirectional
+packet traffic. A forced supplicant stop followed by address removal also
+reassociated, reacquired DHCP and passed traffic again. This establishes
+`WORKING`; stable device MAC provisioning, complete regulatory data, power
+measurement and suspend/resume remain open. See the
 [sanitized bring-up record](../research/device/current/boot/internal-wifi-bringup-2026-09-16.md).
 
 The exact Fuji/Hikari USB connector wiring is `HISTORICAL_SOURCE` from the

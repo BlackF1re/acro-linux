@@ -41,6 +41,7 @@ done
 if [[ -e $rootfs/.hikari-debootstrap-complete ]]; then
 	test -x "$rootfs/sbin/init"
 	test -x "$rootfs/usr/local/sbin/hikari-kexec"
+	test -x "$rootfs/usr/local/sbin/check-hikari-wifi"
 	test ! -e "$rootfs/etc/systemd/system/multi-user.target.wants/wpa_supplicant.service"
 	while IFS= read -r package; do
 		sudo awk -v wanted="$package" '

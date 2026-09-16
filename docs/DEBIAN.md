@@ -145,6 +145,11 @@ are not installed yet. During bring-up, root has no password and is available
 only on local framebuffer/USB consoles; this must be removed before networking
 is treated as production-ready.
 
+The physical BCM4330 STA test used a mode-`0600` configuration in `/run`, not a
+persistent credential. Its legacy firmware rejects creation of the optional
+P2P device, so bring-up configurations use `p2p_disabled=1`; ordinary station
+association and traffic remain functional. P2P itself is not verified.
+
 The BCM4330 firmware and Hikari calibration are proprietary inputs from the
 owner's stock Sony installation and are not committed or redistributed. With
 that stock system mounted read-only, install them into a rootfs using:

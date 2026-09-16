@@ -49,16 +49,25 @@ Acceptance sequence:
 Run the privacy-preserving physical gate on the phone:
 
 ```sh
-scripts/check-hikari-wifi.sh --scan
+/usr/local/sbin/check-hikari-wifi --scan
 ```
 
 It verifies the BCM4330 SDIO IDs, loaded `brcmfmac`, `wlan0` and at least one
 active-scan result while printing no SSID, BSSID or MAC address. The scan gate
-passed repeatedly on 2026-09-16 (six to nine BSSes) and establishes `PARTIAL`.
-After explicitly associating with an authorized test network and obtaining an
-address, add `--traffic-target` with a controlled reachable endpoint. Only a
-successful packet test plus reconnect and suspend/resume coverage can promote
-Wi-Fi to `VERIFIED`.
+passed repeatedly on 2026-09-16 (six to nine BSSes). After explicitly
+associating with an authorized test network and obtaining an address, add
+`--traffic-target` with a controlled reachable endpoint.
+
+The same physical boot subsequently passed association, DHCP, default route,
+DNS and five-packet traffic tests. It then passed a forced supplicant stop,
+address removal, reassociation, fresh DHCP acquisition and another traffic
+test. This promotes the implementation from `PARTIAL` to `WORKING`, with
+`VERIFIED_DEVICE` network evidence. Do not store test credentials in the
+repository or a distributable image. Keep a bring-up-only configuration in
+`/run`; set `p2p_disabled=1` because the legacy BCM4330 firmware cannot create
+the optional P2P device requested by default `wpa_supplicant` behavior.
+Suspend/resume and wake, stable device MAC provenance, regulatory/CLM coverage,
+and power measurements remain required before subsystem-level `VERIFIED`.
 
 On root-mount failure, the initramfs must print `HIKARI ROOT FAILED` and retain
 an emergency shell on the display console; `ttyGS0` is also attempted. Failure

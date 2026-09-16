@@ -92,6 +92,8 @@ sudo install -D -m 0644 "$repo_root/debian/etc/systemd/system/hikari-console.ser
 	"$rootfs/etc/systemd/system/hikari-console.service"
 sudo install -D -m 0755 "$repo_root/debian/usr/local/sbin/hikari-kexec" \
 	"$rootfs/usr/local/sbin/hikari-kexec"
+sudo install -D -m 0755 "$repo_root/scripts/check-hikari-wifi.sh" \
+	"$rootfs/usr/local/sbin/check-hikari-wifi"
 sudo ln -sfn ../hikari-console.service "$rootfs/etc/systemd/system/multi-user.target.wants/hikari-console.service"
 # Debian enables the system-wide supplicant during package configuration.
 # Bring-up networking is explicit and on-demand, so retain the binary and
