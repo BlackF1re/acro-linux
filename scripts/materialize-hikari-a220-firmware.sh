@@ -19,6 +19,14 @@ out=$(realpath -m -- "$out")
 for rel in $A220_FIRMWARE_FILES; do
   dest="$out/$rel"
   mkdir -p "$(dirname -- "$dest")"
+  case "$rel" in
+    qcom/leia_pm4_470.fw) expected=$A220_PM4_SHA256 ;;
+    qcom/leia_pfp_470.fw) expected=$A220_PFP_SHA256 ;;
+    *) echo "missing locked digest for $rel" >&2; exit 1 ;;
+  esac
+  if [[ -s $dest ]] && printf '%s  %s\n' "$expected" "$dest" | sha256sum -c - >/dev/null; then
+    continue
+  fi
   url="$LINUX_FIRMWARE_RAW/$LINUX_FIRMWARE_REF/$rel"
   python3 - "$url" "$dest" <<'PY'
 from pathlib import Path
@@ -40,8 +48,6 @@ tmp.replace(dst)
 PY
 done
 
-for rel in $A220_FIRMWARE_FILES; do
-  test -s "$out/$rel"
-done
-sha256sum "$out"/qcom/leia_pm4_470.fw "$out"/qcom/leia_pfp_470.fw
+printf '%s  %s\n' "$A220_PM4_SHA256" "$out/qcom/leia_pm4_470.fw" | sha256sum -c -
+printf '%s  %s\n' "$A220_PFP_SHA256" "$out/qcom/leia_pfp_470.fw" | sha256sum -c -
 echo "A220_FIRMWARE=PASS ref=$LINUX_FIRMWARE_REF dir=$out"
