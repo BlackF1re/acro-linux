@@ -1,6 +1,8 @@
 # Canonical imported Hikari kernel patch application order.
 # Imported hardware-support commits followed by project-owned corrections.
 # Pure bring-up logging patches are intentionally excluded.
+# The three DTS-only Hikari commits are carried by kernel/dts/ and applied
+# after this series, so they are not replayed against the generated base DTS.
 0001-clk-qcom-gdsc-add-LEGACY_FOOTSWITCH-support-for-MSM8.patch
 0002-clk-qcom-gdsc-add-RPM_ALWAYS_ON-flag.patch
 0003-dt-bindings-interconnect-qcom-add-msm8660-NoC.patch
@@ -31,10 +33,8 @@
 0031-drm-msm-mdp4-fail-safely-on-MSM8x60-clock-errors.patch
 0032-clk-qcom-keep-MSM8x60-MDP-reset-clocks-enabled.patch
 0033-clk-qcom-access-MSM8x60-MMCC-through-secure-IO.patch
-0034-arm-dts-qcom-add-Hikari-SCM-firmware-node.patch
 0035-firmware-qcom-avoid-modern-SCM-probes-on-MSM8x60.patch
 0036-fix-match-MSM8x60-secure-MMCC-access-ABI.patch
-0037-arm-dts-qcom-select-Hikari-BQ27520-G1-register-map.patch
 0038-clk-qcom-fix-MSM8x60-TV-halt-status-map.patch
 0039-dt-bindings-iommu-add-MSM8660-compatible.patch
 0043-drm-msm-mdp4-separate-DSI-video-vblank-from-commit-I.patch
@@ -53,7 +53,6 @@
 0056-drm-msm-dsi-accept-idle-MSM8x60-command-DMA-timeout.patch
 0057-clk-qcom-route-MSM8x60-DSI-through-DSI-pixel-RCG.patch
 0058-clk-qcom-skip-unreliable-MSM8x60-DSI-pixel-halt.patch
-0059-arm-dts-qcom-use-unique-Hikari-DSI1-clock-parents.patch
 0060-drm-msm-dsi-match-Hikari-video-host-timing.patch
 0061-drm-msm-dsi-match-Hikari-PHY-start-order.patch
 0062-drm-msm-mdp4-vote-scanout-memory-bandwidth.patch
