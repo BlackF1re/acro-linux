@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/leds/ams,as3676-backlight.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: AMS AS3676 Sony Hikari backlight, LEDs and ambient-light input
+
+maintainers:
+  - Xperia acro S Linux Project <noreply@example.invalid>
+
+properties:
+  compatible:
+    const: ams,as3676-backlight
+
+  reg:
+    maxItems: 1
+
+  ams,als-connected:
+    type: boolean
+    description:
+      The board routes an ambient-light photodiode to the AS3676 GPIO2 ADC
+      input. The ADC value is exposed through the standard IIO light ABI.
+
+required:
+  - compatible
+  - reg
+
+additionalProperties: false
+...

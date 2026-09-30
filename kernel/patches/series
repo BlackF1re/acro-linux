@@ -1,7 +1,6 @@
 # Canonical imported Hikari kernel patch application order.
-# These are the 36 historical commits exported from the former external
-# worktree. Project-owned corrections are applied strictly and committed by
-# scripts/materialize-hikari-kernel.sh after this imported history.
+# Imported hardware-support commits followed by project-owned corrections.
+# Pure bring-up logging patches are intentionally excluded.
 0001-clk-qcom-gdsc-add-LEGACY_FOOTSWITCH-support-for-MSM8.patch
 0002-clk-qcom-gdsc-add-RPM_ALWAYS_ON-flag.patch
 0003-dt-bindings-interconnect-qcom-add-msm8660-NoC.patch
@@ -15,18 +14,15 @@
 0011-fix-use-MDP4-clock-DT-ABI-names.patch
 0012-fix-correct-Hikari-DSI-clock-and-PHY-setup.patch
 0013-feat-add-Hikari-BQ24160-charging-support.patch
+0013b-power-supply-bq24160-consolidate-Hikari-policy.patch
 0014-fix-correct-Hikari-display-component-graph.patch
-0015-fix-preserve-BQ24160-charge-completion-state.patch
 0016-drm-msm-dsi-select-MSM8x60-V2-host-configuration.patch
-0017-power-supply-bq24160-report-status-transitions.patch
 0018-clk-qcom-fix-MSM8x60-DSI-slave-AHB-halt-bit.patch
 0019-drm-panel-send-complete-Hikari-MDV22-commands.patch
-0020-power-supply-bq24160-distinguish-fault-history.patch
 0021-drm-msm-dsi-correct-MSM8x60-link-clock-topology.patch
 0022-drm-msm-mdp4-make-voltage-rail-optional.patch
 0023-drm-msm-dsi-quiesce-MSM8x60-clocks-before-gating.patch
 0024-phy-qcom-usb-hs-avoid-redundant-fixed-rail-voltage-r.patch
-0025-power-supply-bq24160-log-charging-activation.patch
 0026-drm-msm-dsi-complete-MSM8x60-boot-state-quiesce.patch
 0027-drm-msm-dsi-quiesce-MSM8x60-boot-state-once.patch
 0028-dt-bindings-display-msm-allow-MDP4-power-domain.patch
@@ -64,7 +60,9 @@
 0065-drm-msm-support-contiguous-physical-scanout.patch
 0066-mfd-qcom-pm8xxx-add-PM8901-support.patch
 0067-dt-bindings-power-supply-add-BQ24160-OTG-guard.patch
-0068-power-supply-bq24160-coordinate-USB-OTG-lock.patch
 0069-pinctrl-qcom-map-PM8901-MPP-interrupts.patch
 0070-pinctrl-qcom-ssbi-mpp-honor-output-state.patch
 0071-pinctrl-qcom-use-PM8901-MPP-register-base.patch
+0076-watchdog-qcom-stop-watchdog-on-reboot.patch
+0077-thermal-qcom-add-MSM8660-TSENS-support.patch
+0078-mmc-mmci-read-Qualcomm-PIO-FIFO-address-window.patch

@@ -1,15 +1,15 @@
-name: Hikari build and audit
+name: Hikari SYSTEM kernel audit
 
 on:
   push:
-    branches:
-      - project tooling/hikari-mainline-audit
+    branches: [main]
   pull_request:
     paths:
       - .github/workflows/hikari-kernel-audit.yml
       - kernel/**
       - firmware/**
       - initramfs/**
+      - debian/**
       - scripts/**
       - tools/**
       - tests/**
@@ -33,14 +33,13 @@ env:
 
 jobs:
   static:
-    name: Static checks
+    name: Repository checks
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 1
-
-      - name: Shell and Python checks
+      - name: Shell, Python and repository invariants
         shell: bash
         run: |
           set -euxo pipefail
@@ -48,192 +47,84 @@ jobs:
           python3 -m compileall -q tools scripts tests
           python3 -m unittest discover -s tests -p 'test_*.py'
           python3 tools/sony_elf.py selftest
+          test ! -e kernel/dts/qcom-msm8260-sony-hikari-gpu.dtsi
+          test ! -e kernel/dts/qcom-msm8260-sony-hikari-safe.dtsi
+          test ! -e kernel/configs/hikari-boot5.fragment
+          test ! -e kernel/configs/hikari-firstboot.fragment
+          test ! -e scripts/check-hikari-gpu-profile.sh
+          test ! -e scripts/check-hikari-safe-profile.sh
+          test ! -e scripts/build-hikari-bundle.sh
+          test ! -d initramfs/hikari-firstboot
           git diff --check
 
-  dt-schema:
-    name: DT schema and profiles
+  system-kernel:
+    name: Build the single SYSTEM kernel profile
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 1
-
-      - name: Install DT build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            bc binutils bison build-essential device-tree-compiler flex \
-            gcc-arm-linux-gnueabihf libelf-dev libssl-dev python3-venv ripgrep
-
-      - name: Cache materialized Linux source
-        id: linux-cache
-        uses: actions/cache@v6
-        with:
-          path: ${{ runner.temp }}/linux-hikari
-          key: hikari-linux-v3-${{ hashFiles('kernel/source.lock', 'kernel/patches/**', 'kernel/dts/**', 'kernel/overrides/**', 'scripts/materialize-hikari-kernel.sh', 'scripts/prepare-hikari-kernel-tree.sh', 'scripts/apply-*.py') }}
-
-      - name: Materialize pinned Linux source
-        if: steps.linux-cache.outputs.cache-hit != 'true'
-        run: ./scripts/materialize-hikari-kernel.sh "$RUNNER_TEMP/linux-hikari"
-
-      - name: Verify materialized Linux source
-        run: |
-          set -euxo pipefail
-          test -d "$RUNNER_TEMP/linux-hikari/.git"
-          ./scripts/check-msm8660-mmcc-source.sh "$RUNNER_TEMP/linux-hikari"
-          python3 scripts/check-hikari-display-source.py "$RUNNER_TEMP/linux-hikari"
-          ./scripts/check-hikari-as3676-source.sh "$RUNNER_TEMP/linux-hikari"
-
-      - name: Install dtschema
-        run: |
-          python3 -m venv "$RUNNER_TEMP/dtschema"
-          "$RUNNER_TEMP/dtschema/bin/pip" install --disable-pip-version-check --upgrade pip dtschema
-          echo "$RUNNER_TEMP/dtschema/bin" >> "$GITHUB_PATH"
-
-      - name: Build all Hikari DT profiles in parallel
-        env:
-          HIKARI_BUILD_ROOT: ${{ runner.temp }}/hikari-schema-build
-          KERNEL_SRC: ${{ runner.temp }}/linux-hikari
-          BUILD_DIR: ${{ runner.temp }}/hikari-schema-build/linux
-          REQUIRE_USB_DEBUG: "1"
-          REQUIRE_DISPLAY_BRINGUP: "1"
-          REQUIRE_CHARGING: "1"
-        run: |
-          set -euxo pipefail
-          JOBS="$(nproc)" TARGETS='qcom/qcom-msm8260-sony-hikari.dtb qcom/qcom-msm8260-sony-hikari-gpu.dtb qcom/qcom-msm8260-sony-hikari-safe.dtb' \
-            ./scripts/build-hikari-kernel.sh
-
-      - name: Validate DT schemas and profile invariants
-        env:
-          KERNEL_SRC: ${{ runner.temp }}/linux-hikari
-          BUILD_DIR: ${{ runner.temp }}/hikari-schema-build/linux
-        run: |
-          set -euxo pipefail
-          make -C "$KERNEL_SRC" O="$BUILD_DIR" ARCH=arm CROSS_COMPILE="$CROSS_COMPILE" \
-            CHECK_DTBS=y -j"$(nproc)" \
-            qcom/qcom-msm8260-sony-hikari.dtb \
-            qcom/qcom-msm8260-sony-hikari-gpu.dtb \
-            qcom/qcom-msm8260-sony-hikari-safe.dtb
-          ./scripts/check-hikari-safe-profile.sh \
-            --config "$BUILD_DIR/.config" \
-            --dtb "$BUILD_DIR/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-safe.dtb"
-          ./scripts/check-hikari-gpu-profile.sh \
-            --config "$BUILD_DIR/.config" \
-            --dtb "$BUILD_DIR/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-gpu.dtb"
-
-  build:
-    name: Reproducible artifact bundle
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 1
-
       - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             bc binutils binutils-arm-linux-gnueabihf bison build-essential \
             device-tree-compiler flex gcc-arm-linux-gnueabihf \
-            libc6-dev-armhf-cross libelf-dev libssl-dev ripgrep
-
+            libc6-dev-armhf-cross libelf-dev libssl-dev python3-venv ripgrep
       - name: Cache materialized Linux source
         id: linux-cache
         uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/linux-hikari
-          key: hikari-linux-v3-${{ hashFiles('kernel/source.lock', 'kernel/patches/**', 'kernel/dts/**', 'kernel/overrides/**', 'scripts/materialize-hikari-kernel.sh', 'scripts/prepare-hikari-kernel-tree.sh', 'scripts/apply-*.py') }}
-
+          key: hikari-linux-system-v1-${{ hashFiles('kernel/source.lock', 'kernel/patches/**', 'kernel/dts/**', 'kernel/overrides/**', 'scripts/materialize-hikari-kernel.sh', 'scripts/prepare-hikari-kernel-tree.sh', 'scripts/apply-*.py') }}
       - name: Materialize pinned Linux source
         if: steps.linux-cache.outputs.cache-hit != 'true'
         run: ./scripts/materialize-hikari-kernel.sh "$RUNNER_TEMP/linux-hikari"
-
-      - name: Cache pinned BusyBox source
-        id: busybox-cache
-        uses: actions/cache@v6
-        with:
-          path: ${{ runner.temp }}/busybox-hikari
-          key: hikari-busybox-v1-${{ hashFiles('initramfs/source.lock', 'scripts/materialize-hikari-busybox.sh') }}
-
-      - name: Materialize pinned BusyBox source
-        if: steps.busybox-cache.outputs.cache-hit != 'true'
-        run: ./scripts/materialize-hikari-busybox.sh "$RUNNER_TEMP/busybox-hikari"
-
-      - name: Cache compiled build trees
-        uses: actions/cache@v6
-        with:
-          path: |
-            ${{ runner.temp }}/hikari-build/linux-hikari-current
-            ${{ runner.temp }}/hikari-build/busybox-hikari-current
-          key: hikari-build-v4-${{ hashFiles('kernel/source.lock', 'kernel/patches/**', 'kernel/dts/**', 'kernel/overrides/**', 'kernel/configs/**', 'firmware/a220/source.lock', 'initramfs/source.lock', 'initramfs/hikari-firstboot/**', 'scripts/build-hikari-*.sh', 'scripts/check-hikari-*.sh', 'scripts/materialize-hikari-a220-firmware.sh', 'scripts/prepare-hikari-kernel-tree.sh', 'tools/**') }}
-
-      - name: Build public Hikari bundle
+      - name: Verify source-backed Hikari support
+        run: |
+          set -euxo pipefail
+          ./scripts/check-msm8660-mmcc-source.sh "$RUNNER_TEMP/linux-hikari"
+          python3 scripts/check-hikari-display-source.py "$RUNNER_TEMP/linux-hikari"
+          ./scripts/check-hikari-as3676-source.sh "$RUNNER_TEMP/linux-hikari"
+      - name: Install dtschema
+        run: |
+          python3 -m venv "$RUNNER_TEMP/dtschema"
+          "$RUNNER_TEMP/dtschema/bin/pip" install --disable-pip-version-check dtschema
+          echo "$RUNNER_TEMP/dtschema/bin" >> "$GITHUB_PATH"
+      - name: Build and schema-check SYSTEM
         env:
           HIKARI_BUILD_ROOT: ${{ runner.temp }}/hikari-build
           KERNEL_SRC: ${{ runner.temp }}/linux-hikari
-          BUSYBOX_SRC: ${{ runner.temp }}/busybox-hikari
-          KERNEL_BUILD: ${{ runner.temp }}/hikari-build/linux-hikari-current
-          INITRAMFS_BUILD: ${{ runner.temp }}/hikari-build/hikari-initramfs-current
-          ARTIFACT_DIR: ${{ runner.temp }}/hikari-build/artifacts
+          BUILD_DIR: ${{ runner.temp }}/hikari-build/linux-hikari-current
+          KERNEL_BUILD_PROFILE: debian-smp
+          PRUNE_DEFAULT_MODULES: "1"
           REQUIRE_USB_DEBUG: "1"
           REQUIRE_DISPLAY_BRINGUP: "1"
           REQUIRE_CHARGING: "1"
         run: |
           set -euxo pipefail
-          rm -rf -- "$ARTIFACT_DIR"
-          JOBS="$(nproc)" ./scripts/build-hikari-bundle.sh
-
-      - name: Optionally package Sony ELF fastboot artifacts
-        if: ${{ github.event_name != 'pull_request' && vars.HIKARI_ALLOW_RPM_ARTIFACT_UPLOAD == 'true' }}
-        env:
-          HIKARI_BUILD_ROOT: ${{ runner.temp }}/hikari-build
-          HIKARI_RPM_PAYLOAD_B64: ${{ secrets.HIKARI_RPM_PAYLOAD_B64 }}
-        run: |
-          set -euxo pipefail
-          test -n "$HIKARI_RPM_PAYLOAD_B64" || {
-            echo 'HIKARI_ALLOW_RPM_ARTIFACT_UPLOAD=true but HIKARI_RPM_PAYLOAD_B64 is empty' >&2
-            exit 1
-          }
-          printf '%s' "$HIKARI_RPM_PAYLOAD_B64" | base64 --decode > "$RUNNER_TEMP/rpm.segment"
-          chmod 0600 "$RUNNER_TEMP/rpm.segment"
-          artifact_dir="$RUNNER_TEMP/hikari-build/artifacts"
-          kernel_build="$RUNNER_TEMP/hikari-build/linux-hikari-current"
-          for profile in display gpu safe; do
-            case "$profile" in
-              display)
-                dtb="$artifact_dir/display/qcom-msm8260-sony-hikari.dtb"
-                output="$artifact_dir/display/hikari-display-fastboot.elf"
-                ;;
-              gpu)
-                dtb="$artifact_dir/gpu/qcom-msm8260-sony-hikari-gpu.dtb"
-                output="$artifact_dir/gpu/hikari-gpu-fastboot.elf"
-                ;;
-              safe)
-                dtb="$artifact_dir/safe/qcom-msm8260-sony-hikari-safe.dtb"
-                output="$artifact_dir/safe/hikari-safe-fastboot.elf"
-                ;;
-            esac
-            ./scripts/package-hikari-fastboot.sh \
-              --kernel-build "$kernel_build" \
-              --zimage "$artifact_dir/common/zImage" \
-              --dtb "$dtb" \
-              --ramdisk "$artifact_dir/common/hikari-firstboot.cpio.gz" \
-              --rpm "$RUNNER_TEMP/rpm.segment" \
-              --output "$output"
-          done
-          sed -i 's/^fastboot_ready=.*/fastboot_ready=yes (explicit repository opt-in; supplied RPM firmware)/' \
-            "$artifact_dir/BUILD-MANIFEST.txt"
-          (
-            cd "$artifact_dir"
-            find common display gpu safe -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
-          )
-          rm -f -- "$RUNNER_TEMP/rpm.segment"
-
-      - name: Upload downloadable Hikari artifacts
+          KERNEL_FRAGMENT="$GITHUB_WORKSPACE/kernel/configs/hikari-boot6-display.fragment" \
+          KERNEL_EXTRA_FRAGMENTS="$GITHUB_WORKSPACE/kernel/configs/hikari-debian.fragment" \
+          TARGETS='zImage modules qcom/qcom-msm8260-sony-hikari.dtb' \
+            ./scripts/build-hikari-kernel.sh
+          make -C "$KERNEL_SRC" O="$BUILD_DIR" \
+            ARCH=arm CROSS_COMPILE="$CROSS_COMPILE" CHECK_DTBS=y -j"$(nproc)" \
+            qcom/qcom-msm8260-sony-hikari.dtb
+          ./scripts/check-hikari-usb-dtb.sh \
+            --config "$BUILD_DIR/.config" \
+            --dtb "$BUILD_DIR/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb"
+          ./scripts/check-hikari-pstore.sh \
+            --config "$BUILD_DIR/.config" \
+            --dtb "$BUILD_DIR/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb"
+      - name: Upload SYSTEM build evidence
         uses: actions/upload-artifact@v7
         with:
-          name: hikari-mainline-${{ github.sha }}
-          path: ${{ runner.temp }}/hikari-build/artifacts/
+          name: hikari-system-kernel-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/hikari-build/linux-hikari-current/.config
+            ${{ runner.temp }}/hikari-build/linux-hikari-current/System.map
+            ${{ runner.temp }}/hikari-build/linux-hikari-current/arch/arm/boot/zImage
+            ${{ runner.temp }}/hikari-build/linux-hikari-current/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb
           if-no-files-found: error
           retention-days: 14
           compression-level: 6

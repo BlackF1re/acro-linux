@@ -15,6 +15,7 @@ usage()
 stock_root=$(realpath -e -- "$1")
 target_root=$(realpath -e -- "$2")
 firmware_src="$stock_root/etc/firmware/fw_bcm4330b2.bin"
+bluetooth_patch_src="$stock_root/etc/firmware/BCM4330.hcd"
 calibration_src="$stock_root/etc/wifi/calibration"
 firmware_dir="$target_root/lib/firmware/brcm"
 
@@ -30,10 +31,16 @@ firmware_dir="$target_root/lib/firmware/brcm"
 	echo 'stock Hikari Wi-Fi calibration is missing' >&2
 	exit 1
 }
+[[ -f $bluetooth_patch_src && -s $bluetooth_patch_src ]] || {
+	echo 'stock BCM4330 Bluetooth patchram firmware is missing' >&2
+	exit 1
+}
 
 install -d -m 0755 "$firmware_dir"
 install -m 0644 "$firmware_src" "$firmware_dir/brcmfmac4330-sdio.bin"
 install -m 0600 "$calibration_src" \
 	"$firmware_dir/brcmfmac4330-sdio.sony,hikari.txt"
+install -m 0644 "$bluetooth_patch_src" \
+	"$firmware_dir/BCM4330B1.sony,hikari.hcd"
 
 echo 'HIKARI_BCM4330_PRIVATE_FIRMWARE=PASS'

@@ -1,0 +1,10 @@
+[Unit]
+Description=Bind the Hikari USB configfs gadget
+Before=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hikari-usb-gadget
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,31 @@
+From 5a3300f4a34a8a342977ba81d4b4ba708b2317bd Mon Sep 17 00:00:00 2001
+From: Emma Anholt <emma@anholt.net>
+Date: Wed, 18 Jun 2025 15:25:55 -0700
+Subject: [PATCH] freedreno/a2xx: Disable interpolated input intrinsics.
+
+We never wanted them, it appears to be a refactor bug.
+
+Fixes: 25d4943481d5 ("nir: make use_interpolated_input_intrinsics a nir_lower_io parameter")
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/8431>
+
+[hikari: adapt the upstream change to the NIR_PASS_V spelling in Mesa 25.0.7.]
+---
+ src/gallium/drivers/freedreno/a2xx/fd2_program.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/src/gallium/drivers/freedreno/a2xx/fd2_program.c b/src/gallium/drivers/freedreno/a2xx/fd2_program.c
+index c2501cae1e76..3de9921a46a0 100644
+--- a/src/gallium/drivers/freedreno/a2xx/fd2_program.c
++++ b/src/gallium/drivers/freedreno/a2xx/fd2_program.c
+@@ -84,8 +84,7 @@ fd2_fp_state_create(struct pipe_context *pctx,
+                 : tgsi_to_nir(cso->tokens, pctx->screen, false);
+ 
+    NIR_PASS_V(so->nir, nir_lower_io, nir_var_shader_in | nir_var_shader_out,
+-              ir2_glsl_type_size,
+-              nir_lower_io_use_interpolated_input_intrinsics);
++              ir2_glsl_type_size, 0);
+ 
+    if (ir2_optimize_nir(so->nir, true))
+       goto fail;
+-- 
+2.46.0

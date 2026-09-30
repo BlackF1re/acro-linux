@@ -66,9 +66,9 @@ CONFIG_MSM_IOMMU=y
 CONFIG_DRM_PANEL_RENESAS_R63306_TMD_MDV22=y
 CONFIG_DRM_FBDEV_EMULATION=y
 
-# Adreno A220 is part of DRM/MSM.  Keep the driver and its diagnostics ready in
-# every kernel, while the GPU DT node remains disabled except in the dedicated
-# GPU profile.  The exact Sony MSM8x60 OPP table is supplied by that profile.
+# Adreno A220 is part of DRM/MSM and enabled by the single Hikari DT.  Keep its
+# common OPP/devfreq support in the shared SYSTEM configuration; BOOT inherits
+# this and differs only through the small rescue-loader config delta.
 CONFIG_FW_LOADER=y
 CONFIG_PM_OPP=y
 CONFIG_PM_DEVFREQ=y

@@ -22,6 +22,26 @@ The complete sanitized device evidence is
 [socinfo.txt](../research/device/current/kernel/socinfo.txt); source
 provenance is in [SOURCES.md](SOURCES.md).
 
+## System memory
+
+Sony's Fuji board code defines 939 MiB of normal Linux RAM in three banks:
+`0x40200000-0x42dfffff`, `0x48000000-0x5fffffff` and
+`0x60000000-0x7fefffff`.  The target DT starts the first region at
+`0x40000000` so the upstream MSM8x60 code can reserve its leading 2 MiB for
+SMEM; it preserves the vendor gap below `0x48000000` and the final MiB above
+`0x7fefffff`.  The latter also contains the separate 128 KiB ramoops region.
+
+On 2026-09-25 the physical SYSTEM kernel reported 941 MiB described before
+SMEM and other reservations, 939 MiB normal RAM after the SMEM carveout, and
+`MemTotal: 928996 kB` (about 907 MiB usable by Linux), up from 643368 kB with
+the truncated bring-up DT.  `HIGHMEM` exposes the upper 255 MiB and the 64 MiB
+CMA pool remains reclaimable Linux memory needed for non-IOMMU display/GPU
+buffers.  A 640 MiB anonymous mapping passed full write/read cycles with both
+`0x55` and `0xaa`; no page, allocation, abort, Oops or panic followed.  FD220
+rendering remained functional.  Direct fbcon-to-kmscube master handoff emits
+two repeatable primary-interface underruns, which is a separate display
+transition issue rather than evidence of a RAM fault.
+
 ## Identified components and legacy topology
 
 | Function | Observed device / address | Legacy driver | Component identification | Confidence |
@@ -39,6 +59,8 @@ provenance is in [SOURCES.md](SOURCES.md).
 | Magnetometer | I2C 5-000c | akm8972 | AKM AKM8972 | VERIFIED_DEVICE |
 | Accelerometer | I2C 5-0018 | bma250 | Bosch BMA250 | VERIFIED_DEVICE |
 | Gyroscope | I2C 5-0068 | mpu3050 | InvenSense MPU-3050 | VERIFIED_DEVICE |
+| Headset insertion | TLMM GPIO61 | gpio-keys | high when inserted; `SW_HEADPHONE_INSERT` | VERIFIED_DEVICE |
+| Board analog sensors | PM8058 XOADC MPP3/7/10/8/5 | pm8xxx-xoadc | headset accessory/button ADC, battery thermistor, MSM thermistor, battery ID, charger-current monitor | VERIFIED_VENDOR_SOURCE / VERIFIED_DEVICE |
 | WLAN / Bluetooth | SDIO mmc2:0001; UART/power devices | bcm4330, bcm_bt_lpm, bt_power | Broadcom BCM4330 combo, identified by legacy names/topology | VERIFIED_DEVICE |
 | Audio / FM companion path | I2C 4-000d, platform timpani_codec | marimba-core, timpani_codec | Qualcomm legacy Timpani codec stack; physical die part number not direct | VERIFIED_DEVICE / HYPOTHESIS |
 | PMIC | SSBI msm_ssbi.0/.1 | pm8058-core, pm8901-core | Qualcomm PM8058 rev E3 and PM8901 rev 2.1 | VERIFIED_DEVICE |
@@ -54,7 +76,26 @@ PM8058 S3 at 1.8 V as the physical SDCC4 rail while advertising the 2.7--2.9 V
 MMC OCR bits. The current DT therefore uses a logical fixed OCR adapter but
 does not program shared S3 until all consumers and RPM constraints are known.
 On 2026-09-16 `VERIFIED_DEVICE` evidence showed SDIO `02d0:4330`, a loaded
-native `brcmfmac` interface, and repeated active scans. See the
+native `brcmfmac` interface, repeated active scans, association to an
+authorized network, DHCP/default-route acquisition, DNS and bidirectional
+packet traffic. A forced supplicant stop followed by address removal also
+reassociated, reacquired DHCP and passed traffic again. This establishes
+`WORKING`. On 2026-09-24 sustained receive traffic exposed a Qualcomm MMCI PIO
+FIFO-window bug (`MCI_STARTBITERR`/`-ECOMM`). The initial eight-address change
+still failed on a reconnect after 6493 seconds because it restarted the FIFO
+offset for every burst. The corrected implementation now advances across the
+complete cyclic FIFO window for one PIO service, exactly as Sony's downstream
+MSM SDCC driver does. On 2026-09-25 the physical device passed ten reconnects,
+about 355 MiB of HTTPS receive traffic, and another three reconnects with real
+traffic, without an MMCI, SDIO-header or backplane error. NetworkManager now
+supplies a stable per-installation MAC
+instead of accepting brcmfmac's random fallback. The BCM4330 B2 firmware also
+advertises P2P but cannot create that interface; the standard brcmfmac feature
+mask suppresses only P2P, removing its timeout while station reconnect and
+traffic continue to pass. Signed `wireless-regdb` is installed, but this old
+firmware exposes its own `99` regulatory domain and no verified Sony country
+map or CLM data has been found; regulatory completeness, power measurement and
+suspend/resume and a repeated long-idle reconnect therefore remain open. See the
 [sanitized bring-up record](../research/device/current/boot/internal-wifi-bringup-2026-09-16.md).
 
 The exact Fuji/Hikari USB connector wiring is `HISTORICAL_SOURCE` from the
@@ -98,3 +139,15 @@ The table describes physical evidence or the legacy driver's own component
 identification. It does not itself demonstrate a function, nor any target
 Linux implementation; see [STATUS.md](STATUS.md) and
 `status/hardware.yaml`.
+
+Sony's Fuji board data maps the five board analog inputs above to XOADC
+channels 5 through 9 in that order and powers the ADC reference from PM8058 L18
+at 2.2 V.  The target kernel now models those routes in DT.  Physical SYSTEM
+boot evidence on 2026-09-24 showed all five channels readable with their MPPs
+owned by XOADC.  The MSM NTC changed monotonically in the expected direction
+during CPU heating and is exported as the standard `msm-board-thermal` thermal
+zone using Sony's conversion table.  Headset, battery-ID and charge-monitor
+functional state transitions still require their individual acceptance tests.
+Headset insertion itself is a separate TLMM61 signal: repeated physical
+insert/remove cycles changed it cleanly, generated edge IRQs and updated the
+standard `SW_HEADPHONE_INSERT` input switch after Sony's 1500 ms debounce.

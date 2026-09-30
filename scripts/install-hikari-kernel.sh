@@ -8,6 +8,7 @@ kernel_src=${KERNEL_SRC:-/home/paul/xperia/src/linux}
 kernel_build=${KERNEL_BUILD:-/home/paul/xperia/build/linux-hikari-current}
 rootfs=${ROOTFS_DIR:-/home/paul/xperia/build/hikari-rootfs-current}
 initramfs=${INITRAMFS:-/home/paul/xperia/build/hikari-root-initramfs-current/hikari-root.cpio.gz}
+a220_firmware=${A220_FIRMWARE_DIR:-/home/paul/xperia/build/hikari-a220-firmware-current}
 dtb="$kernel_build/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb"
 boot_dir="$rootfs/boot/hikari-next"
 
@@ -15,6 +16,12 @@ for input in "$kernel_build/arch/arm/boot/zImage" "$dtb" "$initramfs"; do
 	test -s "$input" || { echo "missing kernel input: $input" >&2; exit 1; }
 done
 test -x "$rootfs/sbin/init" || { echo "not a Debian rootfs: $rootfs" >&2; exit 1; }
+
+"$repo_root/scripts/materialize-hikari-a220-firmware.sh" "$a220_firmware"
+sudo install -D -m 0644 "$a220_firmware/qcom/leia_pm4_470.fw" \
+	"$rootfs/lib/firmware/qcom/leia_pm4_470.fw"
+sudo install -D -m 0644 "$a220_firmware/qcom/leia_pfp_470.fw" \
+	"$rootfs/lib/firmware/qcom/leia_pfp_470.fw"
 
 sudo make -C "$kernel_src" O="$kernel_build" ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- \
 	INSTALL_MOD_PATH="$rootfs" INSTALL_MOD_STRIP=1 modules_install
@@ -27,7 +34,16 @@ sudo install -m 0644 "$initramfs" "$boot_dir/hikari-root.cpio.gz"
 	sudo sh -c 'sha256sum zImage qcom-msm8260-sony-hikari.dtb hikari-root.cpio.gz > SHA256SUMS'
 )
 kernel_release=$(make -s -C "$kernel_src" O="$kernel_build" ARCH=arm kernelrelease)
+printf '%s\n' "$kernel_release" | sudo tee "$boot_dir/kernel-release" >/dev/null
 sudo rm -f "$rootfs/lib/modules/$kernel_release/build" \
 	"$rootfs/lib/modules/$kernel_release/source"
 sudo depmod -b "$rootfs" "$kernel_release"
+# This is the single canonical Hikari rootfs, not a multi-kernel distribution.
+# Remove stale module ABI directories so repeated bring-up builds do not grow
+# the image indefinitely or leave modprobe ambiguity behind.
+test -e "$rootfs/.hikari-debootstrap-owned"
+while IFS= read -r old_release; do
+	[ "$old_release" = "$kernel_release" ] && continue
+	sudo find "$rootfs/lib/modules/$old_release" -depth -delete
+done < <(find "$rootfs/lib/modules" -mindepth 1 -maxdepth 1 -type d -printf '%f\n')
 printf 'installed kernel %s into %s\n' "$kernel_release" "$rootfs"

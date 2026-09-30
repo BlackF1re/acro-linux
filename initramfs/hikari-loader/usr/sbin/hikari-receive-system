@@ -1,0 +1,79 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Receive one XMODEM update archive, verify it in staging, then replace the
+# active SYSTEM boot inputs.  The current files survive every failed receive.
+set -eu
+
+/usr/sbin/hikari-mount-system
+boot_dir=/system/boot/hikari-next
+incoming="$boot_dir/.incoming"
+archive=/run/hikari-system-update.tar
+
+mkdir -p "$boot_dir"
+rm -rf "$incoming"
+mkdir "$incoming"
+rm -f "$archive"
+
+case ${1:-usb} in
+usb)
+	echo 'USB network receiver ready on 192.168.77.2:7777.'
+	echo 'Start scripts/send-hikari-system-update.sh on the host.'
+	# BusyBox nc may report a timeout after it has already copied the peer's
+	# FIN-terminated stream.  Do not turn that into a false transport failure:
+	# the mandatory archive member and SHA-256 verification below decides whether
+	# the received stream is complete and authentic.
+	if ! timeout 180 nc -l -p 7777 -w 5 >"$archive"; then
+		[ -s "$archive" ] || { echo 'USB receive failed before data arrived' >&2; exit 1; }
+	fi
+	;;
+xmodem)
+	echo 'XMODEM fallback ready; start the host sender with --xmodem.'
+	rx "$archive"
+	;;
+*)
+	echo "usage: ${0##*/} [usb|xmodem]" >&2
+	exit 2
+	;;
+esac
+[ -s "$archive" ] || { echo 'empty update archive' >&2; exit 1; }
+
+members=$(tar -tf "$archive")
+expected='zImage
+qcom-msm8260-sony-hikari.dtb
+hikari-root.cpio.gz
+kernel-release
+modules.tar.gz
+SHA256SUMS'
+[ "$members" = "$expected" ] || {
+	echo 'update contains unexpected paths or is incomplete' >&2
+	exit 1
+}
+tar -xf "$archive" -C "$incoming"
+(cd "$incoming" && sha256sum -c SHA256SUMS)
+release=$(cat "$incoming/kernel-release")
+case "$release" in *[!A-Za-z0-9._+-]*|'') echo 'unsafe kernel release' >&2; exit 1;; esac
+tar -tzf "$incoming/modules.tar.gz" | grep -qx "lib/modules/$release/" || {
+	echo 'module archive does not match kernel release' >&2
+	exit 1
+}
+tar -xzpf "$incoming/modules.tar.gz" -C /system
+for module_dir in /system/lib/modules/*; do
+	[ -d "$module_dir" ] || continue
+	[ "${module_dir##*/}" = "$release" ] && continue
+	find "$module_dir" -depth -delete
+done
+
+# Keep the exact verified bundle in the active directory.  Besides making the
+# on-card state auditable, hikari-system verifies this same manifest before it
+# enters the second kernel; omitting modules.tar.gz here made every otherwise
+# successful update unbootable.
+for file in zImage qcom-msm8260-sony-hikari.dtb hikari-root.cpio.gz kernel-release modules.tar.gz SHA256SUMS; do
+	mv -f "$incoming/$file" "$boot_dir/$file.new"
+done
+sync
+for file in zImage qcom-msm8260-sony-hikari.dtb hikari-root.cpio.gz kernel-release modules.tar.gz SHA256SUMS; do
+	mv -f "$boot_dir/$file.new" "$boot_dir/$file"
+done
+sync
+rm -rf "$incoming" "$archive"
+echo 'SYSTEM update installed and checksum-verified.'

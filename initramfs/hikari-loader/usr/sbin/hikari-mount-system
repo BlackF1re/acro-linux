@@ -1,0 +1,16 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+set -eu
+
+mountpoint -q /system && exit 0
+mkdir -p /system
+tries=0
+while [ "$tries" -lt 10 ]; do
+	if mount -t ext4 -o rw LABEL=HIKARI_ROOT /system 2>/dev/null; then
+		exit 0
+	fi
+	tries=$((tries + 1))
+	sleep 1
+done
+echo 'HIKARI_ROOT is not available' >&2
+exit 1

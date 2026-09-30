@@ -1,0 +1,53 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Converge the microSD root tree from a checksum-pinned archive received over
+# the private USB NCM link. BOOT itself remains resident in RAM throughout.
+set -eu
+
+expected=${1:-}
+case "$expected" in
+	*[!0-9a-f]*|'') echo "usage: ${0##*/} SHA256" >&2; exit 2 ;;
+esac
+[ "${#expected}" -eq 64 ] || { echo 'SHA256 must contain 64 hex digits' >&2; exit 2; }
+
+/usr/sbin/hikari-mount-system
+archive=/system/.hikari-rootfs-update.tar.gz
+rm -f "$archive"
+echo 'Rootfs receiver ready on 192.168.77.2:7778.'
+# See hikari-receive-system: checksum validation below, rather than nc's
+# post-EOF timeout status, is authoritative for a completed transfer.
+if ! timeout 600 nc -l -p 7778 -w 5 >"$archive"; then
+	[ -s "$archive" ] || { echo 'USB receive failed before data arrived' >&2; exit 1; }
+fi
+[ -s "$archive" ] || { echo 'empty rootfs archive' >&2; exit 1; }
+actual=$(sha256sum "$archive" | sed 's/[[:space:]].*//')
+[ "$actual" = "$expected" ] || { echo 'rootfs archive checksum mismatch' >&2; exit 1; }
+
+members=$(tar -tzf "$archive")
+printf '%s\n' "$members" | grep -qx './.hikari-debootstrap-owned' || {
+	echo 'archive is not the canonical Hikari rootfs' >&2
+	exit 1
+}
+if printf '%s\n' "$members" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+	echo 'archive contains an unsafe path' >&2
+	exit 1
+fi
+
+# BusyBox tar deliberately rejects otherwise valid Debian usr-merge links
+# such as usr/sbin/init -> ../lib/systemd/systemd.  Extract from inside the
+# mounted Debian tree with Debian's GNU tar so its normal filesystem layout is
+# preserved exactly.
+[ -x /system/usr/bin/tar ] || {
+	echo 'installed rootfs has no GNU tar; refusing an unsafe overlay update' >&2
+	exit 1
+}
+chroot /system /usr/bin/tar -xzpf /.hikari-rootfs-update.tar.gz
+release=$(cat /system/boot/hikari-next/kernel-release)
+for module_dir in /system/lib/modules/*; do
+	[ -d "$module_dir" ] || continue
+	[ "${module_dir##*/}" = "$release" ] && continue
+	find "$module_dir" -depth -delete
+done
+sync
+rm -f "$archive"
+echo 'SYSTEM rootfs installed and checksum-verified.'

@@ -17,6 +17,86 @@
 
 /* MSM8x60's second SSBI arbiter connects the four-MPP PM8901. */
 &{/} {
+	/*
+	 * Fuji's board thermistor is routed through PM8058 MPP10 to XOADC
+	 * AMUX7.  The voltage/temperature curve is the exact scale_msm_therm
+	 * table from Sony's board kernel, expressed in the units returned by
+	 * the mainline XOADC consumer API (microvolts and millicelsius).
+	 */
+	hikari_msm_therm: msm-thermal-sensor {
+		compatible = "generic-adc-thermal";
+		#thermal-sensor-cells = <0>;
+		io-channels = <&pm8058_xoadc 0x00 0x07>;
+		io-channel-names = "sensor-channel";
+		temperature-lookup-table = <
+			(-30000) 2150000
+			(-20000) 2107000
+			(-10000) 2037000
+			(0)      1929000
+			(10000)  1776000
+			(20000)  1579000
+			(25000)  1467000
+			(30000)  1349000
+			(40000)  1108000
+			(50000)   878000
+			(60000)   677000
+			(70000)   513000
+			(80000)   385000
+			(90000)   287000
+			(100000)  215000
+			(110000)  186000
+			(120000)  107000
+		>;
+	};
+
+	/*
+	 * The removable pack NTC is fed from L18 (2.2 V) through 100 kOhm.
+	 * Hikari accepts two Sony battery families whose non-overlapping
+	 * resistance ranges allow one voltage-ordered table to describe both.
+	 */
+	hikari_battery_therm: battery-thermal-sensor {
+		compatible = "generic-adc-thermal";
+		#thermal-sensor-cells = <0>;
+		io-channels = <&pm8058_xoadc 0x00 0x06>;
+		io-channel-names = "sensor-channel";
+		temperature-lookup-table = <
+			(-20000) 1416245
+			(0)      1353846
+			(5000)   1329402
+			(10000)  1301674
+			(15000)  1270946
+			(20000)  1238041
+			(25000)  1204525
+			(30000)  1171001
+			(35000)  1138736
+			(40000)  1108189
+			(45000)  1080407
+			(50000)  1055359
+			(55000)  1033510
+			(60000)  1014655
+			(65000)   997814
+			(70000)   983858
+			(100000)  934905
+			(-20000)  885783
+			(0)       725469
+			(5000)    674341
+			(10000)   621808
+			(15000)   570370
+			(20000)   520611
+			(25000)   473155
+			(30000)   430088
+			(35000)   392276
+			(40000)   357454
+			(45000)   327660
+			(50000)   301812
+			(55000)   280279
+			(60000)   261674
+			(65000)   244444
+			(70000)   232200
+			(100000)  185348
+		>;
+	};
+
 	pm8901_ssbi: ssbi@c00000 {
 		compatible = "qcom,ssbi";
 		reg = <0x00c00000 0x1000>;
@@ -80,6 +160,20 @@
 	};
 };
 
+&{/thermal-zones} {
+	battery-pack {
+		polling-delay-passive = <2000>;
+		polling-delay = <10000>;
+		thermal-sensors = <&hikari_battery_therm>;
+	};
+
+	msm-board-thermal {
+		polling-delay-passive = <1000>;
+		polling-delay = <5000>;
+		thermal-sensors = <&hikari_msm_therm>;
+	};
+};
+
 /*
  * Exact downstream rails:
  *   ClearPad VDD        = PM8901 L1, 3.05 V
@@ -124,6 +218,12 @@
 			regulator-min-microvolt = <2850000>;
 			regulator-max-microvolt = <2850000>;
 		};
+
+		/* Fuji/Hikari uses L18 as the 2.2 V XOADC reference supply. */
+		pm8058_l18: l18 {
+			regulator-min-microvolt = <2200000>;
+			regulator-max-microvolt = <2200000>;
+		};
 	};
 };
 
@@ -163,6 +263,34 @@
 		bias-disable;
 	};
 
+	hikari_mpu3050_irq: mpu3050-irq-state {
+		pins = "gpio30";
+		function = "gpio";
+		input-enable;
+		bias-disable;
+	};
+
+	hikari_akm8972_irq: akm8972-irq-state {
+		pins = "gpio31";
+		function = "gpio";
+		input-enable;
+		bias-disable;
+	};
+
+	hikari_apds9702_irq: apds9702-irq-state {
+		pins = "gpio34";
+		function = "gpio";
+		input-enable;
+		bias-disable;
+	};
+
+	hikari_bma250_irq: bma250-irq-state {
+		pins = "gpio41";
+		function = "gpio";
+		input-enable;
+		bias-disable;
+	};
+
 	hikari_volume_down: volume-down-state {
 		pins = "gpio73";
 		function = "gpio";
@@ -172,6 +300,14 @@
 
 	hikari_sim_detect: sim-detect-state {
 		pins = "gpio94";
+		function = "gpio";
+		input-enable;
+		bias-disable;
+	};
+
+	/* Sony's simple-remote driver uses TLMM61 as the plug-presence IRQ. */
+	hikari_headset_detect: headset-detect-state {
+		pins = "gpio61";
 		function = "gpio";
 		input-enable;
 		bias-disable;
@@ -250,12 +386,92 @@
 };
 
 &pm8058_mpps {
+	/*
+	 * Exact Fuji/Hikari XOADC routing from board-semc_fuji.c:
+	 * MPP3 -> AMUX5 (headset), MPP7 -> AMUX6 (battery thermistor),
+	 * MPP10 -> AMUX7 (MSM thermistor), MPP8 -> AMUX8 (battery ID),
+	 * and MPP5 -> AMUX9 (charger current monitor).
+	 */
+	hikari_xoadc_mpp3: xoadc-mpp3-state {
+		pins = "mpp3";
+		function = "analog";
+		input-enable;
+		bias-high-impedance;
+		qcom,amux-route = <PMIC_MPP_AMUX_ROUTE_CH5>;
+	};
+
+	hikari_xoadc_mpp5: xoadc-mpp5-state {
+		pins = "mpp5";
+		function = "analog";
+		input-enable;
+		bias-high-impedance;
+		/* Value 4 is AMUX9 on the SSBI PM8058 MPP controller. */
+		qcom,amux-route = <4>;
+	};
+
+	hikari_xoadc_mpp7: xoadc-mpp7-state {
+		pins = "mpp7";
+		function = "analog";
+		input-enable;
+		bias-high-impedance;
+		qcom,amux-route = <PMIC_MPP_AMUX_ROUTE_CH6>;
+	};
+
+	hikari_xoadc_mpp8: xoadc-mpp8-state {
+		pins = "mpp8";
+		function = "analog";
+		input-enable;
+		bias-high-impedance;
+		qcom,amux-route = <PMIC_MPP_AMUX_ROUTE_CH8>;
+	};
+
+	hikari_xoadc_mpp10: xoadc-mpp10-state {
+		pins = "mpp10";
+		function = "analog";
+		input-enable;
+		bias-high-impedance;
+		qcom,amux-route = <PMIC_MPP_AMUX_ROUTE_CH7>;
+	};
+
 	/* PM8058 MPP11: VBUS detect, legacy zero-based index 10. */
 	hikari_usb_vbus_detect: usb-vbus-detect-state {
 		pins = "mpp11";
 		function = "digital";
 		input-enable;
 		power-source = <PM8058_MPP_S3>;
+	};
+};
+
+&pm8058_xoadc {
+	xoadc-ref-supply = <&pm8058_l18>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&hikari_xoadc_mpp3 &hikari_xoadc_mpp5
+		     &hikari_xoadc_mpp7 &hikari_xoadc_mpp8
+		     &hikari_xoadc_mpp10>;
+
+	adc-channel@5 {
+		reg = <0x00 0x05>;
+		label = "headset-accessory";
+	};
+
+	adc-channel@6 {
+		reg = <0x00 0x06>;
+		label = "battery-thermistor";
+	};
+
+	adc-channel@7 {
+		reg = <0x00 0x07>;
+		label = "msm-thermistor";
+	};
+
+	adc-channel@8 {
+		reg = <0x00 0x08>;
+		label = "battery-id";
+	};
+
+	adc-channel@9 {
+		reg = <0x00 0x09>;
+		label = "charger-current-monitor";
 	};
 };
 
@@ -282,7 +498,8 @@
 	hikari_gpio_keys: gpio-keys {
 		compatible = "gpio-keys";
 		pinctrl-names = "default";
-		pinctrl-0 = <&hikari_volume_up &hikari_volume_down &hikari_sim_detect>;
+		pinctrl-0 = <&hikari_volume_up &hikari_volume_down
+			     &hikari_sim_detect &hikari_headset_detect>;
 
 		volume-up-key {
 			label = "Volume Up";
@@ -307,6 +524,16 @@
 			linux,code = <SW_JACK_PHYSICAL_INSERT>;
 			gpios = <&tlmm 94 GPIO_ACTIVE_HIGH>;
 			debounce-interval = <100>;
+			wakeup-source;
+		};
+
+		headset-detect-switch {
+			label = "Headset detection";
+			linux,input-type = <EV_SW>;
+			linux,code = <SW_HEADPHONE_INSERT>;
+			/* Physical testing and Sony's inverted status path: high = inserted. */
+			gpios = <&tlmm 61 GPIO_ACTIVE_HIGH>;
+			debounce-interval = <1500>;
 			wakeup-source;
 		};
 	};
@@ -352,6 +579,11 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&hikari_touch_irq>;
 		vdd-supply = <&pm8901_l1>;
+		/* Hikari has one 3.05 V ClearPad rail.  RMI4 names both
+		 * logical consumers, so both map to the same physical supply. */
+		vio-supply = <&pm8901_l1>;
+		/* Sony's ClearPad driver waits 400 ms after enabling this rail. */
+		syna,startup-delay-ms = <400>;
 		#address-cells = <1>;
 		#size-cells = <0>;
 
@@ -370,6 +602,18 @@
  * The mainline PN544 HCI driver owns the exact OFF/ON/FWDL toggle sequence.
  */
 &gsbi8_i2c {
+	proximity@54 {
+		compatible = "avago,apds9702";
+		reg = <0x54>;
+		interrupts-extended = <&tlmm 34 IRQ_TYPE_EDGE_BOTH>;
+		dout-gpios = <&tlmm 34 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&hikari_apds9702_irq>;
+		/* Exact Hikari trg/pwr/burst/freq/duration/threshold/filter. */
+		avago,control-word = <0xdfbc>;
+		wakeup-source;
+	};
+
 	nfc@28 {
 		compatible = "nxp,pn544-i2c";
 		reg = <0x28>;
@@ -401,6 +645,9 @@
 		reg = <0x68>;
 		vlogic-supply = <&pm8058_l8>;
 		vdd-supply = <&pm8058_l10>;
+		interrupts-extended = <&tlmm 30 IRQ_TYPE_EDGE_RISING>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&hikari_mpu3050_irq>;
 		mount-matrix = "0", "1", "0",
 			       "1", "0", "0",
 			       "0", "0", "-1";
@@ -414,10 +661,26 @@
 				reg = <0x18>;
 				vddio-supply = <&pm8058_l8>;
 				vdd-supply = <&pm8058_l10>;
+				interrupts-extended = <&tlmm 41 IRQ_TYPE_EDGE_RISING>;
+				pinctrl-names = "default";
+				pinctrl-0 = <&hikari_bma250_irq>;
 				mount-matrix = "1", "0", "0",
 					       "0", "-1", "0",
 					       "0", "0", "-1";
 			};
 		};
+	};
+
+	magnetometer@c {
+		compatible = "asahi-kasei,ak8972";
+		reg = <0x0c>;
+		vdd-supply = <&pm8058_l10>;
+		vid-supply = <&pm8058_l8>;
+		interrupts-extended = <&tlmm 31 IRQ_TYPE_LEVEL_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&hikari_akm8972_irq>;
+		mount-matrix = "-1", "0", "0",
+			       "0", "1", "0",
+			       "0", "0", "-1";
 	};
 };

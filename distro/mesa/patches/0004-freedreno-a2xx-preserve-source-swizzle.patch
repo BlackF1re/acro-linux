@@ -1,0 +1,66 @@
+From a66fce391080ff62e60de3766ff1ad51857ff6ac Mon Sep 17 00:00:00 2001
+From: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Date: Mon, 3 Aug 2026 17:06:28 +0300
+Subject: [PATCH] freedreno/a2xx: keep the swizzle when a source modifier folds
+
+A swizzled source loses its swizzle as soon as a negate or an absolute value
+is applied to it:
+
+  v_in.wzyx * 0.5      MULADDv  export0 = C0.xxxx,  R0.wzyx, C0.xxxx
+  -v_in.wzyx * 0.5     MULADDv  export0 = C0.xxxx, -R0,      C0.xxxx
+  abs(v_in.wzyx)       MULADDv  export0 = C0.xxxx, |R0|,     C0.xxxx
+
+The components read are whatever the register happens to hold in order, so
+the result is wrong wherever the swizzle was not the identity.
+
+The modifier is folded by chasing past the fneg or fabs to the value
+underneath, and that intermediate instruction carried a swizzle of its own.
+nir_legacy_chase_alu_src() composes the two and hands back the result, but we
+built the swizzle from the original source, which by then describes only the
+modifier's own trivially swizzled result.
+
+Build it from the chased source instead:
+
+  -v_in.wzyx * 0.5     MULADDv  export0 = C0.xxxx, -R0.wzyx,  C0.xxxx
+  abs(v_in.wzyx)       MULADDv  export0 = C0.xxxx, |R0.wzyx|, C0.xxxx
+
+This reaches much further than the obvious abs() and negate cases.  ceil()
+lowers to fneg(ffloor(fneg(a))) and mod() to a - b * floor(a / b), so both
+fold a modifier over a swizzled source, and the inverse trigonometric
+functions are built the same way.
+
+Signed-off-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/43606>
+
+---
+diff --git a/src/gallium/drivers/freedreno/a2xx/ir2_nir.c b/src/gallium/drivers/freedreno/a2xx/ir2_nir.c
+index a3d0abcf1d9..9ea93355adf 100644
+--- a/src/gallium/drivers/freedreno/a2xx/ir2_nir.c
++++ b/src/gallium/drivers/freedreno/a2xx/ir2_nir.c
+@@ -430,17 +430,20 @@ emit_alu(struct ir2_context *ctx, nir_alu_instr *alu)
+    for (int i = 0; i < info->num_inputs; i++) {
+       nir_alu_src *src = &alu->src[i];
+ 
+-      /* compress swizzle with writemask when applicable */
++      nir_legacy_alu_src legacy_src =
++         nir_legacy_chase_alu_src(src, true /* fuse_abs */);
++
++      /* compress swizzle with writemask when applicable.  Take it from the
++       * chased source: folding a neg or an abs skips over an instruction that
++       * carried a swizzle of its own, and only the chase composes the two.
++       */
+       unsigned swiz = 0, j = 0;
+       for (int i = 0; i < 4; i++) {
+          if (!(legacy_dest.write_mask & 1 << i) && !info->output_size)
+             continue;
+-         swiz |= swiz_set(src->swizzle[i], j++);
++         swiz |= swiz_set(legacy_src.swizzle[i], j++);
+       }
+ 
+-      nir_legacy_alu_src legacy_src =
+-         nir_legacy_chase_alu_src(src, true /* fuse_abs */);
+-
+       instr->src[i] = make_legacy_src(ctx, legacy_src.src);
+       instr->src[i].swizzle = swiz_merge(instr->src[i].swizzle, swiz);
+       instr->src[i].negate = legacy_src.fneg;
+

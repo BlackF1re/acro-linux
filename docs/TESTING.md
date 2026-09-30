@@ -1,66 +1,70 @@
-# Physical acceptance tests
+# Physical acceptance
 
-## Debian migration checkpoint
+Run checks after static build validation. Record durable facts in
+`status/hardware.yaml`; keep raw logs under `research/device/current/` only
+when they contain evidence not represented elsewhere.
 
-The first attempt completed the storage portion of steps 1--3: the retained
-kernel log showed `mmcblk0p1` mounted read/write, `HIKARI ROOT READY`, and
-systemd running from Debian. It failed the display portion before userspace
-because DRM/MSM returned `-ENODEV` when the build accidentally omitted the
-required physical-scanout source patch. The corrected build has a source-code
-gate in addition to its Kconfig/DTB gates. Repeat the sequence below with the
-replacement artifact; do not treat the prior black boot as a card/rootfs
-failure.
+## BOOT and update path
 
-The next candidate corrected that KMS omission and proved the Debian/rootfs
-and USB-console path, but not the panel. DRM registered a connected 720x1280
-connector and fb0 while the physical display stayed black because the first
-MDV22 command DMA transfer returned `-ETIMEDOUT`; blank/unblank reproduced it.
-The late streaming-DMA experiment is therefore rejected. Retest with the
-physically accepted coherent DSI command-buffer path restored.
+1. Cold boot p3 and confirm the visible banner ends in `BOOT`.
+2. Wait at least 60 seconds with the card inserted: SYSTEM must not start.
+3. Verify local keyboard input, USB ACM shell and USB NCM
+   `192.168.77.2/30`.
+4. Send a SYSTEM update and confirm all archive and module hashes pass.
+5. Run `hikari-system`; confirm the banner ends in `SYSTEM`, root is the
+   labelled microSD and both CPUs are online.
+6. Run `hikari-boot`; confirm S1Boot returns to BOOT and again stops.
 
-Host builds and static checks do not verify hardware. The next test uses a
-separate microSD and preserves the verified p3 rollback image. Before any
-flash, record the card identity and confirm that the prepared filesystem is
-ext4 with `LABEL=HIKARI_ROOT`.
+## Network and USB
 
-Acceptance sequence:
+- Cycle device→host→device with a keyboard and a real USB data connection.
+- Transfer a file larger than the kernel bundle over NCM and compare SHA256.
+- Reboot SYSTEM and verify automatic association to the configured AP, DHCP,
+  real IP traffic and SSH from another host.
+- During bring-up, confirm `root` can log in with an empty password and with the
+  provisioned key; require normal authentication before production release.
 
-1. Boot the candidate ELF once through the existing p3 recovery procedure.
-2. Observe `HIKARI ROOT READY` and a Debian login on both fbcon and `ttyGS0`.
-3. Record `/proc/cmdline`, `findmnt /`, `uname -a`, `systemctl --failed`, full
-   `dmesg`, `/proc/interrupts`, power-supply state and USB role state.
-4. Disconnect and reconnect the notebook cable and prove bidirectional shell
-   traffic after enumeration.
-5. Load each staged module with `modprobe`; a successful probe is recorded as
-   `PROBES`, not as functional hardware verification.
-6. Run the relevant real-world test before promoting a device: touch events,
-   Wi-Fi traffic, Bluetooth transfer, NFC exchange or sensor readings.
-7. Validate `hikari-kexec --check`, then `--load`, then `--exec`. Confirm the
-   new kernel release and matching `/lib/modules` tree after the transition.
-   This passed twice on 2026-09-15: the loader exposed only CPU0, each load set
-   `kexec_loaded=1`, and each SMP stage brought CPUs 0-1 online from microSD.
-8. A normal reboot from the first SMP stage returned to the loader and the USB
-   ACM console re-enumerated; the second transition then passed. A true
-   power-off cold boot, card-absent rescue behavior and display observation
-   across the transition remain to be tested separately.
+## Power
 
-## Internal Wi-Fi
+- With an external meter, sample charger power_supply state, voltage and
+  current through connect, steady charge and disconnect.
+- Confirm host mode asserts OTG power without reporting sink charging.
+- Repeat role cycling while externally powered.
+- Cradle charging requires a known-good cradle and is a separate test.
 
-Run the privacy-preserving physical gate on the phone:
+## GPU
+
+Run `scripts/test-hikari-gpu.py` as root on SYSTEM. Acceptance requires an
+FD220 renderer, successful GLES2 shader compilation and draw, the expected
+RGBA readback, and no new GPU fault, timeout or hang in the kernel log. Context
+creation alone is not an acceptance test. Repeat the test before evaluating a
+Wayland compositor.
+
+## Memory
+
+Confirm `/proc/iomem` exposes `0x40000000-0x42dfffff` and
+`0x48000000-0x7fefffff`, while boot logs reserve the first 2 MiB for SMEM and
+report the upper range as HighMem.  `/proc/meminfo` must report at least
+928000 kB `MemTotal` and retain a 65536 kB CMA pool.  Touch at least 640 MiB
+with two complementary full write/read patterns, then check for page errors,
+allocation failures, aborts, Oopses and panics.  Finally repeat an accelerated
+FD220 render test because display scanout allocates from upper-bank CMA.
+
+## Touchscreen
+
+Capture a real interaction from the stable input symlink:
 
 ```sh
-scripts/check-hikari-wifi.sh --scan
+evtest /dev/input/by-path/platform-16280000.i2c-event
 ```
 
-It verifies the BCM4330 SDIO IDs, loaded `brcmfmac`, `wlan0` and at least one
-active-scan result while printing no SSID, BSSID or MAC address. The scan gate
-passed repeatedly on 2026-09-16 (six to nine BSSes) and establishes `PARTIAL`.
-After explicitly associating with an authorized test network and obtaining an
-address, add `--traffic-target` with a controlled reachable endpoint. Only a
-successful packet test plus reconnect and suspend/resume coverage can promote
-Wi-Fi to `VERIFIED`.
+Verify taps, drags, releases and simultaneous contacts. The Hikari panel must
+report direct input, X `0..719`, Y `0..1279`, distinct tracking IDs and no
+`SYN_DROPPED`. Compositor/libinput integration and all-edge calibration remain
+separate graphical-session tests.
 
-On root-mount failure, the initramfs must print `HIKARI ROOT FAILED` and retain
-an emergency shell on the display console; `ttyGS0` is also attempted. Failure
-of that rescue path blocks adoption of the new p3 image. Internal eMMC rootfs
-work remains out of scope until this removable-storage checkpoint passes.
+## Regression floor
+
+Display/backlight, both terminals, microSD read/write, pstore, Wi-Fi traffic,
+LEDs/sensors already reached during bring-up, and the original p3 recovery
+route must not regress.
