@@ -51,14 +51,19 @@ done
 if [[ "$require_usb_debug" == 1 ]]; then
   for required in CONFIG_USB_CHIPIDEA_MSM=y CONFIG_USB_CHIPIDEA_UDC=y \
     CONFIG_PHY_QCOM_USB_HS=y \
-    CONFIG_USB_GADGET=y CONFIG_USB_G_SERIAL=y CONFIG_U_SERIAL_CONSOLE=y; do
+    CONFIG_USB_GADGET=y CONFIG_USB_G_SERIAL=y; do
     grep -qx "$required" "$build_dir/.config" || {
       echo "Hikari BOOT #5 build requires $required" >&2
       exit 1
     }
   done
-  grep -Eq '^CONFIG_CMDLINE=".*console=tty0 .*console=ttyGS0,115200([ "].*)$' "$build_dir/.config" || {
-    echo 'Hikari BOOT #5.1 build requires the late ttyGS0 console cmdline' >&2
+  grep -Eq '^# CONFIG_U_SERIAL_CONSOLE is not set$' "$build_dir/.config" || {
+    echo 'Hikari build must keep ttyGS0 userspace-only to avoid console feedback' >&2
+    exit 1
+  }
+  grep -Eq '^CONFIG_CMDLINE=".*console=tty0([ "].*)$' "$build_dir/.config" &&
+    ! grep -Eq '^CONFIG_CMDLINE=".*console=ttyGS0' "$build_dir/.config" || {
+    echo 'Hikari build requires tty0 and forbids ttyGS0 in the kernel cmdline' >&2
     exit 1
   }
 fi
@@ -111,14 +116,19 @@ if [[ -n "$initramfs_source" ]]; then
   if [[ "$require_usb_debug" == 1 ]]; then
     for required in CONFIG_USB_CHIPIDEA_MSM=y CONFIG_USB_CHIPIDEA_UDC=y \
       CONFIG_PHY_QCOM_USB_HS=y \
-      CONFIG_USB_GADGET=y CONFIG_USB_G_SERIAL=y CONFIG_U_SERIAL_CONSOLE=y; do
+      CONFIG_USB_GADGET=y CONFIG_USB_G_SERIAL=y; do
       grep -qx "$required" "$build_dir/.config" || {
         echo "Hikari BOOT #5 build lost $required" >&2
         exit 1
       }
     done
-    grep -Eq '^CONFIG_CMDLINE=".*console=tty0 .*console=ttyGS0,115200([ "].*)$' "$build_dir/.config" || {
-      echo 'Hikari BOOT #5.1 build lost the late ttyGS0 console cmdline' >&2
+    grep -Eq '^# CONFIG_U_SERIAL_CONSOLE is not set$' "$build_dir/.config" || {
+      echo 'Hikari build enabled the conflicting ttyGS0 kernel console' >&2
+      exit 1
+    }
+    grep -Eq '^CONFIG_CMDLINE=".*console=tty0([ "].*)$' "$build_dir/.config" &&
+      ! grep -Eq '^CONFIG_CMDLINE=".*console=ttyGS0' "$build_dir/.config" || {
+      echo 'Hikari build lost the userspace-only ttyGS0 cmdline invariant' >&2
       exit 1
     }
   fi

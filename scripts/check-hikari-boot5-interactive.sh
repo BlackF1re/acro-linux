@@ -23,15 +23,20 @@ for option in \
   CONFIG_USB=y CONFIG_USB_CHIPIDEA=y CONFIG_USB_CHIPIDEA_UDC=y \
   CONFIG_USB_CHIPIDEA_MSM=y CONFIG_PHY_QCOM_USB_HS=y \
   CONFIG_REGULATOR_QCOM_RPM=y \
-  CONFIG_USB_GADGET=y CONFIG_USB_G_SERIAL=y CONFIG_U_SERIAL_CONSOLE=y \
+  CONFIG_USB_GADGET=y CONFIG_USB_G_SERIAL=y \
   CONFIG_USB_U_SERIAL=y CONFIG_USB_F_ACM=y CONFIG_USB_LIBCOMPOSITE=y; do
   grep -qx "$option" "$config" || {
     echo "BOOT5_USB_CONFIG=FAIL missing $option" >&2
     exit 1
   }
 done
-grep -Eq '^CONFIG_CMDLINE=".*console=tty0 .*console=ttyGS0,115200([ "].*)$' "$config" || {
-  echo 'BOOT5_USB_CONFIG=FAIL missing late ttyGS0 console cmdline' >&2
+grep -Eq '^# CONFIG_U_SERIAL_CONSOLE is not set$' "$config" || {
+  echo 'BOOT5_USB_CONFIG=FAIL ttyGS0 kernel console must be disabled' >&2
+  exit 1
+}
+grep -Eq '^CONFIG_CMDLINE=".*console=tty0([ "].*)$' "$config" &&
+  ! grep -Eq '^CONFIG_CMDLINE=".*console=ttyGS0' "$config" || {
+  echo 'BOOT5_USB_CONFIG=FAIL ttyGS0 must remain a userspace-only transport' >&2
   exit 1
 }
 

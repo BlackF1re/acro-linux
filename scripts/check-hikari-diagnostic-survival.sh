@@ -37,7 +37,7 @@ for option in \
   CONFIG_USB=y CONFIG_USB_GADGET=y \
   CONFIG_USB_CHIPIDEA=y CONFIG_USB_CHIPIDEA_UDC=y \
   CONFIG_USB_CHIPIDEA_MSM=y CONFIG_PHY_QCOM_USB_HS=y \
-  CONFIG_USB_G_SERIAL=y CONFIG_U_SERIAL_CONSOLE=y \
+  CONFIG_USB_G_SERIAL=y \
   CONFIG_USB_U_SERIAL=y CONFIG_USB_F_ACM=y CONFIG_USB_LIBCOMPOSITE=y; do
   grep -qx "$option" "$config" || {
     echo "HIKARI_DIAG_SURVIVAL=FAIL missing built-in $option" >&2
@@ -47,7 +47,7 @@ done
 
 # Recoverable bring-up faults should be logged, not deliberately escalated to
 # panic.  The detectors remain useful because they emit diagnostics to both
-# ttyGS0 and ramoops while their panic actions stay disabled.
+# the ttyGS0 userspace shell and ramoops while panic actions stay disabled.
 grep -qx '# CONFIG_PANIC_ON_OOPS is not set' "$config" || {
   echo 'HIKARI_DIAG_SURVIVAL=FAIL panic-on-oops must remain disabled' >&2
   exit 1
@@ -65,8 +65,13 @@ done
 # Keep the known-good console first-class and keep risky display probes off the
 # synchronous initcall path.  Additional drivers may fail or defer without
 # becoming a prerequisite for ttyGS0.
-grep -Eq '^CONFIG_CMDLINE=".*console=tty0 .*console=ttyGS0,115200 .*driver_async_probe=mdp4,msm_dsi.*"$' "$config" || {
-  echo 'HIKARI_DIAG_SURVIVAL=FAIL ttyGS0/async display cmdline invariant lost' >&2
+grep -Eq '^# CONFIG_U_SERIAL_CONSOLE is not set$' "$config" || {
+  echo 'HIKARI_DIAG_SURVIVAL=FAIL ttyGS0 kernel-console feedback risk enabled' >&2
+  exit 1
+}
+grep -Eq '^CONFIG_CMDLINE=".*console=tty0 .*driver_async_probe=mdp4,msm_dsi.*"$' "$config" &&
+  ! grep -Eq '^CONFIG_CMDLINE=".*console=ttyGS0' "$config" || {
+  echo 'HIKARI_DIAG_SURVIVAL=FAIL userspace-only ttyGS0/async display invariant lost' >&2
   exit 1
 }
 
@@ -104,4 +109,4 @@ fi
 python3 "$repo_root/tools/check_hikari_kernel_guards.py" --kernel-src "$kernel_src"
 
 echo 'HIKARI_DIAG_SURVIVAL=PASS'
-echo 'usb=ttyGS0 built-in peripheral-mode; pid1=independent supervisor; panic-escalation=off; ramoops=retained'
+echo 'usb=ttyGS0 userspace-only peripheral-mode; pid1=independent supervisor; panic-escalation=off; ramoops=kernel-log'
