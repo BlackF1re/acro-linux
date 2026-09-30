@@ -97,56 +97,6 @@ index 0000000000000000000000000000000000000000..301417e7b09da7a1283c8ef0f3cf997a
 +      };
 +    };
 +...
-diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
-index d0f331e365126b968e34dc7b6c50d90c0553f039..b306d2bd03ae2ab69373f975cb9754d16bd8f564 100644
---- a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
-+++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
-@@ -33,6 +33,18 @@ ramoops@7ffe0000 {
- 		};
- 	};
- 
-+	/* Sony-programmed BQ27520 gauge data is read-only to this kernel. */
-+	battery: battery {
-+		compatible = "simple-battery";
-+		device-chemistry = "lithium-ion";
-+		charge-full-design-microamp-hours = <1900000>;
-+		voltage-min-design-microvolt = <3000000>;
-+		voltage-max-design-microvolt = <4200000>;
-+		constant-charge-current-max-microamp = <1525000>;
-+		constant-charge-voltage-max-microvolt = <4200000>;
-+		charge-term-current-microamp = <50000>;
-+	};
-+
- 	/*
- 	 * The low bank starts at the historical MSM8x60 shared-memory physical
- 	 * base.  CONFIG_ARCH_QCOM_RESERVE_SMEM then retains its first 2 MiB for
-@@ -279,4 +291,26 @@ backlight@40 {
- 		reg = <0x40>;
- 		status = "okay";
- 	};
-+
-+	/* Exact Fuji/Hikari GSBI8 addresses: BQ27520 = 0x55, BQ24160 = 0x6b. */
-+	bq27520: fuel-gauge@55 {
-+		compatible = "ti,bq27520";
-+		reg = <0x55>;
-+		monitored-battery = <&battery>;
-+		status = "okay";
-+	};
-+
-+	charger@6b {
-+		compatible = "ti,bq24160";
-+		reg = <0x6b>;
-+		interrupt-parent = <&tlmm>;
-+		interrupts = <125 IRQ_TYPE_EDGE_BOTH>;
-+		fuel-gauge = <&bq27520>;
-+		ti,usb-input-current-limit-microamp = <500000>;
-+		ti,constant-charge-current-max-microamp = <1525000>;
-+		ti,constant-charge-voltage-max-microvolt = <4200000>;
-+		ti,charge-term-current-microamp = <50000>;
-+		wakeup-source;
-+		status = "okay";
-+	};
- };
 diff --git a/drivers/power/supply/Kconfig b/drivers/power/supply/Kconfig
 index b89ef40df7f82a41a40eba230999e49094047608..5024824a05a05b13a20db208eca2f412f583d179 100644
 --- a/drivers/power/supply/Kconfig

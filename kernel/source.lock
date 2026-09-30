@@ -7,7 +7,8 @@ LINUX_BASE=786262be6048deab760f68c8acc2c85607165894
 PATCH_SERIES=kernel/patches/series
 
 # The base above is the Linus revision recorded by the project for the
-# current 7.3-rc1 Hikari bring-up line.  Project and third-party commits that
-# live above this revision are exported losslessly as mail patches into
-# kernel/patches/ and reapplied with git-am.  This avoids depending on the
-# historical /home/paul/xperia/src/linux worktree for future builds.
+# current 7.3-rc1 Hikari bring-up line. Project and third-party commits above
+# this revision are represented by author-preserving mail patches in
+# kernel/patches/. The canonical Hikari DTS is sourced from kernel/dts/ after
+# patch application. This avoids depending on the historical
+# /home/paul/xperia/src/linux worktree for future builds.

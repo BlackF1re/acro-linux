@@ -11,28 +11,6 @@ Subject: [PATCH 21/36] drm/msm/dsi: correct MSM8x60 link clock topology
  drivers/gpu/drm/msm/dsi/dsi_host.c            | 55 +++++++++++++
  5 files changed, 91 insertions(+), 69 deletions(-)
 
-diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
-index 54284d0fb21b9e1af07591dde150dc9d111f989b..1e45f8b7bdcf0ef1aaa5020958afd97fdc214cc2 100644
---- a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
-+++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
-@@ -218,14 +218,10 @@ dsi: dsi@4700000 {
- 		reg-names = "dsi_ctrl";
- 		interrupts = <GIC_SPI 82 IRQ_TYPE_LEVEL_HIGH>;
- 		clocks = <&mmcc DSI_M_AHB_CLK>, <&mmcc DSI_S_AHB_CLK>,
--			 <&mmcc AMP_AHB_CLK>, <&mmcc DSI_SRC>,
--			 <&mmcc DSI1_BYTE_CLK>, <&mmcc DSI_PIXEL_CLK>,
-+			 <&mmcc AMP_AHB_CLK>, <&mmcc DSI1_BYTE_CLK>,
-+			 <&mmcc MDP_PIXEL_CLK>,
- 			 <&mmcc DSI1_ESC_CLK>;
--		clock-names = "iface", "bus", "core_mmss", "src", "byte", "pixel", "core";
--		assigned-clocks = <&mmcc DSI_SRC>, <&mmcc DSI1_BYTE_CLK>,
--			 <&mmcc DSI_PIXEL_CLK>, <&mmcc DSI1_ESC_CLK>;
--		/* DSI_SRC/pixel use the DSI PLL; byte/escape use the byte PLL. */
--		assigned-clock-parents = <&dsi_phy 1>, <&dsi_phy 0>, <&dsi_phy 1>, <&dsi_phy 0>;
-+		clock-names = "iface", "bus", "core_mmss", "byte", "pixel", "core";
- 		phys = <&dsi_phy>;
- 		phy-names = "dsi";
- 		syscon-sfpb = <&mmss_sfpb>;
 diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
 index a5daad10634be0aa2e1d44711c8ae051137dafc6..1671eee49f77d921c3b1e70a21d7034b2ba295cc 100644
 --- a/drivers/clk/qcom/mmcc-msm8660.c
