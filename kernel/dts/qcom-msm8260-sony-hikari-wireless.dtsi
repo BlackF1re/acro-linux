@@ -18,15 +18,14 @@
 		/*
 		 * Sony advertises MMC_VDD_27_28 | MMC_VDD_28_29 to the MMC
 		 * core although the physical PM8058 S3 rail is 1.8 V.  This fixed
-		 * regulator is therefore only an OCR adapter.  S3 is deliberately
-		 * not modelled here until its shared consumers and RPM constraints
-		 * are complete; programming the shared rail from this partial board
-		 * description is unsafe.
+		 * regulator is therefore only an OCR adapter.  Its parent is the
+		 * real shared PM8058 S3 rail used by WLAN and the Timpani codec.
 		 */
 		regulator-name = "wlan-mmc-ocr-2v8";
 		regulator-min-microvolt = <2800000>;
 		regulator-max-microvolt = <2800000>;
 		regulator-always-on;
+		vin-supply = <&pm8058_s3>;
 	};
 
 	hikari_wifi_pwrseq: wifi-pwrseq {
@@ -108,15 +107,18 @@
 
 /*
  * BCM4330 WLAN is permanently soldered to SDCC4.  Sony's board data uses a
- * four-bit bus, 400 kHz..48 MHz and marks the card non-removable.  The old
- * virtual card-detect callback is unnecessary with DT non-removable.  GPIO130
- * is WL_RST_N and GPIO128 is the separate out-of-band HOST_WAKE interrupt.
+ * four-bit bus, defines 24 MHz as the intermediate operating point and 48 MHz
+ * as the maximum, and marks the card non-removable.  Mainline PL18x traffic at
+ * 48 MHz eventually corrupts an SDIO frame on this device, while 24 MHz keeps
+ * the source-defined operating point without relying on the unstable ceiling.
+ * The old virtual card-detect callback is unnecessary with DT non-removable.
+ * GPIO130 is WL_RST_N and GPIO128 is the separate out-of-band HOST_WAKE IRQ.
  */
 &sdcc4 {
 	/* Logical OCR adapter backed by the real PM8058 S3 supply. */
 	vmmc-supply = <&hikari_wifi_vdd>;
 	bus-width = <4>;
-	max-frequency = <48000000>;
+	max-frequency = <24000000>;
 	non-removable;
 	mmc-pwrseq = <&hikari_wifi_pwrseq>;
 	pinctrl-names = "default";

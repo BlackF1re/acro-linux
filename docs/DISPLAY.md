@@ -1,35 +1,26 @@
-# Hikari built-in display bring-up
+# Display
 
-The target architecture is upstream DRM/MSM MDP4 -> DSI -> DRM panel -> DRM
-fbdev emulation -> fbcon. The Android framebuffer stack is research evidence,
-not the intended architecture.
+The 720×1280 Renesas R63306/TMD MDV22 panel, MSM8x60 DSI/MDP4 path,
+AS3676 boost/backlight and framebuffer console are `VERIFIED_DEVICE`.
 
-## Evidence
+The implementation uses the exact Sony command tables and power/reset order,
+MSM8x60-specific DSI clock/PHY timing, host-before-panel preparation and
+contiguous physical scanout while the legacy IOMMU path remains unsuitable.
+Pure bring-up banners and successful-sequence `dev_info` messages have been
+removed; errors and readback mismatches remain visible.
 
-`VERIFIED_VENDOR_SOURCE` from the Fuji downstream BSP identifies the board
-panel family as Renesas R63306 and the `mipi_video_tmd_wxga_mdv22` profile:
-1280x720, RGB888, four DSI lanes, video non-burst sync-event mode, and the
-legacy timing tuple hback/hfront/hpulse `45/128/3`, vback/vfront/vpulse
-`3/9/4`. The source also records LCD power GPIO18, reset GPIO70, MDP vsync
-GPIO28, PM8901 L2 (2.85 V VCI), PM8901 LVS1 (VDDIO), and PM8058 L0 DSI power.
-These are inputs for a future board-level upstream conversion, not a claim
-that the present DTS correctly drives any of them.
+The SYSTEM userspace uses Mesa Freedreno for the Adreno 220.  Debian Mesa
+25.0.7 needs the upstream A2xx shader fix `5a3300f4a34a` and window-scissor fix
+`34b78fb26b9b`; both are carried as exact backports.  On 2026-09-25 a physical
+accelerated Cage/Foot frame used renderer `FD220`, a captured 720×1280 RGB
+frame had identical pixels along all four edges, and the owner confirmed that
+the former coloured top/right edge was absent.  Cage and the root shell were
+temporary acceptance tools, not the production session design.
 
-At Linux
-[`786262be6048`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=786262be6048deab760f68c8acc2c85607165894),
-DRM/MSM contains `DRM_MSM`, MDP4, DSI and fbdev-emulation infrastructure.
-It does not contain an MSM8x60/45 nm DSI PHY implementation suitable for this
-panel, nor an exact R63306 panel driver; the superficially similar R63353 is
-not treated as compatible.
+The local Debian rebuild is installed as one version-coherent five-package
+Mesa set (`mesa-libgallium`, EGL, GBM, DRI and GLX).  This preserves Debian's
+exact intra-Mesa dependencies; the canonical rootfs passes `apt-get check` and
+an on-device `eglinfo` run still selects hardware renderer `FD220`.
 
-## BOOT #5 decision
-
-No display node, panel driver, MMCC/interconnect patch, or fbcon configuration
-is included in BOOT #5. Adding one would require inventing unproven 45 nm PHY,
-MMCC/MMFAB and panel-init behaviour. USB ACM is intentionally the sole
-external BOOT #5 diagnostic target.
-
-Display remains `IMPLEMENTING`, not `PROBES`. The bounded implementation
-sequence and the BOOT #5.1 read-only live baseline are documented in
-[DISPLAY_BRINGUP_PLAN.md](DISPLAY_BRINGUP_PLAN.md). Only a physical visible
-native-resolution fbcon result can verify the subsystem.
+Display suspend/resume, brightness policy and selection of a normal
+unprivileged Wayland session remain separate acceptance domains.

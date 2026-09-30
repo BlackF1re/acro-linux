@@ -1,0 +1,104 @@
+From 31ef234adb4d9a424597cff1597118673492f2c5 Mon Sep 17 00:00:00 2001
+From: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Date: Sun, 9 Aug 2026 23:43:00 +0300
+Subject: [PATCH] freedreno/a2xx: honor the component a packed varying starts at
+
+The eight shaders.operator.selection highp fragment cases render a
+constant branch of their selects: the failure images show clean half-plane
+regions, exactly the footprint of a condition that never varies.
+
+The state tracker packs several varyings into one slot, so an access can
+begin at any component of it.  The intrinsic carries that component, the
+write mask of a store is relative to the store's own source, and the lane
+a source component lands in is component + lane.  ir2 reads neither, so
+load_input() starts every read at x and store_output() exports every store
+from x.  The vertex shader of these cases packs v_in0, v_in1.x and v_in2.y
+into VAR0.xyz; ir2 wrote the last two to VAR0.xy instead, so v_in1
+overwrote the condition sitting in VAR0.x and VAR0.z was never written at
+all.  The fragment shader then selected on a value that does not vary,
+which is the constant branch the images show.  The mediump variants pack
+into a single store at component 0, which is why only the highp tests
+fail.
+
+Swizzle the input read by the component.  For the store, compact the
+written lanes into consecutive source components and export them through
+a single mov whose write mask places them at component + lane.  cp_export
+rebuilds a folded export's write mask from bit zero, which would return
+such a masked store to the wrong lanes whenever its source is foldable;
+make it keep the channels of the mov it eliminates, so masked exports
+fold into their producers like the unmasked ones always have.
+
+Fixes: 2cddfc409e72 ("freedreno/a2xx: consume lowered IO directly")
+Assisted-by: Claude:claude-fable-5
+Signed-off-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/43606>
+
+---
+diff --git a/src/gallium/drivers/freedreno/a2xx/ir2_cp.c b/src/gallium/drivers/freedreno/a2xx/ir2_cp.c
+index 157c5ebab1e..930f3b4fa88 100644
+--- a/src/gallium/drivers/freedreno/a2xx/ir2_cp.c
++++ b/src/gallium/drivers/freedreno/a2xx/ir2_cp.c
+@@ -205,8 +205,10 @@ cp_export(struct ir2_context *ctx)
+             swiz_merge_p(&s->swizzle, reswiz[i]);
+       }
+ 
++      /* i-th component of the value goes to the i-th written channel */
++      unsigned mask = instr->alu.write_mask;
+       for (int i = 0; i < ncomp; i++) {
+-         c[i]->alu.write_mask |= (1 << i);
++         c[i]->alu.write_mask |= (1 << u_bit_scan(&mask));
+          c[i]->ssa.ncomp++;
+       }
+       instr->type = IR2_NONE;
+diff --git a/src/gallium/drivers/freedreno/a2xx/ir2_nir.c b/src/gallium/drivers/freedreno/a2xx/ir2_nir.c
+--- a/src/gallium/drivers/freedreno/a2xx/ir2_nir.c
++++ b/src/gallium/drivers/freedreno/a2xx/ir2_nir.c
+@@ -552,7 +552,7 @@ load_input(struct ir2_context *ctx, nir_def *def, unsigned idx, unsigned comp)
+       break;
+    default:
+       instr = instr_create_alu_dest(ctx, nir_op_mov, def);
+-      instr->src[0] = ir2_src(idx, 0, IR2_SRC_INPUT);
++      instr->src[0] = ir2_src(idx, swiz_shift(comp), IR2_SRC_INPUT);
+       break;
+    }
+ }
+@@ -565,7 +565,7 @@ output_slot(struct ir2_context *ctx, nir_intrinsic_instr *intr)
+ 
+ static void
+ store_output(struct ir2_context *ctx, nir_src src, unsigned slot,
+-             unsigned ncomp)
++             unsigned ncomp, unsigned wrmask, unsigned comp)
+ {
+    struct ir2_instr *instr;
+    unsigned idx = 0;
+@@ -593,8 +593,19 @@ store_output(struct ir2_context *ctx, nir_src src, unsigned slot,
+       return;
+    }
+ 
+-   instr = instr_create_alu(ctx, nir_op_mov, ncomp);
++   /* the write mask is relative to the source and comp is the component
++    * of the varying the first source component lands in; compact the
++    * written lanes into consecutive source components and let the write
++    * mask place them at component + lane.
++    */
++   unsigned swiz = 0, i = 0;
++   u_foreach_bit (k, wrmask)
++      swiz |= swiz_set(k, i++);
++
++   instr = instr_create_alu(ctx, nir_op_mov, util_bitcount(wrmask));
+    instr->src[0] = make_src(ctx, src);
++   swiz_merge_p(&instr->src[0].swizzle, swiz);
++   instr->alu.write_mask = wrmask << comp;
+    instr->alu.export = idx;
+ }
+ 
+@@ -628,7 +639,8 @@ emit_intrinsic(struct ir2_context *ctx, nir_intrinsic_instr *intr)
+       break;
+    case nir_intrinsic_store_output:
+       store_output(ctx, intr->src[0], output_slot(ctx, intr),
+-                   intr->num_components);
++                   intr->num_components, nir_intrinsic_write_mask(intr),
++                   nir_intrinsic_component(intr));
+       break;
+    case nir_intrinsic_load_uniform:
+       const_offset = nir_src_as_const_value(intr->src[0]);

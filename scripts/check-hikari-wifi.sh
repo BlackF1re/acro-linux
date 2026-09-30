@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Physical Wi-Fi gate. It intentionally emits no SSID, BSSID, MAC address or
-# calibration content. A scan is PARTIAL evidence; real traffic is VERIFIED.
+# calibration content. A scan is PARTIAL evidence; real traffic is
+# VERIFIED_DEVICE evidence, while the subsystem state also depends on the
+# reconnect, power-management and regulatory tests documented in TESTING.md.
 set -euo pipefail
 
 scan=0

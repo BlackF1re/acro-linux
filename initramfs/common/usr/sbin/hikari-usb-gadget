@@ -1,16 +1,40 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Configure a persistent configfs ACM function.  Unlike legacy g_serial, the
-# function instance (and ttyGS0) survives removal of the dual-role UDC while
-# ChipIdea changes to host mode.
+# Configure persistent ACM and NCM functions.  Unlike legacy g_serial, these
+# instances survive removal of the dual-role UDC while ChipIdea changes role.
 
 log()
 {
 	printf '%s\n' "$*" >/dev/kmsg 2>/dev/null || true
 }
 
+bind_gadget()
+{
+	for node in /sys/class/udc/*; do
+		[ -e "$node" ] || continue
+		udc=${node##*/}
+		# ChipIdea removes and recreates its UDC while switching through host
+		# mode.  The registered configfs driver normally follows it, but if
+		# that automatic probe fails it keeps a stale UDC name and will not
+		# retry.  Clear that failed registration before explicitly rebinding.
+		if [ "$configuration_changed" -eq 0 ] &&
+		   [ "$(cat "$node/function" 2>/dev/null)" = hikari ]; then
+			return 0
+		fi
+		if [ -n "$(cat "$gadget/UDC" 2>/dev/null)" ]; then
+			printf '\n' >"$gadget/UDC" 2>/dev/null || true
+		fi
+		if printf '%s\n' "$udc" >"$gadget/UDC"; then
+			log "HIKARI USB CONFIGFS ACM+NCM READY udc=$udc"
+			return 0
+		fi
+	done
+	return 1
+}
+
 config_root=/sys/kernel/config
 gadget=$config_root/usb_gadget/hikari
+configuration_changed=0
 
 mkdir -p "$config_root"
 if ! mountpoint -q "$config_root"; then
@@ -25,25 +49,34 @@ printf '0x0525\n' >"$gadget/idVendor"
 printf '0xa4a7\n' >"$gadget/idProduct"
 mkdir -p "$gadget/strings/0x409"
 printf 'Linux\n' >"$gadget/strings/0x409/manufacturer"
-printf 'Hikari USB console\n' >"$gadget/strings/0x409/product"
+printf 'Hikari console and network\n' >"$gadget/strings/0x409/product"
 mkdir -p "$gadget/configs/c.1/strings/0x409"
-printf 'CDC ACM console\n' >"$gadget/configs/c.1/strings/0x409/configuration"
-printf '250\n' >"$gadget/configs/c.1/MaxPower"
+printf 'CDC ACM console + CDC NCM network\n' >"$gadget/configs/c.1/strings/0x409/configuration"
+# This is a bus-powered USB 2.0 gadget.  Match the BQ24160 SDP policy and the
+# Sony control image: request the full enumerated high-power budget, not the
+# configfs 250 mA value used during early console bring-up.
+printf '500\n' >"$gadget/configs/c.1/MaxPower"
 mkdir -p "$gadget/functions/acm.usb0"
 if [ ! -e "$gadget/configs/c.1/acm.usb0" ]; then
 	ln -s "$gadget/functions/acm.usb0" "$gadget/configs/c.1/acm.usb0"
+	configuration_changed=1
+fi
+if [ ! -d "$gadget/functions/ncm.usb0" ]; then
+	mkdir "$gadget/functions/ncm.usb0"
+	# These attributes are immutable while the function is linked into an
+	# active configuration.  Set them only when creating the function so that
+	# the event-driven service remains safely idempotent after a role change.
+	printf '02:86:60:00:00:02\n' >"$gadget/functions/ncm.usb0/dev_addr"
+	printf '02:86:60:00:00:01\n' >"$gadget/functions/ncm.usb0/host_addr"
+fi
+if [ ! -e "$gadget/configs/c.1/ncm.usb0" ]; then
+	ln -s "$gadget/functions/ncm.usb0" "$gadget/configs/c.1/ncm.usb0"
+	configuration_changed=1
 fi
 
 tries=0
 while [ "$tries" -lt 20 ]; do
-	for node in /sys/class/udc/*; do
-		[ -e "$node" ] || continue
-		udc=${node##*/}
-		if printf '%s\n' "$udc" >"$gadget/UDC"; then
-			log "HIKARI USB CONFIGFS ACM READY udc=$udc"
-			exit 0
-		fi
-	done
+	bind_gadget && exit 0
 	tries=$((tries + 1))
 	sleep 1
 done

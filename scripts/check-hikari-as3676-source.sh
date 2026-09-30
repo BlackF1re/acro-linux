@@ -5,8 +5,9 @@ set -euo pipefail
 kernel=${1:?usage: $0 KERNEL_TREE}
 driver="$kernel/drivers/video/backlight/as3676-backlight.c"
 kconfig="$kernel/drivers/video/backlight/Kconfig"
+binding="$kernel/Documentation/devicetree/bindings/leds/ams,as3676-backlight.yaml"
 
-test -f "$driver" && test -f "$kconfig"
+test -f "$driver" && test -f "$kconfig" && test -f "$binding"
 grep -q 'AS3676_RGB1.*0x0b' "$driver"
 grep -q 'AS3676_RGB2.*0x0c' "$driver"
 grep -q 'AS3676_RGB3.*0x0d' "$driver"
@@ -19,6 +20,19 @@ grep -q '"green"' "$driver"
 grep -q '"blue"' "$driver"
 grep -q 'HIKARI_LED_MAX_UA.*20000' "$driver"
 grep -q 'u8 current_code = as3676_led_current(brightness);' "$driver"
+grep -q 'indio_dev->name = "as3676-als"' "$driver"
+grep -q 'AS3676_ALS_SOURCE_GPIO2' "$driver"
+grep -q 'HIKARI_AS3676_LDO_2500MV.*14' "$driver"
+grep -q 'HIKARI_AS3676_GPIO_CONTROL.*0xc4' "$driver"
+grep -q 'HIKARI_AS3676_ALS_FILTER.*0x42' "$driver"
+grep -q 'HIKARI_AS3676_ALS_WAIT_US.*100000' "$driver"
+grep -q 'as3676_als_standby(as)' "$driver"
+grep -q 'ret = as3676_als_enable(as);' "$driver"
+if grep -q 'pm_sleep_ptr(&as3676_pm_ops)' "$driver"; then
+	echo 'AS3676 ALS must not be left running between direct IIO reads' >&2
+	exit 1
+fi
+grep -q 'ams,als-connected' "$binding"
 if grep -q 'u8 current = as3676_led_current(brightness);' "$driver"; then
 	echo 'AS3676 source reintroduced collision with the kernel current macro' >&2
 	exit 1
@@ -62,6 +76,6 @@ if 'backlight_get_brightness(bl)' not in text:
     raise SystemExit('AS3676 update_status must honor backlight blanking state')
 PY
 
-grep -A2 '^config BACKLIGHT_AS3676$' "$kconfig" | grep -q 'depends on I2C && LEDS_CLASS'
+grep -A2 '^config BACKLIGHT_AS3676$' "$kconfig" | grep -q 'depends on I2C && LEDS_CLASS && IIO'
 
 echo HIKARI_AS3676_SOURCE_GATE=PASS

@@ -1,0 +1,42 @@
+From 5b71e18e74465fdd9867d7ca1f8cce3b87fc9365 Mon Sep 17 00:00:00 2001
+From: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Date: Tue, 4 Aug 2026 17:07:56 +0300
+Subject: [PATCH] freedreno/a2xx: don't type-pun the immediate values through a cast
+
+load_const() reads the caller's float array through a uint32_t pointer.
+That is undefined behaviour, and gcc for arm reorders the read ahead of
+the compound literal's store, so the immediate captures whatever the
+stack held.  Whether the value survives depends on the compiler, the
+target and inlining -- which is how the bug shipped: the miscompile only
+happens in the 32-bit arm build that runs on the actual hardware, and
+every immediate any a2xx shader uses is potentially affected.
+
+Copy the values with memcpy instead.
+
+Fixes: 67610a0323dd ("freedreno: a2xx: NIR backend")
+Assisted-by: Claude:claude-fable-5
+Signed-off-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/43606>
+
+---
+diff --git a/src/gallium/drivers/freedreno/a2xx/ir2_nir.c b/src/gallium/drivers/freedreno/a2xx/ir2_nir.c
+index 5cb1daf1b61..b09805f2167 100644
+--- a/src/gallium/drivers/freedreno/a2xx/ir2_nir.c
++++ b/src/gallium/drivers/freedreno/a2xx/ir2_nir.c
+@@ -137,7 +137,14 @@ load_const(struct ir2_context *ctx, float *value_f, unsigned ncomp)
+    unsigned idx, i, j;
+    unsigned imm_ncomp = 0;
+    unsigned swiz = 0;
+-   uint32_t *value = (uint32_t *)value_f;
++   uint32_t value[4];
++
++   /* type-punned through memcpy: reading the caller's float array through
++    * a uint32_t pointer is undefined and gcc on arm reorders the read
++    * ahead of the store, turning the immediate into stack garbage
++    */
++   assert(ncomp <= ARRAY_SIZE(value));
++   memcpy(value, value_f, ncomp * sizeof(*value));
+ 
+    /* try to merge with existing immediate (TODO: try with neg) */
+    for (idx = 0; idx < so->num_immediates; idx++) {
+

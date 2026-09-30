@@ -2,11 +2,13 @@
 
 ## Result
 
-`PARTIAL`, `VERIFIED_DEVICE`: the current 7.3-rc1 second-stage kernel physically
+`WORKING`, `VERIFIED_DEVICE`: the current 7.3-rc1 second-stage kernel physically
 enumerated the soldered BCM4330 over SDIO, loaded `brcmfmac`, created `wlan0`,
 and completed repeated active scans. Accepted scans found between six and nine
-BSSes. Network association, DHCP and real packet traffic are
-still required before promotion to `VERIFIED`.
+BSSes. It then associated with an authorized protected network, acquired DHCP
+and a default route, resolved DNS and passed real packet traffic. After a
+forced supplicant stop and address removal, it reassociated, reacquired DHCP
+and passed traffic again.
 
 No SSID, BSSID, MAC address, calibration content or other device identifier is
 stored in this record.
@@ -31,6 +33,23 @@ The remaining board wiring is SDCC4 four-bit at up to 48 MHz, WL_RST_N on
 TLMM130 and out-of-band HOST_WAKE on TLMM128. SDIO DAT1 IRQ is not advertised
 because the upstream PL18x host currently lacks `enable_sdio_irq()` support.
 
+## Network acceptance
+
+The 2026-09-16 physical acceptance run used the packaged Debian 13 armhf
+`wpa_supplicant`, a credential held only in a mode-`0600` file under `/run`,
+and `systemd-networkd` DHCP. Privacy-preserving checks passed:
+
+- association, IPv4 DHCP and a default route;
+- DNS resolution and five-packet traffic to a controlled public endpoint;
+- forced supplicant termination, removal of the assigned address,
+  reassociation, fresh DHCP and a repeated traffic pass;
+- a third reassociation with `p2p_disabled=1`, with no new P2P-interface error.
+
+The optional P2P interface is not supported by this legacy firmware path and
+is not part of the accepted station-mode result. The global supplicant service
+remained disabled; the test connection was explicit and transient. Temporary
+transfer packages were removed after `dpkg --audit` passed.
+
 ## Firmware and remaining blockers
 
 The private device rootfs uses Sony's installed BCM4330 B2 firmware and Hikari
@@ -40,6 +59,6 @@ are available, so the driver reports limited channels. It also rejects the
 firmware-default address and assigns a random address despite the private
 calibration file; production MAC provenance remains unresolved.
 
-Before `VERIFIED`: pass association, DHCP, bidirectional network traffic,
-repeated connect/disconnect, suspend/resume, wake behavior, regulatory-domain
-handling, and stable device-specific MAC provisioning.
+Before subsystem-level `VERIFIED`: pass suspend/resume and wake behavior,
+complete regulatory-domain/CLM handling, power measurements, longer reconnect
+endurance and stable device-specific MAC provisioning.

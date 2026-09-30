@@ -7,7 +7,7 @@ set -euo pipefail
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 hikari_build_root=${HIKARI_BUILD_ROOT:-/home/paul/xperia/build}
 kernel_build=${KERNEL_BUILD:-"$hikari_build_root/linux-hikari-current"}
-initramfs=${INITRAMFS:-"$hikari_build_root/hikari-root-initramfs-current/hikari-root.cpio.gz"}
+initramfs=${INITRAMFS:-"$hikari_build_root/hikari-root-initramfs-current/hikari-loader.cpio.gz"}
 rpm=${RPM_PAYLOAD:-/home/paul/xperia/p3-offline-analysis.rSjNfb/rpm.segment}
 artifact_dir=${ARTIFACT_DIR:-"$hikari_build_root/hikari-debian-current"}
 output=${OUTPUT:-"$artifact_dir/hikari-debian-fastboot.elf"}
