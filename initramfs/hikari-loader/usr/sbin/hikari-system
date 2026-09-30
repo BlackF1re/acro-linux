@@ -1,0 +1,36 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Validate and explicitly enter the SMP system stored on microSD.
+set -eu
+
+/usr/sbin/hikari-mount-system
+boot_dir=/boot/hikari-next
+cmdline='console=tty0 driver_async_probe=mdp4,msm_dsi hikari.root=LABEL=HIKARI_ROOT rootfstype=ext4 rootwait rw'
+
+for file in zImage qcom-msm8260-sony-hikari.dtb hikari-root.cpio.gz kernel-release SHA256SUMS; do
+	[ -s "/system$boot_dir/$file" ] || {
+		echo "missing SYSTEM boot input: $file" >&2
+		exit 1
+	}
+done
+(cd "/system$boot_dir" && sha256sum -c SHA256SUMS)
+
+echo 'Loading verified microSD kernel: SYSTEM'
+mkdir -p /system/proc
+mount --bind /proc /system/proc
+cleanup()
+{
+	mountpoint -q /system/proc && umount /system/proc || true
+}
+trap cleanup EXIT HUP INT TERM
+chroot /system /usr/sbin/kexec --load "$boot_dir/zImage" \
+	--dtb="$boot_dir/qcom-msm8260-sony-hikari.dtb" \
+	--initrd="$boot_dir/hikari-root.cpio.gz" --append="$cmdline"
+cleanup
+trap - EXIT HUP INT TERM
+sync
+# Keep ext4 clean across kexec.  The final kexec binary and libraries remain
+# readable, while the new kernel receives a consistent filesystem.
+mount -o remount,ro /system
+echo 'Entering SYSTEM'
+exec chroot /system /usr/sbin/kexec -e

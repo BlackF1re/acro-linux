@@ -1,4 +1,7 @@
-# Xperia acro S Linux
+# Xperia acro S native Linux
 
-Development-host USB/WSL setup is documented in [docs/HOST_USB.md](docs/HOST_USB.md).
-The strictly local first-boot build procedure is in [docs/BUILD.md](docs/BUILD.md).
+Current working state, build commands and physical acceptance criteria are in
+[docs/STATUS.md](docs/STATUS.md), [docs/BUILD.md](docs/BUILD.md) and
+[docs/TESTING.md](docs/TESTING.md). Boot/recovery and the verified partition map
+are documented separately; raw experiment transcripts live under `research/`
+and are not duplicated into narrative reports.

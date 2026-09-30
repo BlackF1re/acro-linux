@@ -5,3 +5,7 @@
 # CONFIG_SMP is not set
 # CONFIG_HOTPLUG_CPU is not set
 CONFIG_KEXEC=y
+CONFIG_USB_CONFIGFS_NCM=y
+# Give the ABI-incompatible UP rescue kernel a visibly distinct release.  The
+# build script also cleans the shared O= tree when switching profiles.
+CONFIG_LOCALVERSION="-hikari-boot"

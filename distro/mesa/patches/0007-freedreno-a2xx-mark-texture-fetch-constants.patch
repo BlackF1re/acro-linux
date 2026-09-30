@@ -1,0 +1,81 @@
+From 43e63886f7f4d2173aab5706f9f0ccf82a2d6135 Mon Sep 17 00:00:00 2001
+From: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Date: Mon, 3 Aug 2026 08:11:33 +0300
+Subject: [PATCH] freedreno/a2xx: mark texture fetch constants as textures
+
+Dword 0 of a texture fetch constant begins with a two bit type: invalid
+texture, invalid buffer, valid texture, or valid buffer.  We leave it at
+zero on every constant we emit, which is the encoding for an invalid
+texture.
+
+Plain 2D sampling works anyway, so this has gone unnoticed, but a constant
+we have declared invalid is not a state to build on.
+
+The enum values were placeholders, SQ_TEX_TYPE_0 through _3.  Name them
+after the same four values in the AMD register headers already in tree --
+V_038010_SQ_TEX_VTX_{INVALID_TEXTURE,INVALID_BUFFER,VALID_TEXTURE,
+VALID_BUFFER} in r600d.h, and the V_03001C_ set in evergreend.h -- which
+describe the same two bit field on the descendants of this hardware and
+are used there exactly as here.
+
+Assisted-by: Claude:claude-opus-5
+Signed-off-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/43606>
+---
+ src/freedreno/registers/adreno/a2xx.xml          | 8 ++++----
+ src/gallium/drivers/freedreno/a2xx/fd2_gmem.c    | 3 ++-
+ src/gallium/drivers/freedreno/a2xx/fd2_texture.c | 3 ++-
+ 3 files changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/src/freedreno/registers/adreno/a2xx.xml b/src/freedreno/registers/adreno/a2xx.xml
+index 0847bae4e3d..66a9ad75131 100644
+--- a/src/freedreno/registers/adreno/a2xx.xml
++++ b/src/freedreno/registers/adreno/a2xx.xml
+@@ -1801,10 +1801,10 @@ xsi:schemaLocation="https://gitlab.freedesktop.org/freedreno/ rules-fd.xsd">
+ 		<value name="SQ_TEX_NUM_FORMAT_INT" value="1"/>
+ 	</enum>
+ 	<enum name="sq_tex_type">
+-		<value name="SQ_TEX_TYPE_0" value="0"/>
+-		<value name="SQ_TEX_TYPE_1" value="1"/>
+-		<value name="SQ_TEX_TYPE_2" value="2"/>
+-		<value name="SQ_TEX_TYPE_3" value="3"/>
++		<value name="SQ_TEX_TYPE_INVALID_TEXTURE" value="0"/>
++		<value name="SQ_TEX_TYPE_INVALID_BUFFER" value="1"/>
++		<value name="SQ_TEX_TYPE_VALID_TEXTURE" value="2"/>
++		<value name="SQ_TEX_TYPE_VALID_BUFFER" value="3"/>
+ 	</enum>
+ 	<reg32 offset="0" name="0">
+ 		<bitfield name="TYPE" low="0" high="1" type="sq_tex_type"/>
+diff --git a/src/gallium/drivers/freedreno/a2xx/fd2_gmem.c b/src/gallium/drivers/freedreno/a2xx/fd2_gmem.c
+index dfdb9c9ab01..7d9db5e2602 100644
+--- a/src/gallium/drivers/freedreno/a2xx/fd2_gmem.c
++++ b/src/gallium/drivers/freedreno/a2xx/fd2_gmem.c
+@@ -227,7 +227,8 @@ emit_mem2gmem_surf(struct fd_batch *batch, uint32_t base,
+    /* emit fb as a texture: */
+    OUT_PKT3(ring, CP_SET_CONSTANT, 7);
+    OUT_RING(ring, 0x00010000);
+-   OUT_RING(ring, A2XX_SQ_TEX_0_CLAMP_X(SQ_TEX_WRAP) |
++   OUT_RING(ring, A2XX_SQ_TEX_0_TYPE(SQ_TEX_TYPE_VALID_TEXTURE) |
++                     A2XX_SQ_TEX_0_CLAMP_X(SQ_TEX_WRAP) |
+                      A2XX_SQ_TEX_0_CLAMP_Y(SQ_TEX_WRAP) |
+                      A2XX_SQ_TEX_0_CLAMP_Z(SQ_TEX_WRAP) |
+                      A2XX_SQ_TEX_0_PITCH(
+diff --git a/src/gallium/drivers/freedreno/a2xx/fd2_texture.c b/src/gallium/drivers/freedreno/a2xx/fd2_texture.c
+index 783cef2207c..99e06289ed6 100644
+--- a/src/gallium/drivers/freedreno/a2xx/fd2_texture.c
++++ b/src/gallium/drivers/freedreno/a2xx/fd2_texture.c
+@@ -160,7 +160,8 @@ fd2_sampler_view_create(struct pipe_context *pctx, struct pipe_resource *prsc,
+    so->base.reference.count = 1;
+    so->base.context = pctx;
+ 
+-   so->tex0 = A2XX_SQ_TEX_0_SIGN_X(fmt.sign) | A2XX_SQ_TEX_0_SIGN_Y(fmt.sign) |
++   so->tex0 = A2XX_SQ_TEX_0_TYPE(SQ_TEX_TYPE_VALID_TEXTURE) |
++              A2XX_SQ_TEX_0_SIGN_X(fmt.sign) | A2XX_SQ_TEX_0_SIGN_Y(fmt.sign) |
+               A2XX_SQ_TEX_0_SIGN_Z(fmt.sign) | A2XX_SQ_TEX_0_SIGN_W(fmt.sign) |
+               A2XX_SQ_TEX_0_PITCH(fdl2_pitch_pixels(&rsc->layout, 0) *
+                                   util_format_get_blockwidth(prsc->format)) |
+-- 
+2.53.0
+
+
+

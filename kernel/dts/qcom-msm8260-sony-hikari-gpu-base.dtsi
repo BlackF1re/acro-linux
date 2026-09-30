@@ -2,9 +2,7 @@
 /*
  * Sony Xperia acro S (Hikari) Adreno A220 hardware description.
  *
- * Keep the node disabled in the common/display profile.  The dedicated GPU
- * profile enables it after the MMCC/MDP test boundary, so a GPU failure cannot
- * obscure the current display bring-up result.
+ * The SYSTEM DT is the only production target, so the GPU is enabled here.
  *
  * Hardware facts come from Sony/CAF MSM8x60 board data: GFX3D is at
  * 0x04300000..0x0431ffff, GIC SPI 80, and the five legacy operating points are
@@ -28,7 +26,7 @@
 		clock-names = "core", "iface", "mem_iface", "bus";
 		power-domains = <&mmcc GFX3D_GDSC>;
 		operating-points-v2 = <&gpu_opp_table>;
-		status = "disabled";
+		status = "okay";
 
 		gpu_opp_table: opp-table {
 			compatible = "operating-points-v2";

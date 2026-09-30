@@ -12,6 +12,7 @@ qemu_arm=${QEMU_ARM:-/usr/bin/qemu-arm}
 keyring=${DEBIAN_KEYRING:-/usr/share/keyrings/debian-archive-keyring.gpg}
 packages=$(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$repo_root/debian/packages.txt" | paste -sd, -)
 wgetrc="$repo_root/debian/wgetrc"
+stock_system_root=${HIKARI_STOCK_SYSTEM_ROOT:-"$repo_root/../../private/hikari-stock-system"}
 
 [[ $rootfs == /home/paul/xperia/build/* ]] || { echo 'ROOTFS_DIR must remain below /home/paul/xperia/build' >&2; exit 1; }
 command -v debootstrap >/dev/null
@@ -25,6 +26,10 @@ if [[ ! -e "$rootfs/.hikari-debootstrap-first-stage" ]]; then
 		exit 1
 	}
 	mkdir -p "$rootfs"
+	# The archive streamed to the device contains the top-level `.` entry.
+	# Keep it owned by root even when the build directory was created by the
+	# unprivileged host user; otherwise extraction changes ownership of `/`.
+	sudo chown 0:0 "$rootfs"
 	sudo touch "$rootfs/.hikari-debootstrap-owned"
 	sudo env WGETRC="$wgetrc" \
 		debootstrap --foreign --variant="$DEBIAN_VARIANT" --arch="$DEBIAN_ARCH" \
@@ -32,6 +37,10 @@ if [[ ! -e "$rootfs/.hikari-debootstrap-first-stage" ]]; then
 		"$DEBIAN_SUITE" "$rootfs" "$DEBIAN_MIRROR"
 	sudo touch "$rootfs/.hikari-debootstrap-first-stage"
 fi
+
+# Converge old canonical trees created before the ownership invariant was
+# enforced above.  This is intentionally repeated on every incremental build.
+sudo chown 0:0 "$rootfs"
 if [[ ! -e "$rootfs/.hikari-debootstrap-complete" ]]; then
 	if [[ -x "$rootfs/debootstrap/debootstrap" ]]; then
 		sudo install -m 0755 "$qemu_arm" "$rootfs/usr/bin/qemu-arm-static"
@@ -88,30 +97,96 @@ fi
 
 sudo install -D -m 0644 "$repo_root/debian/etc/hostname" "$rootfs/etc/hostname"
 sudo install -D -m 0644 "$repo_root/debian/etc/fstab" "$rootfs/etc/fstab"
+sudo install -D -m 0644 "$repo_root/debian/etc/issue" "$rootfs/etc/issue"
+sudo install -D -m 0644 "$repo_root/debian/etc/default/locale" \
+	"$rootfs/etc/default/locale"
+sudo install -D -m 0644 "$repo_root/debian/etc/profile.d/hikari-stage.sh" \
+	"$rootfs/etc/profile.d/hikari-stage.sh"
+sudo install -D -m 0600 \
+	"$repo_root/debian/etc/NetworkManager/system-connections/hikari-usb.nmconnection" \
+	"$rootfs/etc/NetworkManager/system-connections/hikari-usb.nmconnection"
+sudo install -D -m 0644 \
+	"$repo_root/debian/etc/NetworkManager/conf.d/20-hikari-wifi.conf" \
+	"$rootfs/etc/NetworkManager/conf.d/20-hikari-wifi.conf"
+sudo install -D -m 0644 \
+	"$repo_root/debian/etc/modprobe.d/hikari-brcmfmac.conf" \
+	"$rootfs/etc/modprobe.d/hikari-brcmfmac.conf"
+sudo install -D -m 0644 "$repo_root/debian/etc/ssh/sshd_config.d/10-hikari.conf" \
+	"$rootfs/etc/ssh/sshd_config.d/10-hikari.conf"
 sudo install -D -m 0644 "$repo_root/debian/etc/systemd/system/hikari-console.service" \
 	"$rootfs/etc/systemd/system/hikari-console.service"
+sudo install -D -m 0644 "$repo_root/debian/etc/systemd/system/hikari-usb-gadget.service" \
+	"$rootfs/etc/systemd/system/hikari-usb-gadget.service"
+sudo install -D -m 0644 \
+	"$repo_root/debian/etc/systemd/system/phosh.service.d/10-hikari-renderer.conf" \
+	"$rootfs/etc/systemd/system/phosh.service.d/10-hikari-renderer.conf"
+sudo install -D -m 0644 "$repo_root/debian/etc/dconf/profile/user" \
+	"$rootfs/etc/dconf/profile/user"
+sudo install -D -m 0644 "$repo_root/debian/etc/dconf/db/local.d/00-hikari" \
+	"$rootfs/etc/dconf/db/local.d/00-hikari"
+sudo chroot "$rootfs" dconf update
+sudo install -D -m 0644 "$repo_root/debian/etc/udev/rules.d/70-hikari-usb-gadget.rules" \
+	"$rootfs/etc/udev/rules.d/70-hikari-usb-gadget.rules"
+sudo install -D -m 0644 "$repo_root/debian/etc/udev/rules.d/90-hikari-usb-network.rules" \
+	"$rootfs/etc/udev/rules.d/90-hikari-usb-network.rules"
+sudo install -D -m 0755 "$repo_root/initramfs/common/usr/sbin/hikari-usb-gadget" \
+	"$rootfs/usr/local/sbin/hikari-usb-gadget"
 sudo install -D -m 0755 "$repo_root/debian/usr/local/sbin/hikari-kexec" \
 	"$rootfs/usr/local/sbin/hikari-kexec"
+sudo install -D -m 0755 "$repo_root/debian/usr/local/sbin/hikari-boot" \
+	"$rootfs/usr/local/sbin/hikari-boot"
+if [[ -s $stock_system_root/etc/firmware/BCM4330.hcd ]]; then
+	sudo "$repo_root/scripts/materialize-hikari-bcm4330-firmware.sh" \
+		"$stock_system_root" "$rootfs"
+else
+	echo 'warning: private BCM4330 firmware was not materialized' >&2
+fi
 sudo install -D -m 0755 "$repo_root/scripts/check-hikari-wifi.sh" \
 	"$rootfs/usr/local/sbin/check-hikari-wifi"
 sudo ln -sfn ../hikari-console.service "$rootfs/etc/systemd/system/multi-user.target.wants/hikari-console.service"
-# Debian enables the system-wide supplicant during package configuration.
-# Bring-up networking is explicit and on-demand, so retain the binary and
-# D-Bus activation metadata but remove boot-time service enablement.
 sudo rm -f \
+	"$rootfs/etc/systemd/system/multi-user.target.wants/hikari-usb-gadget-watch.service" \
+	"$rootfs/etc/systemd/system/hikari-usb-gadget-watch.service"
+sudo ln -sfn ../hikari-usb-gadget.service \
+	"$rootfs/etc/systemd/system/multi-user.target.wants/hikari-usb-gadget.service"
+# NetworkManager owns both USB and Wi-Fi.  No Wi-Fi secret is stored in the
+# repository; provision the connection once with nmcli on the target.
+sudo rm -f \
+	"$rootfs/usr/local/sbin/hikari-wifi" \
+	"$rootfs/etc/systemd/network/10-usb0.network" \
+	"$rootfs/etc/systemd/network/20-wlan0.network" \
 	"$rootfs/etc/systemd/system/multi-user.target.wants/wpa_supplicant.service" \
-	"$rootfs/etc/systemd/system/dbus-fi.w1.wpa_supplicant1.service"
+	"$rootfs/etc/systemd/system/dbus-fi.w1.wpa_supplicant1.service" \
+	"$rootfs/etc/systemd/system/multi-user.target.wants/systemd-networkd.service"
+# The BOOT receiver deliberately overlays a verified rootfs archive instead
+# of deleting the live filesystem.  Mask networkd so old enablement cannot
+# race NetworkManager after such an upgrade.
+sudo ln -sfn /dev/null \
+	"$rootfs/etc/systemd/system/systemd-networkd.service"
+sudo ln -sfn /lib/systemd/system/NetworkManager.service \
+	"$rootfs/etc/systemd/system/multi-user.target.wants/NetworkManager.service"
+sudo ln -sfn /lib/systemd/system/ssh.service \
+	"$rootfs/etc/systemd/system/multi-user.target.wants/ssh.service"
+sudo ln -sfn /lib/systemd/system/systemd-timesyncd.service \
+	"$rootfs/etc/systemd/system/sysinit.target.wants/systemd-timesyncd.service"
+if sudo chroot "$rootfs" getent passwd phosh >/dev/null; then
+	sudo chroot "$rootfs" usermod -aG video,render,input phosh
+fi
 printf 'hikari\n' | sudo tee "$rootfs/etc/hostname" >/dev/null
 printf '127.0.0.1 localhost\n127.0.1.1 hikari\n' | sudo tee "$rootfs/etc/hosts" >/dev/null
 printf 'deb %s %s main\n' "$DEBIAN_MIRROR_DEFAULT" "$DEBIAN_SUITE" | \
 	sudo tee "$rootfs/etc/apt/sources.list" >/dev/null
 
-# Bring-up only: permit a physical USB/display console without shipping a
-# password. Network login is not installed or enabled by this manifest.
+# Bring-up only: permit console and SSH access as root with an empty password.
+# This must be replaced with normal authentication before production use.
 sudo sed -i 's#^root:[^:]*:#root::#' "$rootfs/etc/shadow"
 sudo rm -f "$rootfs/usr/bin/qemu-arm-static"
 sudo find "$rootfs/var/cache/apt" "$rootfs/var/lib/apt/lists" \
 	-mindepth 1 -delete
 sudo find "$rootfs/var/log" -type f -exec truncate -s 0 {} +
+test "$(stat -c '%u:%g' "$rootfs")" = 0:0 || {
+	echo "rootfs root directory is not owned by root:root" >&2
+	exit 1
+}
 printf 'rootfs: %s\n' "$rootfs"
 sudo du -sh "$rootfs"

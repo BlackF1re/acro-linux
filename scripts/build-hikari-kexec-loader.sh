@@ -10,7 +10,15 @@ kernel_build=${KERNEL_BUILD:-"$hikari_build_root/linux-hikari-current"}
 base_fragment="$repo_root/kernel/configs/hikari-boot6-display.fragment"
 debian_fragment="$repo_root/kernel/configs/hikari-debian.fragment"
 loader_fragment="$repo_root/kernel/configs/hikari-kexec-loader.fragment"
-root_initramfs="$hikari_build_root/hikari-root-initramfs-current/hikari-root.cpio.gz"
+root_initramfs="$hikari_build_root/hikari-root-initramfs-current/hikari-loader.cpio.gz"
+artifact_dir="$hikari_build_root/hikari-debian-current"
+loader_elf="$artifact_dir/hikari-kexec-loader.elf"
+
+# Always regenerate the embedded userspace first.  Reusing an older archive
+# can silently omit changes to the USB gadget or loader commands even though
+# the kernel itself was rebuilt successfully.
+HIKARI_BUILD_ROOT="$hikari_build_root" \
+	"$repo_root/scripts/build-hikari-root-initramfs.sh"
 
 test -s "$root_initramfs" || {
 	echo "missing root initramfs: $root_initramfs" >&2
@@ -18,6 +26,7 @@ test -s "$root_initramfs" || {
 }
 
 HIKARI_BUILD_ROOT="$hikari_build_root" BUILD_DIR="$kernel_build" \
+	KERNEL_BUILD_PROFILE=rescue-up \
 	KERNEL_FRAGMENT="$base_fragment" \
 	KERNEL_EXTRA_FRAGMENTS="$debian_fragment $loader_fragment" \
 	PRUNE_DEFAULT_MODULES=1 INITRAMFS_SOURCE="$root_initramfs" \
@@ -35,5 +44,13 @@ grep -qx 'CONFIG_KEXEC=y' "$config" || {
 	exit 1
 }
 
-printf 'HIKARI_KEXEC_LOADER=PASS\nbuild=%s\ninitramfs=%s\n' \
-	"$kernel_build" "$root_initramfs"
+# A successful kernel build is not yet a flashable Sony image.  Refresh the
+# canonical BOOT artifact here so this entry point cannot leave a stale ELF
+# behind after changing the embedded initramfs.
+HIKARI_BUILD_ROOT="$hikari_build_root" \
+	ARTIFACT_DIR="$artifact_dir" OUTPUT="$loader_elf" \
+	INITRAMFS="$root_initramfs" \
+	"$repo_root/scripts/build-hikari-debian-elf.sh"
+
+printf 'HIKARI_KEXEC_LOADER=PASS\nbuild=%s\ninitramfs=%s\nartifact=%s\n' \
+	"$kernel_build" "$root_initramfs" "$loader_elf"

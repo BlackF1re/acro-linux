@@ -12,30 +12,52 @@ kernel = Path(sys.argv[1])
 repo = Path(__file__).resolve().parent.parent
 driver = kernel / "drivers/video/backlight/as3676-backlight.c"
 kconfig = kernel / "drivers/video/backlight/Kconfig"
+binding = kernel / "Documentation/devicetree/bindings/leds/ams,as3676-backlight.yaml"
 override = repo / "kernel/overrides/as3676-backlight.c"
+binding_override = repo / "kernel/bindings/ams,as3676-backlight.yaml"
 
 text = driver.read_text()
-markers = (
-    "#define AS3676_CURR6\t\t0x2f",
-    "#define AS3676_ID1_VALUE\t0xae",
-    "devm_backlight_device_register",
-    'MODULE_DESCRIPTION("AS3676 Hikari LCD backlight")',
-)
-for marker in markers:
-    if marker not in text:
-        raise SystemExit(f"unexpected pre-LED AS3676 source; missing: {marker}")
+if 'MODULE_DESCRIPTION("AS3676 backlight' not in text:
+    markers = (
+        "#define AS3676_CURR6\t\t0x2f",
+        "#define AS3676_ID1_VALUE\t0xae",
+        "devm_backlight_device_register",
+        'MODULE_DESCRIPTION("AS3676 Hikari LCD backlight")',
+    )
+    for marker in markers:
+        if marker not in text:
+            raise SystemExit(f"unexpected pre-LED AS3676 source; missing: {marker}")
 
 driver.write_text(override.read_text())
+binding.write_text(binding_override.read_text())
 
 kt = kconfig.read_text()
-old = '''config BACKLIGHT_AS3676
+new = '''config BACKLIGHT_AS3676
+\ttristate "AMS AS3676 Hikari backlight, LEDs and ALS"
+\tdepends on I2C && LEDS_CLASS && IIO
+'''
+old_blocks = (
+    '''config BACKLIGHT_AS3676
 \ttristate "AMS AS3676 Hikari backlight"
 \tdepends on I2C
-'''
-new = '''config BACKLIGHT_AS3676
+''',
+    '''config BACKLIGHT_AS3676
 \ttristate "AMS AS3676 Hikari backlight and LEDs"
 \tdepends on I2C && LEDS_CLASS
-'''
-if old not in kt:
-    raise SystemExit("unexpected BACKLIGHT_AS3676 Kconfig block")
-kconfig.write_text(kt.replace(old, new, 1))
+''',
+    '''config BACKLIGHT_AS3676
+\ttristate "AMS AS3676 Hikari backlight and LEDs"
+\tdepends on I2C && LEDS_CLASS && IIO
+''',
+	'''config BACKLIGHT_AS3676
+\ttristate "AMS AS3676 Hikari backlight, LEDs and ALS"
+\tdepends on I2C && LEDS_CLASS && IIO
+''',
+)
+if new not in kt:
+    for old in old_blocks:
+        if old in kt:
+            kconfig.write_text(kt.replace(old, new, 1))
+            break
+    else:
+        raise SystemExit("unexpected BACKLIGHT_AS3676 Kconfig block")

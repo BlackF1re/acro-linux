@@ -69,7 +69,18 @@ fdtget -t x "$dtb" /regulator-usb-otg-vbus vin-supply >/dev/null || {
 }
 if [[ -n "$kernel_tree" ]]; then
 	mpp_driver="$kernel_tree/drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c"
+	charger_driver="$kernel_tree/drivers/power/supply/bq24160_charger.c"
 	test -f "$mpp_driver" || { echo "missing materialized SSBI MPP driver: $mpp_driver" >&2; exit 1; }
+	test -f "$charger_driver" || { echo "missing materialized BQ24160 driver: $charger_driver" >&2; exit 1; }
+	for required in 'pm_stay_awake(bq->dev);' 'pm_relax(bq->dev);' \
+		'bq24160_set_charging(bq, true);' \
+		'control &= ~BQ24160_CTRL_RESET;' \
+		'bq24160_usb_code(bq->usb_limit_ua) << 4'; do
+		grep -Fq "$required" "$charger_driver" || {
+			echo "BQ24160 charging wakeup lifecycle missing: $required" >&2
+			exit 1
+		}
+	done
 	python3 - "$mpp_driver" <<'PY'
 from pathlib import Path
 import re

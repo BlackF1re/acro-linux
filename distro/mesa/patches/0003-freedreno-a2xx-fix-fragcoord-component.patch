@@ -1,0 +1,67 @@
+From 56f473cc63e86c74e815c5f44e3cdc7ddd6d665f Mon Sep 17 00:00:00 2001
+From: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Date: Tue, 11 Aug 2026 03:09:16 +0300
+Subject: [PATCH] freedreno/a2xx: read gl_FragCoord from the component asked
+ for
+
+Backport the upstream fix to Mesa 25.0.7, whose load_input() helper still
+takes the lowered destination and base separately.
+
+Original commit message:
+
+dEQP-GLES2.functional.shaders.builtin_variable.fragcoord_w regressed on
+a200 when the state tracker began delivering pre-lowered IO: gl_FragCoord.w
+now arrives as a single component load_interpolated_input with component 3,
+and the fragment shader reads the x component instead.
+
+Fixes: 2cddfc409e72 ("freedreno/a2xx: consume lowered IO directly")
+Signed-off-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/43643>
+---
+ src/gallium/drivers/freedreno/a2xx/ir2_nir.c | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/src/gallium/drivers/freedreno/a2xx/ir2_nir.c b/src/gallium/drivers/freedreno/a2xx/ir2_nir.c
+--- a/src/gallium/drivers/freedreno/a2xx/ir2_nir.c
++++ b/src/gallium/drivers/freedreno/a2xx/ir2_nir.c
+@@ -497,8 +497,17 @@
+    }
+ }
+ 
++static unsigned
++swiz_shift(unsigned comp)
++{
++   unsigned swiz = 0;
++   for (int i = 0; i < 4; i++)
++      swiz |= swiz_set(comp + i, i);
++   return swiz;
++}
++
+ static void
+-load_input(struct ir2_context *ctx, nir_def *def, unsigned idx)
++load_input(struct ir2_context *ctx, nir_def *def, unsigned idx, unsigned comp)
+ {
+    struct ir2_instr *instr;
+    int slot = -1;
+@@ -541,7 +550,7 @@
+ 
+       unsigned reg_idx = instr->reg - ctx->reg; /* XXX */
+       instr = instr_create_alu_dest(ctx, nir_op_mov, def);
+-      instr->src[0] = ir2_src(reg_idx, 0, IR2_SRC_REG);
++      instr->src[0] = ir2_src(reg_idx, swiz_shift(comp), IR2_SRC_REG);
+       break;
+    default:
+       instr = instr_create_alu_dest(ctx, nir_op_mov, def);
+@@ -615,7 +624,8 @@
+       break;
+ 
+    case nir_intrinsic_load_input:
+-      load_input(ctx, &intr->def, nir_intrinsic_base(intr));
++      load_input(ctx, &intr->def, nir_intrinsic_base(intr),
++                 nir_intrinsic_component(intr));
+       break;
+    case nir_intrinsic_store_output:
+       store_output(ctx, intr->src[0], output_slot(ctx, intr),
+-- 
+2.53.0
+

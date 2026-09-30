@@ -1,0 +1,92 @@
+From: Hikari Linux Project <hikari-linux@localhost>
+Date: Thu, 24 Sep 2026 06:45:00 +0700
+Subject: [PATCH] mmc: mmci: read Qualcomm PIO FIFO address window
+
+The Qualcomm SDCC FIFO is exposed as an address window.  The downstream
+Qualcomm/Sony driver consumes PIO RX data by advancing through that window,
+wrapping at MCI_FIFOSIZE.  The MMCI Qualcomm FIFO-count helper limits an
+individual SDCC4 burst to eight words, but one PIO service can consume more
+than one burst.  The common read path currently uses ioread32_rep() and
+therefore repeatedly accesses only the first address.
+
+This normally remains hidden on Qualcomm systems that use DML and DMA.  It
+is exercised on MSM8260, where SDCC4 has no DMA channel described and a
+BCM4330 Wi-Fi function uses PIO.  Sustained RX traffic eventually reports
+MCI_STARTBITERR as -ECOMM and leaves the SDIO function unusable.
+
+Read successive FIFO addresses for the Qualcomm variant while preserving
+the existing common access for all other variants.  Keep the address offset
+across bursts in one PIO service and wrap it at the variant FIFO size, exactly
+as the downstream driver does.
+
+Signed-off-by: Hikari Linux Project <hikari-linux@localhost>
+---
+ drivers/mmc/host/mmci.c | 34 +++++++++++++++++++++++++++++-----
+ 1 file changed, 29 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/mmc/host/mmci.c b/drivers/mmc/host/mmci.c
+index e500051bd..ffc160dca 100644
+--- a/drivers/mmc/host/mmci.c
++++ b/drivers/mmc/host/mmci.c
+@@ -1608,12 +1608,39 @@ static int mmci_qcom_get_rx_fifocnt(struct mmci_host *host, u32 status, int r)
+ 	return 0;
+ }
+ 
++static void mmci_fifo_read(struct mmci_host *host, void *buffer,
++			   unsigned int words, unsigned int *word_offset)
++{
++	void __iomem *fifo = host->base + MMCIFIFO;
++	u32 *ptr = buffer;
++	unsigned int i;
++
++	if (!host->variant->qcom_fifo) {
++		ioread32_rep(fifo, buffer, words);
++		return;
++	}
++
++	/*
++	 * The Qualcomm FIFO is exposed as a cyclic address window.  Preserve
++	 * the offset across the eight-word bursts consumed by one PIO service,
++	 * matching the downstream Qualcomm driver.
++	 */
++	for (i = 0; i < words; i++) {
++		unsigned int offset = *word_offset * sizeof(*ptr);
++
++		*ptr++ = readl_relaxed(fifo + offset);
++		*word_offset = (*word_offset + 1) %
++				(host->variant->fifosize / sizeof(*ptr));
++	}
++}
++
+ static int mmci_pio_read(struct mmci_host *host, char *buffer, unsigned int remain)
+ {
+ 	void __iomem *base = host->base;
+ 	char *ptr = buffer;
+ 	u32 status = readl(host->base + MMCISTATUS);
+ 	int host_remain = host->size;
++	unsigned int fifo_word_offset = 0;
+ 
+ 	do {
+ 		int count = host->get_rx_fifocnt(host, status, host_remain);
+@@ -1633,14 +1660,16 @@ static int mmci_pio_read(struct mmci_host *host, char *buffer, unsigned int rema
+ 		if (unlikely(count & 0x3)) {
+ 			if (count < 4) {
+ 				unsigned char buf[4];
+-				ioread32_rep(base + MMCIFIFO, buf, 1);
++				mmci_fifo_read(host, buf, 1, &fifo_word_offset);
+ 				memcpy(ptr, buf, count);
+ 			} else {
+-				ioread32_rep(base + MMCIFIFO, ptr, count >> 2);
++				mmci_fifo_read(host, ptr, count >> 2,
++					       &fifo_word_offset);
+ 				count &= ~0x3;
+ 			}
+ 		} else {
+-			ioread32_rep(base + MMCIFIFO, ptr, count >> 2);
++			mmci_fifo_read(host, ptr, count >> 2,
++				       &fifo_word_offset);
+ 		}
+ 
+ 		ptr += count;
+-- 
+2.47.3

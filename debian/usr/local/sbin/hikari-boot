@@ -1,0 +1,8 @@
+#!/bin/sh
+# Return to the persistent first-stage BOOT environment.
+set -eu
+echo 'Rebooting into BOOT'
+sync
+# Let systemd stop services, unmount filesystems and close the journal.  The
+# persistent Sony boot image naturally returns to the BOOT environment.
+exec systemctl reboot

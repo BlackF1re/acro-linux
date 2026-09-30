@@ -9,19 +9,13 @@ source_dts="$repo_root/kernel/dts/qcom-msm8260-sony-hikari.dts"
 hardware_dtsi="$repo_root/kernel/dts/qcom-msm8260-sony-hikari-hardware.dtsi"
 wireless_dtsi="$repo_root/kernel/dts/qcom-msm8260-sony-hikari-wireless.dtsi"
 gpu_base_dtsi="$repo_root/kernel/dts/qcom-msm8260-sony-hikari-gpu-base.dtsi"
-gpu_profile_dtsi="$repo_root/kernel/dts/qcom-msm8260-sony-hikari-gpu.dtsi"
-safe_dtsi="$repo_root/kernel/dts/qcom-msm8260-sony-hikari-safe.dtsi"
 hardware_name=$(basename -- "$hardware_dtsi")
 wireless_name=$(basename -- "$wireless_dtsi")
 gpu_base_name=$(basename -- "$gpu_base_dtsi")
-gpu_profile_name=$(basename -- "$gpu_profile_dtsi")
-safe_name=$(basename -- "$safe_dtsi")
 main_target="$target_dir/qcom-msm8260-sony-hikari.dts"
-gpu_target="$target_dir/qcom-msm8260-sony-hikari-gpu.dts"
-safe_target="$target_dir/qcom-msm8260-sony-hikari-safe.dts"
 
 test -f "$source_dts" || { echo "missing project DTS: $source_dts" >&2; exit 1; }
-for input in "$hardware_dtsi" "$wireless_dtsi" "$gpu_base_dtsi" "$gpu_profile_dtsi" "$safe_dtsi"; do
+for input in "$hardware_dtsi" "$wireless_dtsi" "$gpu_base_dtsi"; do
   test -f "$input" || { echo "missing project DTSI: $input" >&2; exit 1; }
 done
 test -f "$target_dir/qcom-msm8660.dtsi" || { echo "not an MSM8660-capable kernel tree: $kernel_src" >&2; exit 1; }
@@ -59,8 +53,13 @@ for path, old, new in edits:
     path.write_text(text.replace(old, new, 1))
 PY
 
+# Source-backed additions not yet available in upstream: truthful AK8972
+# matching and an IIO conversion of Sony's GPL APDS9702 driver.
+python3 "$repo_root/scripts/apply-hikari-sensors.py" "$kernel_src"
+python3 "$repo_root/scripts/apply-hikari-as3676-leds.py" "$kernel_src"
+
 install -m 0644 "$source_dts" "$main_target"
-for input in "$hardware_dtsi" "$wireless_dtsi" "$gpu_base_dtsi" "$gpu_profile_dtsi" "$safe_dtsi"; do
+for input in "$hardware_dtsi" "$wireless_dtsi" "$gpu_base_dtsi"; do
   install -m 0644 "$input" "$target_dir/$(basename -- "$input")"
 done
 for include_name in "$hardware_name" "$wireless_name" "$gpu_base_name"; do
@@ -69,18 +68,23 @@ for include_name in "$hardware_name" "$wireless_name" "$gpu_base_name"; do
 	fi
 done
 
-# Both derived profiles start from the exact normal DTS.  GPU enables only the
-# A220 node; safe disables the multimedia island.  This keeps board wiring from
-# drifting between artifacts and preserves the verified USB/ramoops foundation.
-cp -- "$main_target" "$gpu_target"
-printf '\n#include "%s"\n' "$gpu_profile_name" >> "$gpu_target"
-cp -- "$main_target" "$safe_target"
-printf '\n#include "%s"\n' "$safe_name" >> "$safe_target"
+for obsolete in "$target_dir/qcom-msm8260-sony-hikari-gpu.dts" \
+	"$target_dir/qcom-msm8260-sony-hikari-safe.dts"; do
+	rm -f -- "$obsolete"
+done
 
-for dtb in qcom-msm8260-sony-hikari.dtb qcom-msm8260-sony-hikari-gpu.dtb qcom-msm8260-sony-hikari-safe.dtb; do
+# Converge kernel trees previously prepared by the old three-profile build.
+# Leaving these Makefile entries behind makes a plain `make dtbs` reference
+# source files which no longer exist.
+sed -i \
+	-e '/qcom-msm8260-sony-hikari-gpu\.dtb/d' \
+	-e '/qcom-msm8260-sony-hikari-safe\.dtb/d' \
+	"$target_dir/Makefile"
+
+for dtb in qcom-msm8260-sony-hikari.dtb; do
 	if ! rg -q "${dtb//./\\.}" "$target_dir/Makefile"; then
 		printf 'dtb-$(CONFIG_ARCH_QCOM) += %s\n' "$dtb" >> "$target_dir/Makefile"
 	fi
 done
 
-echo "prepared $kernel_src with Hikari display, GPU and USB-safe DTBs"
+echo "prepared $kernel_src with the single Hikari SYSTEM DTB"

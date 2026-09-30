@@ -26,7 +26,10 @@ for option in \
 	CONFIG_KEYBOARD_PMIC8XXX=y \
 	CONFIG_KEYBOARD_GPIO=y \
 	CONFIG_RTC_DRV_PM8XXX=y \
-	CONFIG_QCOM_PM8XXX_XOADC=y; do
+	CONFIG_QCOM_PM8XXX_XOADC=y \
+	CONFIG_GENERIC_ADC_THERMAL=y \
+	CONFIG_QCOM_TSENS=y \
+	CONFIG_NVMEM_QCOM_QFPROM=y; do
 	grep -qx "$option" "$config" || { echo "missing $option" >&2; exit 1; }
 done
 
@@ -37,6 +40,7 @@ for symbol in \
 	CONFIG_CFG80211 CONFIG_BRCMFMAC CONFIG_BRCMFMAC_SDIO \
 	CONFIG_BT CONFIG_BT_HCIUART CONFIG_BT_HCIUART_SERDEV \
 	CONFIG_BT_HCIUART_BCM CONFIG_BT_HCIUART_H4 \
+	CONFIG_BT_BNEP CONFIG_BT_RFCOMM CONFIG_BT_HIDP \
 	CONFIG_RMI4_CORE CONFIG_RMI4_I2C CONFIG_RMI4_F11 \
 	CONFIG_MPU3050_I2C CONFIG_BMA180; do
 	grep -Eq "^${symbol}=[ym]$" "$config" || {
@@ -62,6 +66,12 @@ gyro="$gsbi12/i2c@19c80000/gyroscope@68"
 accel="$gyro/i2c-gate/accelerometer@18"
 keypad="$pmic/keypad@148"
 gpio_keys=/gpio-keys
+headset_switch="$gpio_keys/headset-detect-switch"
+xoadc="$pmic/xoadc@197"
+msm_therm=/msm-thermal-sensor
+msm_thermal_zone=/thermal-zones/msm-board-thermal
+battery_therm=/battery-thermal-sensor
+battery_thermal_zone=/thermal-zones/battery-pack
 
 [[ $(fdtget -ts "$dtb" "$emmc" status) == okay ]]
 [[ $(fdtget -ts "$dtb" "$sd" status) == okay ]]
@@ -112,19 +122,26 @@ read -r _provider fw_index fw_flags <<<"$(fdtget -tu "$dtb" "$nfc" firmware-gpio
 [[ $en_index -eq 16 && $en_flags -eq 0 ]]
 [[ $fw_index -eq 26 && $fw_flags -eq 0 ]]
 
-# BCM4330 WLAN: SDCC4 four-bit/48 MHz; its physical supply is PM8058 S3 at
-# 1.8 V, but the incomplete shared-rail model must not program S3 yet. Sony's
-# downstream host advertises the 2.7-2.9 V OCR bits despite that physical rail,
-# represented here by a logical fixed 2.8 V child supply. PM8058 GPIO38 FUNC2
+# BCM4330 WLAN: SDCC4 four-bit at Sony's 24 MHz intermediate operating point;
+# 48 MHz is the vendor maximum but failed sustained transfers with mainline
+# PL18x on the physical Hikari. Its physical supply is the shared PM8058 S3
+# rail at 1.8 V. Sony's downstream host advertises the 2.7-2.9 V OCR bits
+# despite that physical rail, represented here by a logical fixed 2.8 V child
+# supply. PM8058 GPIO38 FUNC2
 # supplies the BCM4330 32.768 kHz sleep clock. Sony bcmdhd directly drives
 # WL_RST_N GPIO130 and uses GPIO128 as its OOB HOST_WAKE interrupt. SDIO DAT1
 # IRQ cannot be advertised until the PL18x host implements enable_sdio_irq().
 wifi_vdd=/wifi-vdd-regulator
+wifi_physical_vdd="$rpm/regulators-1/s3"
+[[ $(fdtget -tu "$dtb" "$wifi_physical_vdd" regulator-min-microvolt) -eq 1800000 ]]
+[[ $(fdtget -tu "$dtb" "$wifi_physical_vdd" regulator-max-microvolt) -eq 1800000 ]]
+[[ $(fdtget -tu "$dtb" "$wifi_physical_vdd" qcom,switch-mode-frequency) -eq 1600000 ]]
+fdtget -p "$dtb" "$wifi_physical_vdd" | grep -qx regulator-always-on
 [[ $(fdtget -ts "$dtb" "$wifi_vdd" compatible) == regulator-fixed ]]
 [[ $(fdtget -tu "$dtb" "$wifi_vdd" regulator-min-microvolt) -eq 2800000 ]]
 [[ $(fdtget -tu "$dtb" "$wifi_vdd" regulator-max-microvolt) -eq 2800000 ]]
 fdtget -p "$dtb" "$wifi_vdd" | grep -qx regulator-always-on
-! fdtget -p "$dtb" "$wifi_vdd" | grep -qx vin-supply
+fdtget -p "$dtb" "$wifi_vdd" | grep -qx vin-supply
 wifi_sleep_clk="$pmic/gpio@150/wifi-sleep-clk-state"
 [[ $(fdtget -ts "$dtb" "$wifi_sleep_clk" pins) == gpio38 ]]
 [[ $(fdtget -ts "$dtb" "$wifi_sleep_clk" function) == func2 ]]
@@ -133,7 +150,7 @@ wifi_sleep_clk="$pmic/gpio@150/wifi-sleep-clk-state"
 fdtget -p "$dtb" "$wifi_sleep_clk" | grep -qx output-high
 [[ $(fdtget -ts "$dtb" "$wifi_host" status) == okay ]]
 [[ $(fdtget -tu "$dtb" "$wifi_host" bus-width) -eq 4 ]]
-[[ $(fdtget -tu "$dtb" "$wifi_host" max-frequency) -eq 48000000 ]]
+[[ $(fdtget -tu "$dtb" "$wifi_host" max-frequency) -eq 24000000 ]]
 fdtget -p "$dtb" "$wifi_host" | grep -qx non-removable
 ! fdtget -p "$dtb" "$wifi_host" | grep -qx cap-sdio-irq
 fdtget -p "$dtb" "$wifi_host" | grep -qx mmc-pwrseq
@@ -179,6 +196,41 @@ grep -qx '# CONFIG_RMI4_F34 is not set' "$config"
 [[ $(fdtget -tu "$dtb" "$rpm/regulators-1/l10" regulator-min-microvolt) -eq 2850000 ]]
 fdtget -p "$dtb" "$rpm/regulators-1/l8" | grep -qx regulator-always-on
 fdtget -p "$dtb" "$rpm/regulators-1/l10" | grep -qx regulator-always-on
+
+# PM8058 XOADC uses the dedicated 2.2 V L18 reference and five exact
+# board-level analog routes from Sony's Fuji/Hikari BSP.
+[[ $(fdtget -tu "$dtb" "$rpm/regulators-1/l18" regulator-min-microvolt) -eq 2200000 ]]
+[[ $(fdtget -tu "$dtb" "$rpm/regulators-1/l18" regulator-max-microvolt) -eq 2200000 ]]
+fdtget -p "$dtb" "$xoadc" | grep -qx xoadc-ref-supply
+for channel in 5 6 7 8 9; do
+	[[ $(fdtget -tu "$dtb" "$xoadc/adc-channel@$channel" reg) == "0 $((16#$channel))" ]]
+done
+[[ $(fdtget -ts "$dtb" "$xoadc/adc-channel@5" label) == headset-accessory ]]
+[[ $(fdtget -ts "$dtb" "$xoadc/adc-channel@6" label) == battery-thermistor ]]
+[[ $(fdtget -ts "$dtb" "$xoadc/adc-channel@7" label) == msm-thermistor ]]
+[[ $(fdtget -ts "$dtb" "$xoadc/adc-channel@8" label) == battery-id ]]
+[[ $(fdtget -ts "$dtb" "$xoadc/adc-channel@9" label) == charger-current-monitor ]]
+[[ $(fdtget -ts "$dtb" "$msm_therm" compatible) == generic-adc-thermal ]]
+read -r _provider msm_therm_prescale msm_therm_channel <<<"$(fdtget -tu "$dtb" "$msm_therm" io-channels)"
+[[ $msm_therm_prescale -eq 0 && $msm_therm_channel -eq 7 ]]
+[[ $(fdtget -ts "$dtb" "$msm_therm" io-channel-names) == sensor-channel ]]
+[[ $(fdtget -tu "$dtb" "$msm_therm" temperature-lookup-table | wc -w) -eq 34 ]]
+fdtget -p "$dtb" "$msm_thermal_zone" | grep -qx thermal-sensors
+[[ $(fdtget -ts "$dtb" "$battery_therm" compatible) == generic-adc-thermal ]]
+read -r _provider battery_therm_prescale battery_therm_channel <<<"$(fdtget -tu "$dtb" "$battery_therm" io-channels)"
+[[ $battery_therm_prescale -eq 0 && $battery_therm_channel -eq 6 ]]
+[[ $(fdtget -ts "$dtb" "$battery_therm" io-channel-names) == sensor-channel ]]
+[[ $(fdtget -tu "$dtb" "$battery_therm" temperature-lookup-table | wc -w) -eq 68 ]]
+fdtget -p "$dtb" "$battery_thermal_zone" | grep -qx thermal-sensors
+
+# Sony reads plug presence on TLMM61.  Physical Hikari evidence confirms
+# stable high when inserted and low when removed; report it as a normal switch.
+[[ $(fdtget -tu "$dtb" "$headset_switch" linux,input-type) -eq 5 ]]
+[[ $(fdtget -tu "$dtb" "$headset_switch" linux,code) -eq 2 ]]
+read -r _provider headset_gpio_index headset_gpio_flags <<<"$(fdtget -tu "$dtb" "$headset_switch" gpios)"
+[[ $headset_gpio_index -eq 61 && $headset_gpio_flags -eq 0 ]]
+[[ $(fdtget -tu "$dtb" "$headset_switch" debounce-interval) -eq 1500 ]]
+fdtget -p "$dtb" "$headset_switch" | grep -qx wakeup-source
 
 [[ $(fdtget -ts "$dtb" "$gyro" compatible) == invensense,mpu3050 ]]
 [[ $(fdtget -tu "$dtb" "$gyro" reg) -eq 104 ]]

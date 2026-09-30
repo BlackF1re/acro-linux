@@ -8,7 +8,7 @@ kernel_src=${KERNEL_SRC:-/home/paul/xperia/src/linux}
 build_dir=${BUILD_DIR:-"$hikari_build_root/linux-hikari-current"}
 cross_compile=${CROSS_COMPILE:-arm-linux-gnueabihf-}
 jobs=${JOBS:-"$(nproc)"}
-targets=${TARGETS:-"zImage qcom/qcom-msm8260-sony-hikari.dtb qcom/qcom-msm8260-sony-hikari-gpu.dtb qcom/qcom-msm8260-sony-hikari-safe.dtb"}
+targets=${TARGETS:-"zImage qcom/qcom-msm8260-sony-hikari.dtb"}
 initramfs_source=${INITRAMFS_SOURCE:-}
 kernel_fragment=${KERNEL_FRAGMENT:-"$repo_root/kernel/configs/hikari-boot6-display.fragment"}
 kernel_extra_fragments=${KERNEL_EXTRA_FRAGMENTS:-}
@@ -16,6 +16,7 @@ prune_default_modules=${PRUNE_DEFAULT_MODULES:-0}
 require_usb_debug=${REQUIRE_USB_DEBUG:-0}
 require_display_bringup=${REQUIRE_DISPLAY_BRINGUP:-0}
 require_charging=${REQUIRE_CHARGING:-0}
+build_profile=${KERNEL_BUILD_PROFILE:-generic}
 
 export KBUILD_BUILD_TIMESTAMP=${KBUILD_BUILD_TIMESTAMP:-"1970-01-01 00:00:00 UTC"}
 export KBUILD_BUILD_VERSION=${KBUILD_BUILD_VERSION:-1}
@@ -31,6 +32,22 @@ mkdir -p "$hikari_build_root"
 hikari_build_root=$(realpath -m -- "$hikari_build_root")
 build_dir=$(realpath -m -- "$build_dir")
 case "$build_dir" in "$hikari_build_root"/*) ;; *) echo "BUILD_DIR must be below HIKARI_BUILD_ROOT=$hikari_build_root" >&2; exit 1;; esac
+
+# Hikari's rescue loader is UP/non-SMP while the Debian kernel is SMP.  Kbuild
+# does not promise that one O= directory can be switched safely between such
+# ABI-changing configurations.  In particular, stale *.mod.c objects can keep
+# the same release string yet produce modules rejected by the running kernel.
+# Preserve the disk-saving single output tree, but force a clean transition
+# whenever its declared profile changes.
+profile_stamp="$build_dir/.hikari-build-profile"
+if [[ ! -f "$profile_stamp" && -f "$build_dir/vmlinux" ]]; then
+	echo "Hikari kernel profile was not recorded; cleaning legacy shared O= tree"
+	make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" clean
+elif [[ -f "$profile_stamp" ]] && [[ "$(<"$profile_stamp")" != "$build_profile" ]]; then
+	echo "Hikari kernel profile changed: $(<"$profile_stamp") -> $build_profile; cleaning shared O= tree"
+	make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" clean
+fi
+printf '%s\n' "$build_profile" > "$profile_stamp"
 "$repo_root/scripts/prepare-hikari-kernel-tree.sh" "$kernel_src"
 if [[ "$require_display_bringup" == 1 ]]; then
   # Kconfig alone cannot prove that Hikari's physically verified no-IOMMU
@@ -73,7 +90,8 @@ if [[ "$require_usb_debug" == 1 ]]; then
   for required in CONFIG_USB_CHIPIDEA_MSM=y CONFIG_USB_CHIPIDEA_UDC=y \
     CONFIG_PHY_QCOM_USB_HS=y \
     CONFIG_USB_GADGET=y CONFIG_CONFIGFS_FS=y CONFIG_USB_CONFIGFS=y \
-    CONFIG_USB_CONFIGFS_ACM=y CONFIG_USB_U_SERIAL=y; do
+    CONFIG_USB_CONFIGFS_ACM=y CONFIG_USB_CONFIGFS_NCM=y \
+    CONFIG_USB_U_SERIAL=y CONFIG_USB_U_ETHER=y; do
     grep -qx "$required" "$build_dir/.config" || {
       echo "Hikari BOOT #5 build requires $required" >&2
       exit 1
@@ -138,7 +156,8 @@ if [[ -n "$initramfs_source" ]]; then
     for required in CONFIG_USB_CHIPIDEA_MSM=y CONFIG_USB_CHIPIDEA_UDC=y \
       CONFIG_PHY_QCOM_USB_HS=y \
       CONFIG_USB_GADGET=y CONFIG_CONFIGFS_FS=y CONFIG_USB_CONFIGFS=y \
-      CONFIG_USB_CONFIGFS_ACM=y CONFIG_USB_U_SERIAL=y; do
+      CONFIG_USB_CONFIGFS_ACM=y CONFIG_USB_CONFIGFS_NCM=y \
+      CONFIG_USB_U_SERIAL=y CONFIG_USB_U_ETHER=y; do
       grep -qx "$required" "$build_dir/.config" || {
         echo "Hikari BOOT #5 build lost $required" >&2
         exit 1
@@ -190,7 +209,7 @@ make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" \
 if [[ " $targets " == *" zImage "* ]]; then
   echo "zImage: $build_dir/arch/arm/boot/zImage"
 fi
-for dtb_name in qcom-msm8260-sony-hikari.dtb qcom-msm8260-sony-hikari-gpu.dtb qcom-msm8260-sony-hikari-safe.dtb; do
+for dtb_name in qcom-msm8260-sony-hikari.dtb; do
   if [[ " $targets " == *" qcom/$dtb_name "* ]]; then
     echo "DTB:    $build_dir/arch/arm/boot/dts/qcom/$dtb_name"
   fi
