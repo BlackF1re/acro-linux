@@ -61,20 +61,41 @@
 		charge-term-current-microamp = <50000>;
 	};
 
+	cpufreq: cpu-frequency-controller@903000 {
+		compatible = "qcom,msm8660-cpufreq";
+		reg = <0x00903000 0x1000>,
+		      <0x02041000 0x1000>,
+		      <0x02051000 0x1000>;
+		reg-names = "scpll", "acc0", "acc1";
+		qcom,l2cc = <&l2cc>;
+
+		cpu0-supply = <&pm8901_s0>;
+		cpu1-supply = <&pm8901_s1>;
+		mem-supply = <&pm8058_s0>;
+		dig-supply = <&pm8058_s1>;
+
+		interconnects = <&afab AFAB_MAS_AMPSS_M0 &afab AFAB_SLV_EBI_CH0>;
+		interconnect-names = "cpu-mem";
+		nvmem-cells = <&speed_bin>;
+		nvmem-cell-names = "speed-bin";
+	};
+
 	/*
 	 * The low bank starts at the historical MSM8x60 shared-memory physical
 	 * base.  CONFIG_ARCH_QCOM_RESERVE_SMEM then retains its first 2 MiB for
 	 * SMEM, leaving 0x40200000 as the first normal Linux address.  The legacy
-	 * resource view starts at that latter address; see FIRST_BOOT_MEMORY.md.
-	 * This remains a deliberately minimal bring-up memory description, not a
-	 * claim that every byte of nominal RAM is currently understood.
+	 * resource view starts at that latter address.  The remaining ranges match
+	 * Sony's three-bank Fuji map exactly: 44 MiB at PHYS_OFFSET, 384 MiB at
+	 * 0x48000000 and 511 MiB at 0x60000000.  The gap below 0x48000000 and the
+	 * final MiB above 0x7fefffff are therefore intentionally not System RAM.
 	 */
 };
 
 /* Override the placeholder System RAM node supplied by qcom-msm8660.dtsi. */
 &{/memory@0} {
 	reg = <0x40000000 0x02e00000>,
-	      <0x48000000 0x26600000>;
+	      <0x48000000 0x18000000>,
+	      <0x60000000 0x1ff00000>;
 };
 
 /*
@@ -349,11 +370,45 @@
 &rpm {
 	regulators-0 {
 		compatible = "qcom,rpm-pm8901-regulators";
+
+		pm8901_s0: s0 {
+			regulator-min-microvolt = <750000>;
+			regulator-max-microvolt = <1325000>;
+			qcom,switch-mode-frequency = <1600000>;
+		};
+
+		pm8901_s1: s1 {
+			regulator-min-microvolt = <750000>;
+			regulator-max-microvolt = <1325000>;
+			qcom,switch-mode-frequency = <1600000>;
+		};
+
 		pm8901_l2: l2 { regulator-min-microvolt = <2850000>; regulator-max-microvolt = <2850000>; };
 		pm8901_lvs1: lvs1 { regulator-always-on; };
 	};
 	regulators-1 {
 		compatible = "qcom,rpm-pm8058-regulators";
+
+		pm8058_s0: s0 {
+			regulator-min-microvolt = <800000>;
+			regulator-max-microvolt = <1325000>;
+			qcom,switch-mode-frequency = <1600000>;
+		};
+
+		pm8058_s1: s1 {
+			regulator-min-microvolt = <800000>;
+			regulator-max-microvolt = <1200000>;
+			qcom,switch-mode-frequency = <1600000>;
+		};
+
+		/* Shared WLAN/Timpani rail; exact voltage from Sony's Fuji BSP. */
+		pm8058_s3: s3 {
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+			qcom,switch-mode-frequency = <1600000>;
+			regulator-always-on;
+			bias-pull-down;
+		};
 
 		pm8058_l6: l6 {
 			regulator-min-microvolt = <3050000>;
@@ -374,6 +429,12 @@
 	};
 };
 
+&qfprom {
+	speed_bin: speed-bin@c0 {
+		reg = <0xc0 0x4>;
+	};
+};
+
 &gsbi8 {
 	qcom,mode = <GSBI_PROT_I2C>;
 	status = "okay";
@@ -386,6 +447,8 @@
 	lcd_backlight: backlight@40 {
 		compatible = "ams,as3676-backlight";
 		reg = <0x40>;
+		/* Hikari routes the ambient-light photodiode to AS3676 GPIO2. */
+		ams,als-connected;
 		status = "okay";
 	};
 

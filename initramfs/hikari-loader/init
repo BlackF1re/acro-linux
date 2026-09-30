@@ -1,0 +1,64 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Persistent first-stage environment.  It never starts the microSD system
+# without an explicit operator command.
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export HOME=/
+export TERM=linux
+export PS1='BOOT # '
+
+log()
+{
+	printf '%s\n' "$*" >/dev/kmsg 2>/dev/null || true
+	printf '%s\n' "$*" >/dev/console 2>/dev/null || true
+}
+
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mkdir -p /run /system
+mount -t tmpfs -o mode=0755 tmpfs /run
+
+/usr/sbin/hikari-usb-gadget || log 'HIKARI USB GADGET SETUP FAILED'
+tries=0
+while [ "$tries" -lt 20 ] && [ ! -e /sys/class/net/usb0 ]; do
+	tries=$((tries + 1))
+	sleep 1
+done
+if [ -e /sys/class/net/usb0 ]; then
+	ip link set usb0 up
+	ip address replace 192.168.77.2/30 dev usb0
+else
+	log 'HIKARI USB NCM SETUP FAILED no usb0'
+fi
+
+banner()
+{
+	cat <<'EOF'
+============================================================
+ HIKARI MAINLINE LINUX BOOT
+============================================================
+This first-stage system never starts microSD automatically.
+Commands: hikari-system, hikari-receive-system, hikari-receive-rootfs
+          reboot, poweroff
+USB network: 192.168.77.2/30 (host 192.168.77.1)
+EOF
+}
+
+banner >/dev/console 2>/dev/null || true
+banner >/dev/tty0 2>/dev/null || true
+log 'HIKARI BOOT READY'
+
+usb_console()
+{
+	while :; do
+		if [ -c /dev/ttyGS0 ]; then
+			/usr/sbin/hikari-console-launch
+		fi
+		sleep 1
+	done
+}
+
+usb_console &
+banner
+exec sh -i </dev/console >/dev/console 2>&1

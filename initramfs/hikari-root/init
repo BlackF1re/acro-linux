@@ -16,10 +16,20 @@ mount -t devtmpfs devtmpfs /dev
 mkdir -p /run /newroot
 mount -t tmpfs -o mode=0755 tmpfs /run
 
-# Keep ttyGS0 allocated across ChipIdea gadget/host transitions.  The helper
-# registers a configfs composite driver once; it automatically rebinds when
-# the UDC returns after host mode.
+# Register the configfs composite gadget once.  After switch_root, udev starts
+# the same idempotent helper whenever ChipIdea publishes a new UDC add event.
 /usr/sbin/hikari-usb-gadget || log 'HIKARI USB GADGET SETUP FAILED'
+tries=0
+while [ "$tries" -lt 20 ] && [ ! -e /sys/class/net/usb0 ]; do
+	tries=$((tries + 1))
+	sleep 1
+done
+if [ -e /sys/class/net/usb0 ]; then
+	ip link set usb0 up
+	ip address replace 192.168.77.2/30 dev usb0
+else
+	log 'HIKARI SYSTEM USB NCM SETUP FAILED no usb0'
+fi
 
 root_spec=LABEL=HIKARI_ROOT
 root_type=ext4
@@ -33,10 +43,11 @@ for arg in $(cat /proc/cmdline); do
 	esac
 done
 
-log "HIKARI ROOT WAIT spec=$root_spec type=$root_type opts=$root_opts"
+log "HIKARI SYSTEM ROOT WAIT spec=$root_spec type=$root_type opts=$root_opts"
 tries=0
 while [ "$tries" -lt 60 ]; do
-	if mount -t "$root_type" -o "$root_opts" "$root_spec" /newroot 2>/dev/null; then
+	if mount -t "$root_type" -o "$root_opts" "$root_spec" /newroot \
+		2>/run/root-mount.err; then
 		break
 	fi
 	tries=$((tries + 1))
@@ -44,13 +55,24 @@ while [ "$tries" -lt 60 ]; do
 done
 
 if ! mountpoint -q /newroot || [ ! -x /newroot/sbin/init ]; then
-	log "HIKARI ROOT FAILED spec=$root_spec"
+	log "HIKARI SYSTEM ROOT FAILED spec=$root_spec"
+	while IFS= read -r line; do
+		log "HIKARI SYSTEM ROOT ERROR $line"
+	done </run/root-mount.err
+	log 'HIKARI SYSTEM BLOCK DEVICES'
+	while IFS= read -r line; do log "$line"; done </proc/partitions
+	blkid 2>&1 | while IFS= read -r line; do log "$line"; done
 	log 'Connect USB CDC ACM; emergency shell is active.'
-	setsid sh -c 'exec sh </dev/ttyGS0 >/dev/ttyGS0 2>&1' &
+	(
+		while :; do
+			[ -c /dev/ttyGS0 ] && /usr/sbin/hikari-console-launch
+			sleep 1
+		done
+	) &
 	exec sh </dev/console >/dev/console 2>&1
 fi
 
-log "HIKARI ROOT READY spec=$root_spec"
+log "HIKARI SYSTEM ROOT READY spec=$root_spec"
 mkdir -p /newroot/proc /newroot/sys /newroot/dev /newroot/run
 mount --move /proc /newroot/proc
 mount --move /sys /newroot/sys

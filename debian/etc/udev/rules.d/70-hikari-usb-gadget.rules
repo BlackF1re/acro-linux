@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# ChipIdea removes and recreates its UDC while changing USB role.  Rebind the
+# already configured configfs gadget from the normal kernel uevent, without a
+# polling daemon.
+ACTION=="add", SUBSYSTEM=="udc", TAG+="systemd", ENV{SYSTEMD_WANTS}+="hikari-usb-gadget.service"

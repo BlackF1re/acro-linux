@@ -16,20 +16,18 @@ by the DRM panel core.
 
 Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
 ---
- .../panel/panel-renesas-r63306-tmd-mdv22.c    | 8 +++++++-
- 1 file changed, 7 insertions(+), 1 deletion(-)
+ .../panel/panel-renesas-r63306-tmd-mdv22.c    | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
 
 diff --git a/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c b/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
 index 53e1c1b40e683c8e84c828d7b307e03b62b0fa20..1ea88eb6628fb3274802b529f33203806749a347 100644
 --- a/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
 +++ b/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
-@@ -46,6 +46,9 @@ static int mdv22_prepare(struct drm_panel *panel)
+@@ -46,6 +46,7 @@ static int mdv22_prepare(struct drm_panel *panel)
  	ret=mdv22_send(m->dsi,mdv22_init,ARRAY_SIZE(mdv22_init)); if(ret) goto power_off;
  	ret=mipi_dsi_dcs_exit_sleep_mode(m->dsi); if(ret) goto power_off; msleep(100);
  	ret=mdv22_send(m->dsi,mdv22_post_sleep,ARRAY_SIZE(mdv22_post_sleep)); if(ret) goto power_off; msleep(20);
 +	ret=mipi_dsi_dcs_set_display_on(m->dsi); if(ret) goto power_off;
-+	dev_info(panel->dev, "MDV22 command sequence complete before video scanout\n");
-+	msleep(20);
  	return 0;
  power_off:
  	gpiod_set_value_cansleep(m->reset,0);

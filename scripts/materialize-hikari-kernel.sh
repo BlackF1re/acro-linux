@@ -116,10 +116,13 @@ GIT_COMMITTER_DATE=2026-09-04T17:30:00+03:00 \
 git -C "$out" commit -q -m $'drm: msm: finalize Hikari MDV22 signalling\n\nMatch the Sony Hikari MDV22 BGR channel order and reproduce the exact reset/LCD power sequencing around panel initialization and shutdown.\n\nSigned-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>'
 
 # Project correction #39 expands the already Hikari-specific AS3676 driver
-# from LCD-only support to every source-backed LED output used on this board.
+# from LCD-only support to every source-backed LED output and the GPIO2
+# ambient-light input used on this board.
 # The precondition checker refuses to replace an unexpected historical driver.
 python3 "$repo_root/scripts/apply-hikari-as3676-leds.py" "$out"
-git -C "$out" add drivers/video/backlight/as3676-backlight.c drivers/video/backlight/Kconfig
+git -C "$out" add \
+  drivers/video/backlight/as3676-backlight.c drivers/video/backlight/Kconfig \
+  Documentation/devicetree/bindings/leds/ams,as3676-backlight.yaml
 if git -C "$out" diff --cached --quiet; then
   echo 'Hikari AS3676 LED correction produced no diff; refusing ambiguous materialization' >&2
   exit 7
@@ -130,7 +133,29 @@ GIT_AUTHOR_DATE=2026-09-04T18:20:00+03:00 \
 GIT_COMMITTER_NAME="Hikari Patch Materializer" \
 GIT_COMMITTER_EMAIL=hikari-materializer@localhost \
 GIT_COMMITTER_DATE=2026-09-04T18:20:00+03:00 \
-git -C "$out" commit -q -m $'leds: as3676: expose Hikari button and RGB outputs\n\nKeep LCD sinks 1/2/6 and add the exact Sony Hikari button RGB1/2/3 group plus notification sinks 41/42/43 through the Linux LED class.\n\nSigned-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>'
+git -C "$out" commit -q -m $'leds: as3676: expose Hikari LEDs and ambient light\n\nKeep LCD sinks 1/2/6, add the exact Sony Hikari button RGB1/2/3 group and notification sinks 41/42/43 through the LED class, and expose the GPIO2 photodiode ADC through IIO.\n\nSigned-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>'
+
+# Project correction #40 adds the two sensor identities absent from upstream:
+# AKM8972 is register-compatible with AK8975, while APDS9702 needs a small IIO
+# conversion of Sony's GPL driver. Board wiring remains in the project DTSI.
+python3 "$repo_root/scripts/apply-hikari-sensors.py" "$out"
+git -C "$out" add \
+  drivers/iio/magnetometer/ak8975.c \
+  drivers/iio/proximity/apds9702.c \
+  drivers/iio/proximity/Kconfig drivers/iio/proximity/Makefile \
+  Documentation/devicetree/bindings/iio/magnetometer/asahi-kasei,ak8975.yaml \
+  Documentation/devicetree/bindings/iio/proximity/avago,apds9702.yaml
+if git -C "$out" diff --cached --quiet; then
+  echo 'Hikari sensor correction produced no diff; refusing ambiguous materialization' >&2
+  exit 8
+fi
+GIT_AUTHOR_NAME=BlackF1re \
+GIT_AUTHOR_EMAIL=55582873+BlackF1re@users.noreply.github.com \
+GIT_AUTHOR_DATE=2026-09-16T00:00:00+07:00 \
+GIT_COMMITTER_NAME="Hikari Patch Materializer" \
+GIT_COMMITTER_EMAIL=hikari-materializer@localhost \
+GIT_COMMITTER_DATE=2026-09-16T00:00:00+07:00 \
+git -C "$out" commit -q -m $'iio: add Hikari AK8972 and APDS9702 sensors\n\nReuse the AK8975 register-compatible implementation for the truthful AK8972 DT identity and convert Sony Mobile\x27s GPL APDS9702 support to the IIO proximity ABI.\n\nSigned-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>'
 
 "$repo_root/scripts/check-msm8660-mmcc-source.sh" "$out"
 python3 "$repo_root/scripts/check-hikari-display-source.py" "$out"

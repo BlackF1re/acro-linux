@@ -1,0 +1,39 @@
+From 722b6c9fc77eeecd7a7ca7f0e845f21af4fcc3fa Mon Sep 17 00:00:00 2001
+From: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Date: Fri, 14 Aug 2026 01:49:37 +0300
+Subject: [PATCH] freedreno/a2xx: set the depth on a cube map fetch constant
+
+The texture fetch constant carries a zero depth for cube maps.  The depth
+field describes the six faces there, and the working configuration
+measured on this hardware programs the face count; do the same.
+
+On its own this changes no test result.  Cube map sampling works without
+it -- the shader supplies the face index and the clamp along r bounds it
+-- so this is parity with the known-good programming rather than a fix.
+
+Assisted-by: Claude:claude-opus-5
+Signed-off-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/43606>
+---
+ src/gallium/drivers/freedreno/a2xx/fd2_texture.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/gallium/drivers/freedreno/a2xx/fd2_texture.c b/src/gallium/drivers/freedreno/a2xx/fd2_texture.c
+index 99e06289ed6..0b318852833 100644
+--- a/src/gallium/drivers/freedreno/a2xx/fd2_texture.c
++++ b/src/gallium/drivers/freedreno/a2xx/fd2_texture.c
+@@ -169,7 +169,8 @@ fd2_sampler_view_create(struct pipe_context *pctx, struct pipe_resource *prsc,
+    so->tex1 = A2XX_SQ_TEX_1_FORMAT(fmt.format) |
+               A2XX_SQ_TEX_1_CLAMP_POLICY(SQ_TEX_CLAMP_POLICY_OGL);
+    so->tex2 = A2XX_SQ_TEX_2_HEIGHT(prsc->height0 - 1) |
+-              A2XX_SQ_TEX_2_WIDTH(prsc->width0 - 1);
++              A2XX_SQ_TEX_2_WIDTH(prsc->width0 - 1) |
++              COND(prsc->target == PIPE_TEXTURE_CUBE, A2XX_SQ_TEX_2_DEPTH(6));
+    so->tex3 = A2XX_SQ_TEX_3_NUM_FORMAT(fmt.num_format) |
+               fd2_tex_swiz(cso->format, cso->swizzle_r, cso->swizzle_g,
+                            cso->swizzle_b, cso->swizzle_a) |
+-- 
+2.53.0
+
+
+

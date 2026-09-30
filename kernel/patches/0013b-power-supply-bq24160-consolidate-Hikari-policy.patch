@@ -1,0 +1,376 @@
+From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+Date: Tue, 22 Sep 2026 15:25:00 +0700
+Subject: [PATCH] power: supply: bq24160: consolidate Hikari charger policy
+
+Replace the diagnostic-led bring-up iterations with the physically tested
+Hikari policy: preserve completion, distinguish active faults from history,
+coordinate OTG lock, service the watchdog while charging, preserve the USB
+input limit, avoid periodic restarts and apply the rev2.3 hold only while
+warm.  Deliberately omit transient state-transition logging.
+
+Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+---
+--- a/drivers/power/supply/bq24160_charger.c
++++ b/drivers/power/supply/bq24160_charger.c
+@@ -16,9 +16,11 @@
+ #include <linux/pm_wakeup.h>
+ #include <linux/power_supply.h>
+ #include <linux/regmap.h>
++#include <linux/regulator/driver.h>
+ #include <linux/workqueue.h>
+ 
+ #define BQ24160_REG_STATUS		0x00
++#define BQ24160_REG_BR_STATUS		0x01
+ #define BQ24160_REG_CONTROL		0x02
+ #define BQ24160_REG_VOLTAGE		0x03
+ #define BQ24160_REG_VENDOR		0x04
+@@ -27,7 +29,10 @@
+ 
+ #define BQ24160_STATUS_TMR_RST		BIT(7)
+ #define BQ24160_STATUS_STAT_MASK	GENMASK(6, 4)
++#define BQ24160_STATUS_SUPPLY_SEL_USB	BIT(3)
+ #define BQ24160_STATUS_FAULT_MASK	GENMASK(2, 0)
++#define BQ24160_BR_STATUS_OTG_LOCK	BIT(3)
++#define BQ24160_CTRL_RESET		BIT(7)
+ #define BQ24160_CTRL_IUSB_MASK		GENMASK(6, 4)
+ #define BQ24160_CTRL_EN_STAT		BIT(3)
+ #define BQ24160_CTRL_TE		BIT(2)
+@@ -44,6 +49,7 @@
+ #define BQ24160_STAT_CHARGING_IN	3
+ #define BQ24160_STAT_CHARGING_USB	4
+ #define BQ24160_STAT_DONE		5
++#define BQ24160_STAT_FAULT		7
+ 
+ #define BQ24160_WATCHDOG_MS		10000
+ #define BQ24160_STATUS_MS		30000
+@@ -62,10 +68,12 @@
+ 	u32 charge_limit_ua;
+ 	u32 charge_voltage_uv;
+ 	u32 term_current_ua;
++	u32 programmed_charge_ua;
+ 	int cold_degc;
+ 	int warm_degc;
+ 	int hot_degc;
+ 	bool rev23_hold;
++	bool otg_locked;
+ 	bool charging;
+ };
+ 
+@@ -83,6 +91,36 @@
+ 	return regmap_read(bq->regmap, reg, val);
+ }
+ 
++static int bq24160_update_control(struct bq24160 *bq, unsigned int mask,
++				  unsigned int val)
++{
++	unsigned int control;
++	int ret;
++
++	ret = regmap_read(bq->regmap, BQ24160_REG_CONTROL, &control);
++	if (ret)
++		return ret;
++
++	/* RESET is write-only and reads back as one; never echo it to the chip. */
++	control &= ~BQ24160_CTRL_RESET;
++	control &= ~mask;
++	control |= val & mask;
++
++	return regmap_write(bq->regmap, BQ24160_REG_CONTROL, control);
++}
++
++static void bq24160_set_charging(struct bq24160 *bq, bool charging)
++{
++	if (bq->charging == charging)
++		return;
++
++	bq->charging = charging;
++	if (charging)
++		pm_stay_awake(bq->dev);
++	else
++		pm_relax(bq->dev);
++}
++
+ static int bq24160_disable(struct bq24160 *bq)
+ {
+ 	/*
+@@ -91,9 +129,9 @@
+ 	 * source would defeat the safe "powered but not charging" state when the
+ 	 * fuel-gauge reading or thermal policy is unavailable.
+ 	 */
+-	bq->charging = false;
+-	return regmap_update_bits(bq->regmap, BQ24160_REG_CONTROL,
+-				  BQ24160_CTRL_CE, BQ24160_CTRL_CE);
++	bq24160_set_charging(bq, false);
++	return bq24160_update_control(bq, BQ24160_CTRL_CE,
++				       BQ24160_CTRL_CE);
+ }
+ 
+ static int bq24160_usb_code(unsigned int ua)
+@@ -139,16 +177,9 @@
+ 	tcode = clamp_val((bq->term_current_ua / 1000 - 50) / 50, 0, 7);
+ 
+ 	/* Preserve the Fuji back-boost avoidance sequence while programming. */
+-	ret = regmap_update_bits(bq->regmap, BQ24160_REG_CONTROL,
+-				 BQ24160_CTRL_HZ | BQ24160_CTRL_CE,
+-				 BQ24160_CTRL_HZ | BQ24160_CTRL_CE);
+-	if (ret)
+-		return ret;
+-	ret = regmap_update_bits(bq->regmap, BQ24160_REG_CONTROL,
+-				 BQ24160_CTRL_IUSB_MASK | BQ24160_CTRL_EN_STAT |
+-				 BQ24160_CTRL_TE,
+-				 bq24160_usb_code(bq->usb_limit_ua) << 4 |
+-				 BQ24160_CTRL_EN_STAT | BQ24160_CTRL_TE);
++	ret = bq24160_update_control(bq,
++				      BQ24160_CTRL_HZ | BQ24160_CTRL_CE,
++				      BQ24160_CTRL_HZ | BQ24160_CTRL_CE);
+ 	if (ret)
+ 		return ret;
+ 	ret = regmap_update_bits(bq->regmap, BQ24160_REG_VOLTAGE,
+@@ -180,7 +211,7 @@
+ static int bq24160_sync_locked(struct bq24160 *bq)
+ {
+ 	unsigned int status, vendor;
+-	int temp, voltage, charge_ua, stat, fault, ret;
++	int temp, voltage, charge_ua, stat, ret;
+ 
+ 	ret = bq24160_read(bq, BQ24160_REG_STATUS, &status);
+ 	if (ret)
+@@ -190,12 +221,46 @@
+ 				 BQ24160_STATUS_TMR_RST, BQ24160_STATUS_TMR_RST);
+ 	if (ret)
+ 		return ret;
++	/* Host mode deliberately disconnects the USB charger input from VBUS. */
++	if (bq->otg_locked)
++		return regmap_update_bits(bq->regmap, BQ24160_REG_BR_STATUS,
++					  BQ24160_BR_STATUS_OTG_LOCK,
++					  BQ24160_BR_STATUS_OTG_LOCK);
++	/*
++	 * Keep the USB power path at its board policy even when battery charging
++	 * is held off by temperature, gauge failure or the revision-23 voltage
++	 * workaround.  Otherwise the reset/default 100 mA limit lets the running
++	 * system discharge its battery while visibly connected to USB power.
++	 */
++	ret = bq24160_update_control(bq,
++				      BQ24160_CTRL_IUSB_MASK |
++				      BQ24160_CTRL_EN_STAT | BQ24160_CTRL_TE,
++				      bq24160_usb_code(bq->usb_limit_ua) << 4 |
++				      BQ24160_CTRL_EN_STAT | BQ24160_CTRL_TE);
++	if (ret)
++		return ret;
+ 
+ 	stat = FIELD_GET(BQ24160_STATUS_STAT_MASK, status);
+-	fault = FIELD_GET(BQ24160_STATUS_FAULT_MASK, status);
+-	if (fault || (stat != BQ24160_STAT_USB_READY &&
+-		      stat != BQ24160_STAT_CHARGING_USB && stat != BQ24160_STAT_DONE))
++	/*
++	 * FAULT is a read-to-clear history field, whereas STAT describes the
++	 * current state.  A recovered fault can therefore be observed together
++	 * with USB_READY (the Hikari boot handoff has produced 0x27).  The chip
++	 * reports an active fault through STAT_FAULT, so do not prevent a new
++	 * charge cycle solely because a stale fault code accompanied READY.
++	 */
++	if (stat == BQ24160_STAT_FAULT ||
++	    (stat != BQ24160_STAT_USB_READY &&
++	     stat != BQ24160_STAT_CHARGING_USB && stat != BQ24160_STAT_DONE))
+ 		return bq24160_disable(bq);
++	/*
++	 * Hardware termination already stopped the charge cycle.  Do not toggle
++	 * CE here: doing so changes STAT away from DONE and the next watchdog pass
++	 * would immediately program and start a new cycle.
++	 */
++	if (stat == BQ24160_STAT_DONE) {
++		bq24160_set_charging(bq, false);
++		return 0;
++	}
+ 
+ 	ret = bq24160_gauge_property(bq, POWER_SUPPLY_PROP_TEMP, &temp);
+ 	if (ret)
+@@ -211,24 +276,40 @@
+ 	ret = bq24160_read(bq, BQ24160_REG_VENDOR, &vendor);
+ 	if (ret)
+ 		return ret;
+-	if (FIELD_GET(BQ24160_VENDOR_REV_MASK, vendor) == 5) {
++	/*
++	 * Sony applies the revision-2.3 4.0/3.9 V restriction only from the
++	 * battery algorithm's WARM state (45..55 C), not during normal charging.
++	 */
++	if (FIELD_GET(BQ24160_VENDOR_REV_MASK, vendor) == 5 &&
++	    temp > bq->warm_degc * 10) {
+ 		if (voltage >= 4000000)
+ 			bq->rev23_hold = true;
+ 		else if (voltage <= 3900000)
+ 			bq->rev23_hold = false;
+ 		if (bq->rev23_hold)
+ 			return bq24160_disable(bq);
+-	}
++	} else
++		bq->rev23_hold = false;
++	/*
++	 * A watchdog refresh must not restart a healthy charge cycle.  Re-enter
++	 * the HZ/CE programming sequence only when charging needs to start or
++	 * when thermal policy selected a different fast-charge current.
++	 */
++	if (bq->charging && stat == BQ24160_STAT_CHARGING_USB &&
++	    bq->programmed_charge_ua == charge_ua)
++		return 0;
+ 
+ 	ret = bq24160_set_limits(bq, charge_ua);
+ 	if (ret)
+ 		return ret;
+ 	/* HZ/CE release is delayed to retain Sony's back-boost avoidance intent. */
+ 	msleep(220);
+-	ret = regmap_update_bits(bq->regmap, BQ24160_REG_CONTROL,
+-				 BQ24160_CTRL_HZ | BQ24160_CTRL_CE, 0);
+-	if (!ret)
+-		bq->charging = true;
++	ret = bq24160_update_control(bq,
++				      BQ24160_CTRL_HZ | BQ24160_CTRL_CE, 0);
++	if (!ret) {
++		bq->programmed_charge_ua = charge_ua;
++		bq24160_set_charging(bq, true);
++	}
+ 	return ret;
+ }
+ 
+@@ -285,13 +366,19 @@
+ 	switch (prop) {
+ 	case POWER_SUPPLY_PROP_ONLINE:
+ 		val->intval = FIELD_GET(BQ24160_STATUS_STAT_MASK, status) == BQ24160_STAT_USB_READY ||
+-			      FIELD_GET(BQ24160_STATUS_STAT_MASK, status) == BQ24160_STAT_CHARGING_USB;
++			      FIELD_GET(BQ24160_STATUS_STAT_MASK, status) == BQ24160_STAT_CHARGING_USB ||
++			      FIELD_GET(BQ24160_STATUS_STAT_MASK, status) == BQ24160_STAT_DONE;
+ 		return 0;
+ 	case POWER_SUPPLY_PROP_STATUS:
+-		val->intval = bq->charging ? POWER_SUPPLY_STATUS_CHARGING : POWER_SUPPLY_STATUS_NOT_CHARGING;
++		if (FIELD_GET(BQ24160_STATUS_STAT_MASK, status) == BQ24160_STAT_DONE)
++			val->intval = POWER_SUPPLY_STATUS_FULL;
++		else
++			val->intval = bq->charging ? POWER_SUPPLY_STATUS_CHARGING :
++				POWER_SUPPLY_STATUS_NOT_CHARGING;
+ 		return 0;
+ 	case POWER_SUPPLY_PROP_HEALTH:
+-		val->intval = FIELD_GET(BQ24160_STATUS_FAULT_MASK, status) ?
++		val->intval = FIELD_GET(BQ24160_STATUS_STAT_MASK, status) ==
++			BQ24160_STAT_FAULT ?
+ 			POWER_SUPPLY_HEALTH_UNSPEC_FAILURE : POWER_SUPPLY_HEALTH_GOOD;
+ 		return 0;
+ 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX:
+@@ -314,9 +401,77 @@
+ 	.max_register = 0x07,
+ };
+ 
++static int bq24160_otg_guard_enable(struct regulator_dev *rdev)
++{
++	struct bq24160 *bq = rdev_get_drvdata(rdev);
++	int ret;
++
++	mutex_lock(&bq->lock);
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_BR_STATUS,
++				 BQ24160_BR_STATUS_OTG_LOCK,
++				 BQ24160_BR_STATUS_OTG_LOCK);
++	if (!ret) {
++		bq->otg_locked = true;
++		ret = bq24160_disable(bq);
++		if (ret) {
++			bq->otg_locked = false;
++			regmap_update_bits(bq->regmap, BQ24160_REG_BR_STATUS,
++					   BQ24160_BR_STATUS_OTG_LOCK, 0);
++		}
++	}
++	mutex_unlock(&bq->lock);
++
++	return ret;
++}
++
++static int bq24160_otg_guard_disable(struct regulator_dev *rdev)
++{
++	struct bq24160 *bq = rdev_get_drvdata(rdev);
++	int ret;
++
++	mutex_lock(&bq->lock);
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_BR_STATUS,
++				 BQ24160_BR_STATUS_OTG_LOCK, 0);
++	if (!ret)
++		bq->otg_locked = false;
++	mutex_unlock(&bq->lock);
++	if (!ret)
++		mod_delayed_work(system_wq, &bq->status_work, 0);
++
++	return ret;
++}
++
++static int bq24160_otg_guard_is_enabled(struct regulator_dev *rdev)
++{
++	struct bq24160 *bq = rdev_get_drvdata(rdev);
++	unsigned int val;
++	int ret;
++
++	ret = regmap_read(bq->regmap, BQ24160_REG_BR_STATUS, &val);
++	return ret ? ret : !!(val & BQ24160_BR_STATUS_OTG_LOCK);
++}
++
++static const struct regulator_ops bq24160_otg_guard_ops = {
++	.enable = bq24160_otg_guard_enable,
++	.disable = bq24160_otg_guard_disable,
++	.is_enabled = bq24160_otg_guard_is_enabled,
++};
++
++static const struct regulator_desc bq24160_otg_guard_desc = {
++	.name = "usb-otg-guard",
++	.of_match = "usb-otg-guard",
++	.type = REGULATOR_VOLTAGE,
++	.owner = THIS_MODULE,
++	.ops = &bq24160_otg_guard_ops,
++	.fixed_uV = 5000000,
++	.n_voltages = 1,
++};
++
+ static int bq24160_probe(struct i2c_client *client)
+ {
+ 	struct power_supply_config psy_cfg = {};
++	struct regulator_config regulator_cfg = {};
++	struct regulator_dev *rdev;
+ 	struct bq24160 *bq;
+ 	int ret;
+ 
+@@ -356,6 +511,26 @@
+ 	if (IS_ERR(bq->psy))
+ 		return PTR_ERR(bq->psy);
+ 
++	/* Sony's USB sink setup explicitly selects USB and releases OTG lock. */
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_STATUS,
++				 BQ24160_STATUS_SUPPLY_SEL_USB,
++				 BQ24160_STATUS_SUPPLY_SEL_USB);
++	if (ret)
++		return dev_err_probe(&client->dev, ret, "failed to select USB input\n");
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_BR_STATUS,
++				 BQ24160_BR_STATUS_OTG_LOCK, 0);
++	if (ret)
++		return dev_err_probe(&client->dev, ret, "failed to release OTG lock\n");
++
++	regulator_cfg.dev = &client->dev;
++	regulator_cfg.driver_data = bq;
++	regulator_cfg.of_node = client->dev.of_node;
++	rdev = devm_regulator_register(&client->dev,
++				       &bq24160_otg_guard_desc, &regulator_cfg);
++	if (IS_ERR(rdev))
++		return dev_err_probe(&client->dev, PTR_ERR(rdev),
++				     "failed to register OTG guard\n");
++
+ 	if (client->irq > 0) {
+ 		ret = devm_request_threaded_irq(&client->dev, client->irq, NULL,
+ 						bq24160_irq_thread, IRQF_ONESHOT | IRQF_TRIGGER_RISING |
+@@ -381,9 +556,9 @@
+ }
+ 
+ /*
+- * A 12 second charger watchdog cannot be serviced reliably while this
+- * initial bring-up driver is suspended.  Leave USB power-path available but
+- * disable charging rather than risk an uncontrolled watchdog transition.
++ * Active charging holds the device wakeup source so the watchdog worker can
++ * run.  If suspend reaches this callback, charging is already inactive; keep
++ * CE disabled while leaving the USB power path available.
+  */
+ static int bq24160_suspend(struct device *dev)
+ {
+

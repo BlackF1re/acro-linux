@@ -1,0 +1,31 @@
+From: Hikari Linux Project <hikari-linux@localhost>
+Date: Tue, 22 Sep 2026 07:45:00 +0700
+Subject: [PATCH] watchdog: qcom: stop watchdog on reboot
+
+The Qualcomm watchdog core keeps an inherited running watchdog alive after
+probe.  During a slow kexec shutdown the watchdog core's keepalive worker
+stops, but qcom-wdt leaves the hardware enabled.  On MSM8x60 this allows the
+30-second bark to fire as PPI 3 (Linux IRQ 19) while the old kernel is still
+shutting down, producing an unhandled interrupt storm that prevents kexec.
+
+Ask the watchdog core to stop the hardware from its reboot notifier.  The
+driver already provides a stop operation, and its separate restart handler
+will still arm the short bite used for an actual hardware restart.
+---
+ drivers/watchdog/qcom-wdt.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/watchdog/qcom-wdt.c b/drivers/watchdog/qcom-wdt.c
+index 000000000000..000000000000 100644
+--- a/drivers/watchdog/qcom-wdt.c
++++ b/drivers/watchdog/qcom-wdt.c
+@@ -327,6 +327,7 @@ static int qcom_wdt_probe(struct platform_device *pdev)
+ 		set_bit(WDOG_HW_RUNNING, &wdt->wdd.status);
+ 	}
+ 
++	watchdog_stop_on_reboot(&wdt->wdd);
+ 	ret = devm_watchdog_register_device(dev, &wdt->wdd);
+ 	if (ret)
+ 		return ret;
+-- 
+2.47.3

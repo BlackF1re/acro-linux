@@ -1,0 +1,42 @@
+From 34b78fb26b9b1b3f52c81de538ebbad1c994b293 Mon Sep 17 00:00:00 2001
+From: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Date: Mon, 3 Aug 2026 08:26:09 +0300
+Subject: [PATCH] freedreno/a2xx: fix the window scissor losing a row and a
+ column
+
+Every draw comes out one pixel short at the top and on the right: the last
+row and the last column of the scissored area are never rasterised and keep
+whatever was there before.
+
+PA_SC_WINDOW_SCISSOR_BR takes an exclusive bottom right corner, while the
+scissor carried in the context is inclusive.
+
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/43603>
+---
+ src/gallium/drivers/freedreno/a2xx/fd2_emit.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/src/gallium/drivers/freedreno/a2xx/fd2_emit.c b/src/gallium/drivers/freedreno/a2xx/fd2_emit.c
+index da5c99188e7..520a8f23064 100644
+--- a/src/gallium/drivers/freedreno/a2xx/fd2_emit.c
++++ b/src/gallium/drivers/freedreno/a2xx/fd2_emit.c
+@@ -299,12 +299,15 @@ fd2_emit_state(struct fd_context *ctx, const enum fd_dirty_3d_state dirty)
+    if (dirty & (FD_DIRTY_SCISSOR | FD_DIRTY_RASTERIZER)) {
+       struct pipe_scissor_state *scissor = fd_context_get_scissor(ctx);
+ 
++      /* the scissor we are handed has an inclusive bottom right, which is
++       * what the later generations take, but this one wants it exclusive
++       */
+       OUT_PKT3(ring, CP_SET_CONSTANT, 3);
+       OUT_RING(ring, CP_REG(REG_A2XX_PA_SC_WINDOW_SCISSOR_TL));
+       OUT_RING(ring, xy2d(scissor->minx, /* PA_SC_WINDOW_SCISSOR_TL */
+                           scissor->miny));
+-      OUT_RING(ring, xy2d(scissor->maxx, /* PA_SC_WINDOW_SCISSOR_BR */
+-                          scissor->maxy));
++      OUT_RING(ring, xy2d(scissor->maxx + 1, /* PA_SC_WINDOW_SCISSOR_BR */
++                          scissor->maxy + 1));
+ 
+       ctx->batch->max_scissor.minx =
+          MIN2(ctx->batch->max_scissor.minx, scissor->minx);
+-- 
+2.46.0

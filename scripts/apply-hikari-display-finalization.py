@@ -109,17 +109,8 @@ def main() -> int:
     )
 
     # The exact Sony ID00/ID01 display-on sequence ends immediately after the
-    # 0x29 DCS command.  It does not add another delay and its off sequence is
-    # only 0x10 followed by 80 ms (there is no separate 0x28 command).
-    replace_once(
-        panel,
-        "\tdev_info(panel->dev, \"MDV22 command sequence complete before video scanout\\n\");\n"
-        "\tmsleep(20);\n"
-        "\treturn 0;\n",
-        "\tdev_info(panel->dev, \"MDV22 command sequence complete before video scanout\\n\");\n"
-        "\treturn 0;\n",
-        "MDV22 exact post-display-on timing",
-    )
+    # 0x29 DCS command.  Its off sequence is only 0x10 followed by 80 ms
+    # (there is no separate 0x28 command).
     replace_once(
         panel,
         "static int mdv22_disable(struct drm_panel *panel)\n"
