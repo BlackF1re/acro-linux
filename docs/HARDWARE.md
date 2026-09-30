@@ -46,6 +46,49 @@ provenance is in [SOURCES.md](SOURCES.md).
 | HDMI | platform hdmi_msm.* | hdmi_msm | MSM8x60 HDMI block; external PHY/controller unknown | VERIFIED_DEVICE / UNKNOWN |
 | USB | platform msm_otg, msm_hsusb* | legacy MSM OTG/host | MSM8x60 integrated USB path; exact PHY die unknown | VERIFIED_DEVICE / UNKNOWN |
 
+The BCM4330 WLAN half is soldered to MSM SDCC4 with a four-bit bus running up
+to 48 MHz. `HISTORICAL_SOURCE` Sony-generation board data identifies TLMM130 as
+active-low `WL_RST_N`, TLMM128 as the out-of-band `WL_HOST_WAKEUP`, and physical
+PM8058 GPIO38 alternate function 2 as the 32.768 kHz sleep clock. It also names
+PM8058 S3 at 1.8 V as the physical SDCC4 rail while advertising the 2.7--2.9 V
+MMC OCR bits. The current DT therefore uses a logical fixed OCR adapter but
+does not program shared S3 until all consumers and RPM constraints are known.
+On 2026-09-16 `VERIFIED_DEVICE` evidence showed SDIO `02d0:4330`, a loaded
+native `brcmfmac` interface, and repeated active scans. See the
+[sanitized bring-up record](../research/device/current/boot/internal-wifi-bringup-2026-09-16.md).
+
+The exact Fuji/Hikari USB connector wiring is `HISTORICAL_SOURCE` from the
+OpenSEMC Sony-generation board code uses explicitly zero-based PMIC indices:
+index 30 is physical PM8058 GPIO31 ID with a 1.5 kOhm S3 pull-up; index 10 is
+physical PM8058 MPP11 VBUS detect; PM8901 index 0 is physical MPP1 and
+enables external 5 V; TLMM28 enables the NCP373 protected VBUS switch; and
+TLMM104 is its active-low fault input. PM8901 is on the second SSBI controller
+at `0x00c00000`, with an active-low interrupt on TLMM91 and four MPPs. These
+facts are implemented in the current local DT. Build 0079 is
+`VERIFIED_DEVICE` under target Linux for source power, EHCI High-Speed
+enumeration of a Mercusys/Realtek `2c4e:0102` adapter, clean host removal and
+return to device role. PM8xxx consumer specifiers use physical
+one-based GPIO/MPP numbers even though controller `gpio-ranges` remain
+zero-based. The 0073 boot proved that encoding USB-ID as 29 selects host mode
+with a normal notebook cable. Rechecking Sony's namespace showed that its
+indices 30/10 map to physical mainline GPIO31/MPP11; the current DT statically
+checks those values together with MPP1. Build 0079 then physically verified
+the corrected source path.
+
+PM8901 MPP control registers start at `0x27`, unlike the PM8058 MPP base
+`0x50`. This is `VERIFIED_VENDOR_SOURCE` from Sony's PM8901 MFD source and
+`VERIFIED_DEVICE` by build 0077 regmap readback: physical MPP1 remained
+`0x30` while the old generic-driver path wrote through the wrong base. Patch
+0071 encodes the compatible-specific base; build 0079 physically verified its
+effect through powered peripheral enumeration.
+
+The wiring is also `VERIFIED_DEVICE` under the Sony-derived Android kernel.
+During a physical OTG test PM8901 MPP1 (`ext_5v_en`, legacy GPIO225) and
+TLMM28 (`ncp373_en`) changed low-to-high together, while the active-low
+TLMM104 fault input returned high. The host enumerated three real devices,
+including a Kingston DataTraveler and a USB keyboard/mouse receiver. This
+validates the hardware facts, but is not target-Linux acceptance.
+
 pm8xxx-nfc is a PM8058-side platform support node (power/interrupt
 integration); it is not evidence for a second NFC controller. The I2C pn544
 node and /dev/pn544 identify the controller.

@@ -160,6 +160,32 @@ MDP/DSI interrupts, and no underrun or kernel fault. This is a physical display
 acceptance result, not merely a successful build; the detailed evidence is in
 [display-physical-scanout-success.md](../research/device/current/boot/display-physical-scanout-success.md).
 
+## Verified display patch cleanup 0060 (2026-09-11)
+
+Five superseded MDP-IOMMU experiments were retired from the production series
+after physical 0066 proved that Hikari requires contiguous CMA scanout and does
+not use either MDP IOMMU provider. The DRM/MSM, panel and MMCC execution paths
+are unchanged; both unused IOMMU provider nodes are now explicitly disabled.
+
+The clean 60-patch tree materialized and built successfully with the exact
+accepted 0066 kernel configuration. Display, MMCC, USB recovery, ramoops,
+kernel-source, safe-profile, GPU-profile, charging, board-hardware, memory-map
+and Sony ELF gates passed. The boot-only candidate is:
+
+```text
+/home/paul/xperia/build/hikari-artifacts-display-cleanup-0060-20260911/display/hikari-display-fastboot.elf
+size:    13,382,219 bytes
+SHA-256: 0f08c2f67b6e210c0f45ebe9c228d5fff6e1e48bafe8313066be814764b015bf
+```
+
+The image was flashed only to `boot` and physically passed native 720x1280
+fbcon acceptance. MDP4 used physical scanout at `0x7bd00000`, the panel command
+sequence completed, the initramfs wrote its display witness, and the captured
+log contained no display underrun or kernel fault. The owner visually confirmed
+working output. This artifact is `VERIFIED`; accepted 0066 remains the rollback
+control. See
+[display-patch-cleanup.md](../research/device/current/boot/display-patch-cleanup.md).
+
 ## Earlier MDP multi-provider display artifact
 
 The latest physical post-mortem reached secure MMCC setup, MMFAB unhalt, the
@@ -167,8 +193,8 @@ MDP footswitch, and the first MDP IOMMU provider before an Oops in
 `qcom_iommu_of_xlate()`. Signed kernel commit
 `fb48685d80a0bfb4b55b67afc5ec1463d2833d0f` replaces the driver's invalid
 single-client-pointer model with one matching client master per IOMMU
-provider. The correction is preserved as project patch 0041 and guarded by
-both kernel-source validation tools.
+provider. This historical correction is archived with the other retired
+IOMMU experiments; it has no production consumer after MDP was detached.
 
 The historical, physically tested successor artifact was:
 
@@ -219,8 +245,8 @@ recursed through that same client's IOMMU-backed DMA-unmap path.
 Signed kernel commit `96651e282822a6b587b43dc3c4767a1f27581933`
 assigns page-table DMA ownership to an actual IOMMU provider, retains the
 provider for the domain lifetime, and fixes multi-provider context attach,
-detach, unwind and TLB handling. Project patch 0042 and the display source
-gate preserve those invariants.
+detach, unwind and TLB handling. This historical patch is archived for
+research and is no longer enforced by production source gates.
 
 The new locally validated, **not deployed** display artifact is:
 
@@ -423,3 +449,91 @@ because WSL inherited a Windows temporary directory; rebuilding with a native
 WSL temporary directory succeeded.  No device was flashed or rebooted.
 Visible pixels and advancing display interrupts remain the required physical
 acceptance test.
+
+## Hikari USB/OTG/charging successor
+
+Build 0075 physically verified High-Speed USB device operation and
+disconnect/reconnect, then exposed an OTG teardown deadlock: the kernel console
+and immediately respawned shell both held `ttyGS0` while ChipIdea tried to
+remove the UDC. Build 0076 fixed that deadlock: it completed three host-mode
+entries/removals and returned to the High-Speed serial gadget. However, its
+host VBUS remained absent and no peripheral enumerated. Debugfs showed PM8901
+MPP1 still configured as a bidirectional digital pin, despite the regulator
+consumer requesting an output.
+
+Build 0077 proved that the logical host sequence completed but still supplied
+no physical VBUS. PM8901 regmap readback showed MPP1 register `0x27` remained
+at `0x30` (output low), because the generic driver used PM8058's MPP base
+`0x50`. The current successor, build 0078, contains patch 0071 selecting the
+Sony-backed PM8901 MPP base `0x27`:
+
+```text
+/home/paul/xperia/build/hikari-artifacts-usb-otg-0078/display/hikari-display-fastboot.elf
+size:   13,390,021 bytes
+SHA-256 35ba338b8e8bd95ce3cae33fd3aadc6c959e2b5d1278ac23893518534d60b46a
+```
+
+It retains patch 0070's GPIO direction/value correction and all physically
+verified display and USB-role work. `SHA256SUMS`, Sony ELF structure,
+first-boot memory-layout checks and the complete build/static gate suite pass.
+This artifact has not been deployed. USB device mode must be regression-tested;
+in host mode register `0x27` must read `0x31`, VBUS must be measured, a low-risk
+peripheral must enumerate and transfer real data, and the phone must return to
+device mode. Positive-current charging with a battery below 3.9 V remains a
+separate required acceptance test.
+
+Build 0079 physically verified the corrected PM8901 register base and complete
+OTG cycle: external VBUS powered a Mercusys adapter, EHCI enumerated its
+Realtek `2c4e:0102` interface at High Speed, teardown completed, and the gadget
+returned to device role. Build 0083 is the accepted successor, adding a small
+ARM EABI console launcher so CDC ACM receives a controlling tty, canonical
+signals, working Ctrl-C, EOF respawn and reliable repeated host reopens:
+
+```text
+/home/paul/xperia/build/hikari-artifacts-usb-otg-0083/display/hikari-display-fastboot.elf
+size:   13,393,307 bytes
+SHA-256 611668745691aff4a0a038a7addaa3f137dedd276938e43ef0d9a7d66b108160
+```
+
+The complete build/static gate suite passed before deployment. The physical
+records are `usb-otg-0079-device-test/README.md` and
+`usb-console-0083-device-test/README.md`. USB OTG and the diagnostic terminal
+are `VERIFIED_DEVICE`; positive-current charging remains a separate test.
+
+The 63-patch series, ending at patch 0068, adds PM8901 support and the
+source-backed BQ24160/dual-role USB power path while retaining the physically
+verified 0066 display stack. The final **not deployed** display artifact is:
+
+```text
+/home/paul/xperia/build/hikari-artifacts-usb-otg-0068-final/display/hikari-display-fastboot.elf
+size:   13,387,117 bytes
+SHA-256 a5df4cd8535f7e48bf379de20d7b3f7cf3812f5a4d743969945cc888140fd529
+```
+
+Companion profiles and initramfs:
+
+```text
+gpu/hikari-gpu-fastboot.elf
+SHA-256 b2d55146072a09d69ecdb5118aba8c643f287b07a9bef2c3dd839f2327855c96
+safe/hikari-safe-fastboot.elf
+SHA-256 e63dd8e51b11cd5964ea8141c34e88839b8540bc36bf1ee45c1f20877df6a090
+/home/paul/xperia/build/hikari-initramfs-usb-otg-0068-final/hikari-firstboot.cpio.gz
+SHA-256 ff8a8f638ace114cc936fffb14264e5fcb69558692273a20319647cb0d25a386
+```
+
+The materialized kernel source commit is
+`ca6633c7d4dd48aaaf57bc8b5648a3aedb1ce693`.
+
+Kernel and all three DTBs built. Kernel-source, USB config/DT graph, charging,
+board-hardware, display, diagnostic-survival, initramfs-layout, safe-profile,
+GPU-profile, persistent-RAM, Sony-ELF, appended-DTB, p3-size, SMEM and
+decompressor-overlap gates pass. DT schema checking has no new USB/PM8901/
+BQ24160/NCP373 error; the remaining warnings predate this change and concern
+other board nodes. The build reused only A220 firmware whose pinned SHA-256
+matched `firmware/a220/source.lock`. No device was flashed or rebooted.
+# Debian rootfs and incremental kernel development
+
+The current native-userspace workflow is documented in [DEBIAN.md](DEBIAN.md).
+It deliberately reuses `linux-hikari-current`, `busybox-hikari-current`,
+`hikari-root-initramfs-current` and `hikari-rootfs-current`. Do not introduce
+per-attempt build directories.

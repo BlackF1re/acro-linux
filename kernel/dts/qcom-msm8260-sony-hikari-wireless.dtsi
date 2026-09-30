@@ -9,43 +9,63 @@
 
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
 #include <dt-bindings/soc/qcom,gsbi.h>
 
 / {
+	hikari_wifi_vdd: wifi-vdd-regulator {
+		compatible = "regulator-fixed";
+		/*
+		 * Sony advertises MMC_VDD_27_28 | MMC_VDD_28_29 to the MMC
+		 * core although the physical PM8058 S3 rail is 1.8 V.  This fixed
+		 * regulator is therefore only an OCR adapter.  S3 is deliberately
+		 * not modelled here until its shared consumers and RPM constraints
+		 * are complete; programming the shared rail from this partial board
+		 * description is unsafe.
+		 */
+		regulator-name = "wlan-mmc-ocr-2v8";
+		regulator-min-microvolt = <2800000>;
+		regulator-max-microvolt = <2800000>;
+		regulator-always-on;
+	};
+
 	hikari_wifi_pwrseq: wifi-pwrseq {
 		compatible = "mmc-pwrseq-simple";
-		/* Sony bcmdhd names this WL_RST_N and drives it high to run. */
 		reset-gpios = <&tlmm 130 GPIO_ACTIVE_LOW>;
+		post-power-on-delay-ms = <200>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&hikari_wifi_sleep_clk>;
 	};
 };
 
-/* Sony powers SDCC4/BCM4330 from PM8058 S3 at 1.8 V. */
-&rpm {
-	regulators-1 {
-		pm8058_s3: s3 {
-			regulator-min-microvolt = <1800000>;
-			regulator-max-microvolt = <1800000>;
-		};
+&pm8058_gpio {
+	/* PM8058 GPIO38 FUNC2 is the BCM4330 32.768 kHz sleep clock. */
+	hikari_wifi_sleep_clk: wifi-sleep-clk-state {
+		pins = "gpio38";
+		function = PM8058_GPIO38_39_CLK_32KHZ;
+		output-high;
+		bias-disable;
+		power-source = <PM8058_GPIO_S3>;
+		qcom,drive-strength = <PMIC_GPIO_STRENGTH_LOW>;
 	};
 };
 
 &tlmm {
-	/* Dedicated MSM8x60 SDC4 pads: 16 mA clock, 10 mA pulled-up CMD/DATA. */
+	/* Exact Sony Hikari SDC4 pad state: 8 mA and pulled-up CMD/DATA. */
 	hikari_sdc4_pins: sdc4-state {
 		clk-pins {
 			pins = "sdc4_clk";
-			drive-strength = <16>;
+			drive-strength = <8>;
 			bias-disable;
 		};
 
 		cmd-data-pins {
 			pins = "sdc4_cmd", "sdc4_data";
-			drive-strength = <10>;
+			drive-strength = <8>;
 			bias-pull-up;
 		};
 	};
 
-	/* Broadcom WLAN out-of-band HOST_WAKE. */
 	hikari_wifi_hostwake: wifi-hostwake-state {
 		pins = "gpio128";
 		function = "gpio";
@@ -89,14 +109,15 @@
 /*
  * BCM4330 WLAN is permanently soldered to SDCC4.  Sony's board data uses a
  * four-bit bus, 400 kHz..48 MHz and marks the card non-removable.  The old
- * virtual card-detect callback is unnecessary with DT non-removable + pwrseq.
+ * virtual card-detect callback is unnecessary with DT non-removable.  GPIO130
+ * is WL_RST_N and GPIO128 is the separate out-of-band HOST_WAKE interrupt.
  */
 &sdcc4 {
-	vmmc-supply = <&pm8058_s3>;
+	/* Logical OCR adapter backed by the real PM8058 S3 supply. */
+	vmmc-supply = <&hikari_wifi_vdd>;
 	bus-width = <4>;
 	max-frequency = <48000000>;
 	non-removable;
-	cap-sdio-irq;
 	mmc-pwrseq = <&hikari_wifi_pwrseq>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&hikari_sdc4_pins>;

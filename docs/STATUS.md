@@ -286,6 +286,104 @@ Cradle/IN and suspend charging remain blocked pending dedicated physical
 evidence. See
 [CHARGING.md](CHARGING.md).
 
+The display-cleanup boot supplied the first long post-display charging and USB
+trace. USB device mode initially enumerated and exchanged shell data, but the
+transport was later lost while the BQ24160 reported a current USB-supply fault
+and repeatedly lost/reacquired its input. The kernel and display remained alive
+through at least 515 seconds. Battery voltage declined during the mainline run;
+the immediate TWRP control instead measured +366 mA and a capacity increase
+from 8% to 9% on the same cable. Target USB reliability is `REGRESSION` and
+charging is `PARTIAL`; the correlation does not yet prove a shared cause. See
+[the USB/charging post-mortem](../research/device/current/boot/usb-charging-postmortem-2026-09-11.md).
+
+The local 0068 successor addresses both sides of that post-mortem without
+changing the already verified display path. It selects BQ24160 USB input and
+releases `OTG_LOCK` at probe, removes a blocking raw ttyGS write from the
+reconnect supervisor, changes HSUSB1 to a GPIO-driven role switch, and adds
+the exact PM8901 MPP1/NCP373 VBUS source chain. Host enable takes the charger
+OTG lock and disables charging before energizing either 5 V switch. The full
+kernel/DTB/initramfs/ELF build and static gates pass. At that point nothing in
+this successor had been deployed: USB device was still `REGRESSION`, charging
+was `PARTIAL`, and USB OTG had entered `IMPLEMENTING`. The later 0075 results
+below supersede that interim USB-device status.
+
+A later Sony-derived Android control run established the working hardware
+baseline. Removing USB changed the fuel-gauge current from positive to
+roughly -0.16--0.28 A and the charger to `Discharging`. Reconnecting the
+notebook selected a standard downstream port at 500 mA; BQ24160 returned to
+`Charging`, battery current reached +0.31--0.36 A, voltage rose from about
+4.09 V to 4.18 V, and SOC advanced 93% to 94%. OTG independently enumerated
+QUMO `090c:1000`, Kingston DataTraveler `0951:1665`, and a `25a7:fa61`
+keyboard/mouse receiver. PM8901 MPP1 and TLMM28 asserted together and NCP373
+fault recovered high. Cradle charging was not tested because the available
+cradle appears defective.
+
+The 0072 target log then isolated a DT numbering defect: both MPP GPIO chips
+registered, but the PM8901 MPP1 consumer used specifier 0. The SSBI MPP driver
+uses physical one-based MPP numbers, so its translation rejected 0 and the
+fixed regulator remained at `-EPROBE_DEFER`. Changing PM8901 index 0 to
+physical MPP1 fixed that consumer, but the first pass incorrectly treated the
+Sony PM8058 indices as physical numbers.
+
+The resulting 0073 display/GPU/safe bundle builds cleanly and passes the USB,
+charging, board-hardware, display, GPU, diagnostic, memory-layout and artifact
+gates. The compiled display DTB was independently checked for MPP1, the
+then-assumed MPP10 and
+the BQ24160 post-init dependency. The display fastboot ELF is 13,388,993 bytes
+with SHA-256
+`59a77176ffaf9090d56b91129f52e521363900485728e1b32409d07a288593f3`.
+The 0073 image was then physically booted with the notebook cable attached.
+Display and PID 1 remained alive, and BQ24160 reported `raw=0x2b`, current
+state `USB_READY` with a stale fault-history field. However, `ttyGS0` was
+disabled at about 2.25 seconds and ChipIdea registered its EHCI host
+controller. Therefore the missing host enumeration was a target role-selection
+failure, not merely a WSL forwarding failure.
+
+The retained 0073 `last_kmsg` exposed a second one-based PMIC GPIO error.
+PM8058 GPIO consumers use physical one-based specifiers, while USB ID was
+encoded as 29. Reading that wrong line low made the connector falsely select
+host mode with a normal notebook cable. The first correction used 30 and the
+0074 image did not enumerate on either Windows or WSL. Rechecking Sony's
+`board-msm8660.h` then established that its PMIC namespace explicitly starts
+at zero: Sony GPIO index 30 is physical mainline GPIO31, and Sony MPP index 10
+is physical mainline MPP11. PM8901 index 0 remains physical MPP1. The local DT
+and compiled-DTB gate now encode and check GPIO31, MPP11 and MPP1.
+The retained 0074 `last_kmsg` confirms the intermediate image still selected
+EHCI host with the notebook cable: `g_serial` became ready at 1.03 seconds,
+`ttyGS0` was disabled at 2.37 seconds and ChipIdea registered EHCI immediately
+afterward. The final GPIO31/MPP11 correction is build 0075. On the phone it
+enumerated the `g_serial` CDC ACM gadget at High Speed, carried bidirectional
+root-shell traffic and repeated that result after a physical notebook-cable
+disconnect/reconnect. USB device mode is therefore `WORKING` and
+`VERIFIED_DEVICE`. The same run detected notebook power at both the USB
+charger and BQ24160, but the battery was already at 4.080--4.096 V and the
+Sony revision-23 policy correctly held charging off above 4.0 V. Positive
+battery current below the 3.9 V restart threshold remains to be tested.
+
+The attempted 0075 OTG transition supplied no observable VBUS and the gadget
+did not return. The retained `last_kmsg` makes the failure narrower than the
+power path: `ci_otg_work` blocked for more than 122 seconds in
+`gserial_free_port()` while removing the UDC, before EHCI registered. Both the
+kernel console and the immediately respawned diagnostic shell held `ttyGS0`
+open. Build 0076 removed both holds. The physical run then registered and
+removed EHCI three times and returned to the High-Speed serial gadget, proving
+the dual-role transition itself no longer deadlocks. There was still no VBUS
+or peripheral enumeration. Debugfs exposed PM8901 MPP1 as inherited
+`digital bi-dir`; the generic SSBI MPP output callback failed to clear input
+mode and ignored the requested value. Patch 0070 corrects those output-state
+semantics in build 0077. The 0077 physical test completed the logical host
+sequence but still supplied no power. Raw PM8901 readback made the cause
+unambiguous: MPP1 register `0x27` remained `0x30`, while the generic driver
+addressed the PM8058 MPP base `0x50`. Sony's PM8901 source specifies base
+`0x27`; patch 0071 applies that compatible-specific base in build 0078.
+Build 0079 supplied the missing physical result. The owner observed source
+power at a Mercusys Wi-Fi adapter; retained `last_kmsg` records EHCI
+registration, High-Speed enumeration of the Realtek `2c4e:0102` `802.11n NIC`,
+its disconnect, EHCI removal, and return to USB device role. Target USB OTG is
+therefore `WORKING` with `VERIFIED_DEVICE` evidence for role switching, VBUS,
+enumeration/control traffic and teardown. Wi-Fi network traffic through that
+adapter remains a separate untested function.
+
 ## Current display boundary: DSI PLL start
 
 The latest retained physical run did not crash: DRM registered a native
@@ -345,3 +443,103 @@ repeating `HIKARI DISPLAY ALIVE` lines. Native panel output and fbcon are theref
 `VERIFIED` with `VERIFIED_DEVICE` evidence. Suspend/resume, brightness policy,
 and accelerated GPU remain separate acceptance domains. See
 [the physical scanout record](../research/device/current/boot/display-physical-scanout-success.md).
+
+The follow-up cleanup reduces the production stack from 65 to 60
+patches by retiring five MDP IOMMU experiments that have no runtime consumer in
+the accepted physical-CMA design. It leaves the verified DRM/DSI/MMCC and panel
+paths unchanged and explicitly disables both unused MDP IOMMU providers. The
+artifact passed the complete local build/static-gate suite and a boot-only
+physical test: native 720x1280 fbcon remained visible and the captured boot log
+showed physical scanout with no underrun or kernel fault. It is `VERIFIED` with
+`VERIFIED_DEVICE` evidence; artifact 0066 remains the rollback control. See
+[the cleanup record](../research/device/current/boot/display-patch-cleanup.md).
+
+## Debian and modular update architecture (2026-09-14)
+
+The known-good display, USB dual-role path, charging coordination, storage,
+ext4 and recovery console now form a built-in rescue boundary. A small
+initramfs waits for an ext4 filesystem labelled `HIKARI_ROOT` and switches to a
+minimal Debian 13 `armhf` userspace. Wi-Fi, Bluetooth, NFC, RMI4 touch and
+motion sensors are built as modules with modversions; unrelated modules from
+the multi-board default configuration are pruned. The canonical kernel build,
+rootfs and boot artifact are each updated in place instead of creating
+timestamped trees.
+
+The kernel, DTB and initramfs pass their static gates. The packaged Sony ELF is
+12,858,228 bytes, below the 20,971,520-byte p3 limit, with SHA-256
+`08bceef5fd9f02ce20938906438a05e268a13070d6575cf3d36d91c86fe54750`.
+The signed-release-verified Debian root tree completed with 110 package records,
+no unpacked packages, 20 stripped modules exactly matching `modules.order`, and
+207 MiB host disk use. A single in-tree driver-directory build was exercised
+without dirtying the kernel source tree or leaving an `updates/` duplicate.
+These results were an `IMPLEMENTING` host-only checkpoint, not device
+acceptance. Debian-on-microSD, module loading and ARM kexec were still
+`UNKNOWN` at that point. No eMMC partition or phone was written while preparing
+that checkpoint.
+
+The first physical microSD boot refined that result. Retained TWRP
+`/proc/last_kmsg` proves that mainline discovered the card as `mmcblk0`, mounted
+its labelled ext4 partition read/write, printed `HIKARI ROOT READY`, executed
+Debian systemd as PID 1, and remained alive for at least 64 seconds. The card,
+root switch and Debian userspace therefore reach `BOOTS` with
+`VERIFIED_DEVICE` evidence; module and kexec acceptance remained pending at
+that stage.
+
+That same log explains the black screen without speculation. MDP4 read its
+v4.1 revision, then emitted `no IOMMU, bailing out`, failed KMS with `-ENODEV`,
+and never created fb0. The Debian build had used the historical external kernel
+tree, in which the physically verified contiguous-scanout patch 0065 and other
+late patches were absent, while its build gate checked only Kconfig. The
+canonical tree has been repaired with 0057, 0058, 0062 and 0065--0071. The
+build now runs the display source gate before configuration, so a source tree
+without the no-IOMMU implementation cannot produce another candidate. The
+first replacement ELF was then booted on the device. It is 12,859,620 bytes
+with SHA-256
+`fab8742c1ee5d25e2da6f360060dd5065f7db57afc26b407e6ebbdd88f64e3c7`.
+It successfully mounted the card as `/dev/mmcblk1p1`, reached a running Debian
+systemd with no failed units, and provided a reconnectable root shell over
+`ttyGS0`. DRM selected contiguous scanout and registered fb0, but the physical
+screen remained black: the first 12-byte MDV22 command deterministically timed
+out both at boot and after blank/unblank. The unverified late DSI experiments
+that introduced that regression have been retired from the production path;
+the next candidate restores the coherent command-DMA implementation used by
+the physically accepted 0066/0068/0073 kernels while retaining no-IOMMU
+scanout and USB/OTG work. That candidate is 12,856,868 bytes with SHA-256
+`f2775bde961ebe2444cd8667ab56af85878033a317181e40ea1b9d90a3220c23`;
+it has passed host gates but remains unverified on the device.
+
+The development boot architecture is now physically verified. An SMP kernel
+correctly rejected kexec with `EINVAL` because upstream MSM8x60 can start CPU1
+but cannot prove it fully powered down; a physical offline/online probe also
+failed to restore CPU1. A deliberately single-core p3 loader avoids that unsafe
+path by leaving CPU1 in bootloader reset. The phone completed two checksum-
+verified kexec transitions from this loader into the full SMP kernel stored on
+`HIKARI_ROOT`; both second stages brought CPUs 0-1 online and mounted Debian
+read/write. A normal reboot returned to the loader between the two passes, and
+the ACM console re-enumerated after every transition. Kernel/DT development now
+needs a normal reboot through the loader, but no routine fastboot or TWRP cycle.
+See the [kexec acceptance record](../research/device/current/boot/kexec-loader-acceptance.md).
+The second-stage `/lib/modules` tree matched its kernel release and 15 Hikari
+modules were live, including RMI4, NFC, Bluetooth UART and both motion-sensor
+drivers. This verifies module ABI/loading only; the associated real-world
+hardware functions retain their separate acceptance states.
+
+## Internal Wi-Fi bring-up (2026-09-16)
+
+The BCM4330 now enumerates natively on SDCC4 in the current 7.3-rc1 SMP stage.
+The decisive missing board fact was the 32.768 kHz sleep clock: Sony routes it
+through physical PM8058 GPIO38 alternate function 2. Attaching that pinctrl
+state to the MMC power sequence before releasing active-low WL_RST_N on
+TLMM130 produced physical SDIO `02d0:4330`. An experimental explicit PM8058 S3
+regulator was removed because S3 is shared and its complete constraints are
+not yet modelled; the accepted change leaves that physical rail in its
+established bootloader/RPM state.
+
+With owner-supplied stock BCM4330 B2 firmware and private board calibration,
+mainline `brcmfmac` creates `wlan0` and repeated active scans found between six
+and nine BSSes. This is `PARTIAL` with `VERIFIED_DEVICE` evidence, not yet
+`VERIFIED`: association, DHCP and real packet traffic have not passed. CLM and
+txcap blobs are absent, and deterministic device MAC provisioning, regulatory
+handling, reconnect endurance and suspend/resume remain open. Proprietary and
+device-specific contents are neither printed nor committed. See the
+[sanitized Wi-Fi record](../research/device/current/boot/internal-wifi-bringup-2026-09-16.md).

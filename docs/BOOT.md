@@ -112,6 +112,41 @@ single explicitly whitelisted boot target.  No safe temporary-boot mechanism
 has been established for this exact handset; it is therefore UNKNOWN rather
 than assumed from related Xperia devices.
 
+## Production userspace and low-reflash development path
+
+The intended system is a current minimal Debian `armhf` root filesystem plus
+this project's maintained mainline kernel, DT and kernel modules. Debian does
+not replace or absorb the hardware patches: the patch series remains the
+reproducible kernel/BSP layer, while Debian supplies ordinary package-managed
+userspace. Modules installed into the root filesystem must match the exact
+kernel build.
+
+The first storage target should be microSD, not eMMC. Keep a known-good,
+display/USB-capable bootstrap Sony ELF in p3 and make it mount the Debian root
+from the removable card. Rootfs and application changes can then be made by
+editing the card, with no recovery or fastboot cycle.
+
+Kernel/DT experiments no longer require replacing p3. The physically verified
+design uses a stable single-core rescue kernel in p3 which loads a full SMP
+kernel, DTB and initramfs from microSD and enters it with ARM `kexec`. Keeping CPU1 in
+bootloader reset avoids the unsupported and unsafe attempt to hot-unplug a
+running MSM8x60 Scorpion core. Two complete transitions passed on 2026-09-15,
+including a normal reboot back to the loader between them. Ordinary kernel and
+DT experiments now require a normal reboot through the loader, but neither
+fastboot nor recovery. See the
+[physical acceptance record](../research/device/current/boot/kexec-loader-acceptance.md).
+
+The removable card now boots Debian read/write and supplies the verified
+second-stage kernel. Its Linux node varied across boots, so the initramfs uses
+the stable filesystem label `HIKARI_ROOT`. Card removal/failure recovery,
+sustained I/O and repeated cold-boot endurance remain separate tests.
+
+The implementation and its exact built-in/module boundary are maintained in
+[DEBIAN.md](DEBIAN.md). The p3 kernel is a complete rescue-capable kernel, not
+a disposable first-stage kernel. Its small initramfs performs `switch_root`;
+only the later, separately verified kexec path transfers control to another
+kernel stored on the root filesystem.
+
 ## Sources
 
 - [Historical LT26 custom boot ELF change](https://android.googlesource.com/device/sony/lt26/%2B/b644924c93b3c89e0e6f3aeeb85fb9a23147350f%5E%21/)

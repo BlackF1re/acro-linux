@@ -82,6 +82,7 @@ for spec in \
 	expect_hex "$node" reg "$base 100000"
 	expect_hex "$node" qcom,ncb 2
 	expect_hex "$node" interrupts "0 $nonsecure_irq 4 0 $secure_irq 4"
+	expect_string "$node" status disabled
 	clocks=$(fdtget -t x "$dtb" "$node" clocks | tr -s ' ' | sed 's/^ //;s/ $//')
 	[[ $clocks == "$mmcc_phandle b $mmcc_phandle 1e" ]] || {
 		echo "$node clocks must resolve to SMMU_AHB_CLK (11) and MDP_AXI_CLK (30), got '$clocks'" >&2

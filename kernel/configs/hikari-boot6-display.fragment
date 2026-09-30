@@ -35,11 +35,14 @@ CONFIG_USB_CHIPIDEA_UDC=y
 CONFIG_USB_CHIPIDEA_MSM=y
 CONFIG_PHY_QCOM_USB_HS=y
 CONFIG_USB_GADGET=y
-CONFIG_USB_G_SERIAL=y
+CONFIG_CONFIGFS_FS=y
+CONFIG_USB_CONFIGFS=y
+CONFIG_USB_CONFIGFS_ACM=y
+# CONFIG_USB_G_SERIAL is not set
 # CONFIG_U_SERIAL_CONSOLE is not set
 
 # Diagnostic-survival policy: recoverable peripheral faults should leave the
-# kernel alive long enough for ttyGS0 and ramoops to report the failure.  A
+# kernel alive long enough for tty0 and ramoops to report the failure.  A
 # true fatal panic still stops execution, but must not be triggered merely by
 # an oops, hung-task report or soft-lockup warning in experimental drivers.
 # CONFIG_PANIC_ON_OOPS is not set
@@ -100,6 +103,10 @@ CONFIG_MMC_BLOCK=y
 CONFIG_MMC_ARMMMCI=y
 CONFIG_PWRSEQ_SIMPLE=y
 CONFIG_MFD_PM8XXX=y
+CONFIG_REGULATOR_FIXED_VOLTAGE=y
+CONFIG_USB_CHIPIDEA_HOST=y
+CONFIG_USB_ROLE_SWITCH=y
+CONFIG_USB_CONN_GPIO=y
 CONFIG_PINCTRL_QCOM_SSBI_PMIC=y
 CONFIG_INPUT_PMIC8XXX_PWRKEY=y
 CONFIG_INPUT_PM8XXX_VIBRATOR=y

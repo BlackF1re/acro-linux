@@ -105,7 +105,7 @@ boot_chain:
     custom_rom_previously_installed: MoKee
     current_root_reported: true
     notes: Owner-provided historical evidence, not an automatically read bootloader attestation.
-  current_legacy_p3:
+  legacy_p3_reference:
     physical:
       evidence: VERIFIED_DEVICE
       format: Sony-style ELF32 ARM
@@ -114,6 +114,15 @@ boot_chain:
       rpm_load_address: "0x00020000"
       cmdline_segment: ABSENT
       notes: Extracted offline only from the private golden backup. Addresses are verified legacy starting candidates; a target artifact must validate decompressor, DTB, initramfs, firmware and reserved-memory compatibility. Exact cmdline handling remains UNKNOWN.
+  kexec_loader:
+    implementation: VERIFIED
+    evidence: VERIFIED_DEVICE
+    installed_in_p3: true
+    artifact_size: 12630460
+    artifact_sha256: 6bd74c112d879b0074c2415ccaebbd2eae8cbf2915445fa3c3f0c3b9419b801a
+    first_stage: "single-core mainline rescue kernel in p3"
+    second_stage: "full SMP mainline kernel, DTB and initramfs on HIKARI_ROOT"
+    notes: "On 2026-09-15 two complete loader-to-SMP transitions passed, separated by a normal reboot back to the loader. The loader exposed only CPU0; each kexec load set kexec_loaded=1; each second stage brought CPUs 0-1 online and mounted Debian from microSD read/write. USB ACM re-enumerated after every transition. Direct kexec from the SMP stage remains intentionally unsupported because MSM8x60 cannot prove CPU1 fully powered down."
   recovery:
     physical:
       evidence: VERIFIED_DEVICE
@@ -125,16 +134,16 @@ boot_chain:
       rollback_route: VERIFIED_DEVICE
       notes: The bootloader-level p3 restore route was physically used after the first failed native-Linux attempt; TWRP storage and independence from p3 remain UNKNOWN.
 subsystems:
-  cpu_smp: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: VERIFIED, evidence: VERIFIED_DEVICE, notes: "BOOT #4 post-mortem identified two CPU bring-up; BOOT #5.1 remains live on both CPUs." } }
+  cpu_smp: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: VERIFIED, evidence: VERIFIED_DEVICE, notes: "BOOT #4 post-mortem identified two CPU bring-up; BOOT #5.1 remained live on both CPUs. On 2026-09-15 the single-core p3 loader twice kexeced the full kernel, whose normal SCM path brought CPUs 0-1 online. Runtime offlining CPU1 succeeded but onlining it again failed EIO, so direct SMP-stage kexec remains correctly blocked rather than faking CPU-kill support." } }
   storage_emmc: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
-  storage_microsd: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: WORKING, notes: Separate mmcblk1/mmcblk1p1 SD path was mounted, wrote the C2 raw-backup stream, and its parts passed hash validation. }, target_linux: { implementation: UNKNOWN } }
+  storage_microsd: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: WORKING, notes: Separate mmcblk1/mmcblk1p1 SD path was mounted, wrote the C2 raw-backup stream, and its parts passed hash validation. }, target_linux: { implementation: BOOTS, evidence: VERIFIED_DEVICE, notes: "Physical Debian migration boots discovered the 29.5 GiB card, mounted HIKARI_ROOT read/write, printed HIKARI ROOT READY, switched to Debian systemd and remained alive with no failed units. On 2026-09-15 it supplied two checksum-verified SMP kexec boots and stayed the read/write Debian root. Its node varied among mmcblk0p1, mmcblk1p1 and mmcblk2p1 across boots, validating label-based discovery. Sustained storage I/O and removal handling remain unverified." } }
   display: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: WORKING }, target_linux: { implementation: VERIFIED, evidence: VERIFIED_DEVICE, notes: "Physical 0066 produced readable native 720x1280 fbcon with repeating HIKARI DISPLAY ALIVE output confirmed by the owner, active DRM CRTC/plane, contiguous CMA scanout at 0x7bd00000, advancing MDP/DSI IRQs, and no underrun, kernel fault, or hung task through at least 867 seconds. Display suspend/resume, brightness policy and accelerated GPU remain separate acceptance domains." } }
   touchscreen: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   gpu: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
-  wifi: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  wifi: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: PARTIAL, evidence: VERIFIED_DEVICE, notes: "On 2026-09-16 the 7.3-rc1 second stage physically enumerated Broadcom SDIO 02d0:4330 after PM8058 GPIO38 was configured as the 32.768 kHz FUNC2 sleep clock. brcmfmac loaded owner-supplied stock B2 firmware and private Hikari calibration, created wlan0, and repeatedly completed active scans (6 to 9 BSSes). Association, DHCP/real traffic, stable device MAC, regulatory/CLM data, reconnect endurance, power use and suspend/resume remain unverified." } }
   bluetooth: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
-  usb_device: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: VERIFIED, evidence: VERIFIED_DEVICE, notes: "BOOT #5.1 physically verified HSUSB peripheral/static g_serial CDC ACM High-Speed enumeration, target ttyGS0, host ttyACM0, interactive root shell, and shell respawn. USB OTG host and ECM remain separate unverified/not-implemented work." } }
-  usb_otg_host: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
+  usb_device: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: WORKING, evidence: VERIFIED_DEVICE, notes: "Sony-derived Android enumerated as 0fce:5176 with MTP/ADB and sustained bidirectional ADB across disconnect/reconnect." }, target_linux: { implementation: WORKING, evidence: VERIFIED_DEVICE, notes: "Build 0075 physically enumerated the static g_serial CDC ACM gadget as 0525:a4a7 at High Speed. Build 0083 verified controlling-terminal behavior. On 2026-09-15 Debian physically completed a device-host-device cycle using a persistent configfs ACM function: the PC regained 0525:a4a7 and /dev/ttyACM0 on the same running kernel, role=device, UDC=configured, with no legacy gserial teardown or hung-task signature. Repeated-cycle endurance and suspend/resume remain unverified." } }
+  usb_otg_host: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: WORKING, evidence: VERIFIED_DEVICE, notes: "Sony-derived Android physically enumerated QUMO 090c:1000, Kingston DataTraveler 0951:1665, and a 25a7:fa61 HID keyboard/mouse receiver. PM8901 MPP1 ext_5v_en and TLMM28 ncp373_en asserted; active-low TLMM104 fault recovered high." }, target_linux: { implementation: WORKING, evidence: VERIFIED_DEVICE, notes: "Build 0079 physically supplied VBUS and enumerated Realtek 2c4e:0102. On 2026-09-15 the current Debian kernel entered EHCI host mode, enumerated HID keyboard 04f3:0103, and accepted real keystrokes at fbcon; OTG removal cleanly deregistered EHCI and returned to the configfs serial gadget. This verifies source power, role switching, HID enumeration/input traffic, teardown, and return to device mode. Wi-Fi network data through the earlier adapter, repeated-cycle endurance, and suspend/resume remain separately unverified." } }
   hdmi: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   audio: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   camera: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
@@ -142,7 +151,7 @@ subsystems:
   gnss: { physical: { evidence: UNKNOWN }, legacy_baseline: { implementation: UNKNOWN }, target_linux: { implementation: UNKNOWN } }
   nfc: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   fm_radio: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
-  battery_charging: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: IMPLEMENTING, evidence: VERIFIED_DEVICE, notes: "BQ24160 and BQ27520 physically probed. The g27 run recorded USB input at the conservative 500 mA limit, successful CE/HZ release, and raw status transition 0x23 -> 0x40 with final FAULT=0. This verifies driver activation/programming, not positive battery current or increasing state of charge. Native charging acceptance, cradle/IN and suspend charging remain NOT_VERIFIED/BLOCKED." } }
+  battery_charging: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: WORKING, evidence: VERIFIED_DEVICE, notes: "Sony-derived Android USB-cycle test changed from -0.16..-0.28 A/Discharging unplugged to +0.31..+0.36 A/Charging on a 500 mA standard downstream port; voltage rose about 4.09 -> 4.18 V and SOC advanced 93% -> 94%. Cradle remains NOT_VERIFIED because the available cradle appears defective." }, target_linux: { implementation: PARTIAL, evidence: VERIFIED_DEVICE, notes: "Build 0075 detected notebook input (usb-charger online=1 and BQ24160 online=1) while the gauge read 4.080..4.096 V, 96..97%, and about -0.25 A. Not-charging at that voltage is expected from Sony's source-backed revision-23 safety hold, which stops above 4.0 V and restarts only at or below 3.9 V. Positive-current charging and voltage/SOC rise below the restart threshold remain unverified; cradle/IN and suspend charging remain NOT_VERIFIED/BLOCKED." } }
   thermal: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   rtc: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }
   watchdog: { physical: { evidence: VERIFIED_DEVICE }, legacy_baseline: { implementation: PROBES }, target_linux: { implementation: UNKNOWN } }

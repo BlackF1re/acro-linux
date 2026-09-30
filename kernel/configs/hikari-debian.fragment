@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Delta applied after hikari-boot6-display.fragment for the production-style
+# Debian boot. The already verified rescue path remains built in.
+CONFIG_MODULES=y
+CONFIG_MODULE_UNLOAD=y
+CONFIG_MODVERSIONS=y
+CONFIG_KALLSYMS=y
+CONFIG_KEXEC=y
+
+# These default to modules under the broad multi-board media configuration but
+# have no relationship to Hikari hardware.
+# CONFIG_DVB_STV090x is not set
+# CONFIG_DVB_STV6110x is not set
+# CONFIG_DVB_TDA665x is not set
+
+# Required before the Debian filesystem can supply any modules.
+CONFIG_BLOCK=y
+CONFIG_PARTITION_ADVANCED=y
+CONFIG_MSDOS_PARTITION=y
+CONFIG_EXT4_FS=y
+CONFIG_EXT4_USE_FOR_EXT2=y
+
+# Unverified and late-probed leaf hardware belongs in /lib/modules. These may
+# be rebuilt/reloaded independently while the kernel ABI and DT stay stable.
+CONFIG_NFC=m
+CONFIG_NFC_HCI=m
+CONFIG_NFC_SHDLC=y
+CONFIG_NFC_PN544_I2C=m
+CONFIG_BRCMFMAC=m
+CONFIG_BRCMFMAC_SDIO=y
+CONFIG_BT=m
+CONFIG_BT_HCIUART=m
+CONFIG_BT_HCIUART_SERDEV=y
+CONFIG_BT_HCIUART_BCM=y
+CONFIG_BT_HCIUART_H4=y
+CONFIG_BT_BCM=m
+CONFIG_RMI4_CORE=m
+CONFIG_RMI4_I2C=m
+CONFIG_RMI4_F11=y
+CONFIG_MPU3050_I2C=m
+CONFIG_BMA180=m

@@ -16,15 +16,19 @@ source "$repo_root/firmware/a220/source.lock"
 mkdir -p "$out"
 out=$(realpath -m -- "$out")
 
+expected_sha256() {
+  case "$1" in
+    qcom/leia_pm4_470.fw) printf '%s\n' "$A220_PM4_SHA256" ;;
+    qcom/leia_pfp_470.fw) printf '%s\n' "$A220_PFP_SHA256" ;;
+    *) echo "missing checksum for $1" >&2; return 1 ;;
+  esac
+}
+
 for rel in $A220_FIRMWARE_FILES; do
   dest="$out/$rel"
   mkdir -p "$(dirname -- "$dest")"
-  case "$rel" in
-    qcom/leia_pm4_470.fw) expected=$A220_PM4_SHA256 ;;
-    qcom/leia_pfp_470.fw) expected=$A220_PFP_SHA256 ;;
-    *) echo "missing locked digest for $rel" >&2; exit 1 ;;
-  esac
-  if [[ -s $dest ]] && printf '%s  %s\n' "$expected" "$dest" | sha256sum -c - >/dev/null; then
+  expected=$(expected_sha256 "$rel")
+  if [[ -f $dest ]] && printf '%s  %s\n' "$expected" "$dest" | sha256sum --check --status; then
     continue
   fi
   url="$LINUX_FIRMWARE_RAW/$LINUX_FIRMWARE_REF/$rel"
@@ -46,8 +50,14 @@ with tempfile.NamedTemporaryFile(dir=dst.parent, delete=False) as f:
 tmp.chmod(0o644)
 tmp.replace(dst)
 PY
+  printf '%s  %s\n' "$expected" "$dest" | sha256sum --check --status || {
+    echo "firmware checksum mismatch: $rel" >&2
+    exit 1
+  }
 done
 
-printf '%s  %s\n' "$A220_PM4_SHA256" "$out/qcom/leia_pm4_470.fw" | sha256sum -c -
-printf '%s  %s\n' "$A220_PFP_SHA256" "$out/qcom/leia_pfp_470.fw" | sha256sum -c -
+for rel in $A220_FIRMWARE_FILES; do
+  test -s "$out/$rel"
+done
+sha256sum "$out"/qcom/leia_pm4_470.fw "$out"/qcom/leia_pfp_470.fw
 echo "A220_FIRMWARE=PASS ref=$LINUX_FIRMWARE_REF dir=$out"

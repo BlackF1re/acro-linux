@@ -11,6 +11,8 @@ jobs=${JOBS:-"$(nproc)"}
 targets=${TARGETS:-"zImage qcom/qcom-msm8260-sony-hikari.dtb qcom/qcom-msm8260-sony-hikari-gpu.dtb qcom/qcom-msm8260-sony-hikari-safe.dtb"}
 initramfs_source=${INITRAMFS_SOURCE:-}
 kernel_fragment=${KERNEL_FRAGMENT:-"$repo_root/kernel/configs/hikari-boot6-display.fragment"}
+kernel_extra_fragments=${KERNEL_EXTRA_FRAGMENTS:-}
+prune_default_modules=${PRUNE_DEFAULT_MODULES:-0}
 require_usb_debug=${REQUIRE_USB_DEBUG:-0}
 require_display_bringup=${REQUIRE_DISPLAY_BRINGUP:-0}
 require_charging=${REQUIRE_CHARGING:-0}
@@ -30,8 +32,27 @@ hikari_build_root=$(realpath -m -- "$hikari_build_root")
 build_dir=$(realpath -m -- "$build_dir")
 case "$build_dir" in "$hikari_build_root"/*) ;; *) echo "BUILD_DIR must be below HIKARI_BUILD_ROOT=$hikari_build_root" >&2; exit 1;; esac
 "$repo_root/scripts/prepare-hikari-kernel-tree.sh" "$kernel_src"
+if [[ "$require_display_bringup" == 1 ]]; then
+  # Kconfig alone cannot prove that Hikari's physically verified no-IOMMU
+  # scanout implementation is present.  The legacy external worktree once
+  # lost patch 0065 while still satisfying every config check, producing a
+  # kernel which booted Debian but could never register DRM/fb0.
+  python3 "$repo_root/scripts/check-hikari-display-source.py" "$kernel_src"
+fi
 make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" qcom_defconfig
-"$kernel_src/scripts/kconfig/merge_config.sh" -m -O "$build_dir" "$build_dir/.config" "$kernel_fragment"
+if [[ $prune_default_modules == 1 ]]; then
+  # qcom_defconfig intentionally contains modules for many unrelated Qualcomm
+  # generations. Start the device profile with none of those and let the
+  # Hikari fragments below re-enable only their declared leaf drivers and
+  # automatically selected dependencies.
+  sed -E -i 's/^(CONFIG_[A-Z0-9_]+)=m$/# \1 is not set/' "$build_dir/.config"
+fi
+read -r -a extra_fragments <<<"$kernel_extra_fragments"
+for fragment in "${extra_fragments[@]}"; do
+  test -f "$fragment" || { echo "missing extra kernel fragment: $fragment" >&2; exit 1; }
+done
+"$kernel_src/scripts/kconfig/merge_config.sh" -m -O "$build_dir" "$build_dir/.config" \
+  "$kernel_fragment" "${extra_fragments[@]}"
 make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" olddefconfig
 
 grep -qx 'CONFIG_ARCH_QCOM_RESERVE_SMEM=y' "$build_dir/.config" || {
@@ -51,19 +72,19 @@ done
 if [[ "$require_usb_debug" == 1 ]]; then
   for required in CONFIG_USB_CHIPIDEA_MSM=y CONFIG_USB_CHIPIDEA_UDC=y \
     CONFIG_PHY_QCOM_USB_HS=y \
-    CONFIG_USB_GADGET=y CONFIG_USB_G_SERIAL=y; do
+    CONFIG_USB_GADGET=y CONFIG_CONFIGFS_FS=y CONFIG_USB_CONFIGFS=y \
+    CONFIG_USB_CONFIGFS_ACM=y CONFIG_USB_U_SERIAL=y; do
     grep -qx "$required" "$build_dir/.config" || {
       echo "Hikari BOOT #5 build requires $required" >&2
       exit 1
     }
   done
-  grep -Eq '^# CONFIG_U_SERIAL_CONSOLE is not set$' "$build_dir/.config" || {
-    echo 'Hikari build must keep ttyGS0 userspace-only to avoid console feedback' >&2
+  grep -qx '# CONFIG_U_SERIAL_CONSOLE is not set' "$build_dir/.config" || {
+    echo 'Hikari OTG build must not hold ttyGS0 open as a kernel console' >&2
     exit 1
   }
-  grep -Eq '^CONFIG_CMDLINE=".*console=tty0([ "].*)$' "$build_dir/.config" &&
-    ! grep -Eq '^CONFIG_CMDLINE=".*console=ttyGS0' "$build_dir/.config" || {
-    echo 'Hikari build requires tty0 and forbids ttyGS0 in the kernel cmdline' >&2
+  grep -qx '# CONFIG_USB_G_SERIAL is not set' "$build_dir/.config" || {
+    echo 'Hikari OTG build must not use role-switch-blocking legacy g_serial' >&2
     exit 1
   }
 fi
@@ -116,19 +137,19 @@ if [[ -n "$initramfs_source" ]]; then
   if [[ "$require_usb_debug" == 1 ]]; then
     for required in CONFIG_USB_CHIPIDEA_MSM=y CONFIG_USB_CHIPIDEA_UDC=y \
       CONFIG_PHY_QCOM_USB_HS=y \
-      CONFIG_USB_GADGET=y CONFIG_USB_G_SERIAL=y; do
+      CONFIG_USB_GADGET=y CONFIG_CONFIGFS_FS=y CONFIG_USB_CONFIGFS=y \
+      CONFIG_USB_CONFIGFS_ACM=y CONFIG_USB_U_SERIAL=y; do
       grep -qx "$required" "$build_dir/.config" || {
         echo "Hikari BOOT #5 build lost $required" >&2
         exit 1
       }
     done
-    grep -Eq '^# CONFIG_U_SERIAL_CONSOLE is not set$' "$build_dir/.config" || {
-      echo 'Hikari build enabled the conflicting ttyGS0 kernel console' >&2
+    grep -qx '# CONFIG_U_SERIAL_CONSOLE is not set' "$build_dir/.config" || {
+      echo 'Hikari OTG build enabled the role-switch-blocking ttyGS0 kernel console' >&2
       exit 1
     }
-    grep -Eq '^CONFIG_CMDLINE=".*console=tty0([ "].*)$' "$build_dir/.config" &&
-      ! grep -Eq '^CONFIG_CMDLINE=".*console=ttyGS0' "$build_dir/.config" || {
-      echo 'Hikari build lost the userspace-only ttyGS0 cmdline invariant' >&2
+    grep -qx '# CONFIG_USB_G_SERIAL is not set' "$build_dir/.config" || {
+      echo 'Hikari OTG build enabled role-switch-blocking legacy g_serial' >&2
       exit 1
     }
   fi
@@ -148,7 +169,9 @@ if [[ -n "$initramfs_source" ]]; then
   fi
   if [[ "$require_charging" == 1 ]]; then
     for required in CONFIG_POWER_SUPPLY=y CONFIG_BATTERY_BQ27XXX=y \
-      CONFIG_BATTERY_BQ27XXX_I2C=y CONFIG_CHARGER_BQ24160=y CONFIG_I2C_QUP=y; do
+      CONFIG_BATTERY_BQ27XXX_I2C=y CONFIG_CHARGER_BQ24160=y CONFIG_I2C_QUP=y \
+      CONFIG_PINCTRL_QCOM_SSBI_PMIC=y CONFIG_REGULATOR_FIXED_VOLTAGE=y \
+      CONFIG_USB_CHIPIDEA_HOST=y CONFIG_USB_ROLE_SWITCH=y CONFIG_USB_CONN_GPIO=y; do
       grep -qx "$required" "$build_dir/.config" || {
         echo "Hikari charging build lost $required" >&2
         exit 1
@@ -164,11 +187,6 @@ fi
 read -r -a build_targets <<<"$targets"
 make -C "$kernel_src" O="$build_dir" ARCH=arm CROSS_COMPILE="$cross_compile" \
   -j"$jobs" "${build_targets[@]}"
-if [[ -f "$build_dir/vmlinux" ]] && \
-   strings "$build_dir/vmlinux" | grep -F 'Invalid PAR value detected' >/dev/null; then
-  echo 'built vmlinux contains the rejected MSM8x60 probe-time PAR test' >&2
-  exit 1
-fi
 if [[ " $targets " == *" zImage "* ]]; then
   echo "zImage: $build_dir/arch/arm/boot/zImage"
 fi

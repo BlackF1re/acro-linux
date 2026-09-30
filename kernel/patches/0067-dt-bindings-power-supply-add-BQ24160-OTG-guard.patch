@@ -1,0 +1,32 @@
+From 4e5a24a0379931df67986213df72e9c5868fbb95 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Fri, 11 Sep 2026 02:39:27 +0700
+Subject: [PATCH 67/68] dt-bindings: power: supply: add BQ24160 OTG guard
+
+The BQ24160 must disconnect its charger input before a board supplies USB
+VBUS in host mode. Describe the regulator child used to enforce that order.
+
+Signed-off-by: BlackF1re <plevickij57@gmail.com>
+---
+ .../bindings/power/supply/ti,bq24160.yaml      | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/power/supply/ti,bq24160.yaml b/Documentation/devicetree/bindings/power/supply/ti,bq24160.yaml
+index bf43ffea2..f52d40ded 100644
+--- a/Documentation/devicetree/bindings/power/supply/ti,bq24160.yaml
++++ b/Documentation/devicetree/bindings/power/supply/ti,bq24160.yaml
+@@ -44,6 +44,12 @@ properties:
+ 
+   wakeup-source: true
+ 
++  usb-otg-guard:
++    type: object
++    description: Regulator which disconnects charging while USB host VBUS is active.
++    $ref: /schemas/regulator/regulator.yaml#
++    unevaluatedProperties: false
++
+ required:
+   - compatible
+   - reg
+-- 
+2.53.0

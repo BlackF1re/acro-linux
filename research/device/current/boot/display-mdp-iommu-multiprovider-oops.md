@@ -94,10 +94,10 @@ master per client and provider, translates repeated MIDs into that exact
 master, and makes attach/detach configure only matching masters. It no longer
 uses the single per-device private pointer for this relationship.
 
-Project patch `kernel/patches/0041-iommu-msm-track-client-masters-per-provider.patch`
-preserves the correction in the reproducible patch stack. Both kernel-source
-guards reject reintroduction of `dev_iommu_priv_get/set()` in master insertion
-or first-entry selection during attach.
+The historical patch is retained at
+`research/patches/retired-display-iommu/0041-iommu-msm-track-client-masters-per-provider.patch`.
+It was removed from the production series after physical scanout succeeded
+with MDP detached from both IOMMU providers.
 
 ## Locally validated successor
 
