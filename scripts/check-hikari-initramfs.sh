@@ -17,44 +17,44 @@ for path in init bin/sh bin/mount bin/sleep bin/cttyhack bin/mkdir bin/cat bin/e
             usr/sbin/hikari-gpu-diag \
             lib/firmware/qcom/leia_pm4_470.fw lib/firmware/qcom/leia_pfp_470.fw \
             dev proc sys; do
-  printf '%s\n' "$listing" | grep -Eq "[[:space:]]${path}( |$| ->)" || {
+  grep -Eq "[[:space:]]${path}( |$| ->)" <<<"$listing" || {
     echo "Hikari initramfs missing $path" >&2
     exit 1
   }
 done
 for helper in hikari-diag hikari-display-diag hikari-power-diag hikari-gpu-diag; do
-  printf '%s\n' "$listing" | grep -Eq "^-rwxr-xr-x.* usr/sbin/${helper}$" || {
+  grep -Eq "^-rwxr-xr-x.* usr/sbin/${helper}$" <<<"$listing" || {
     echo "Hikari initramfs missing executable diagnostic helper $helper" >&2
     exit 1
   }
 done
 for fw in leia_pm4_470.fw leia_pfp_470.fw; do
-  printf '%s\n' "$listing" | grep -Eq "^-rw-r--r--.* lib/firmware/qcom/${fw}$" || {
+  grep -Eq "^-rw-r--r--.* lib/firmware/qcom/${fw}$" <<<"$listing" || {
     echo "Hikari initramfs missing readable A220 firmware $fw" >&2
     exit 1
   }
 done
 for link in bin/ls bin/uname bin/dmesg bin/ps bin/cttyhack; do
-  printf '%s\n' "$listing" | grep -Eq " ${link} -> busybox$" || {
+  grep -Eq " ${link} -> busybox$" <<<"$listing" || {
     echo "Hikari initramfs missing canonical BusyBox link $link -> busybox" >&2
     exit 1
   }
 done
 for link in usr/bin/setsid usr/bin/top; do
-  printf '%s\n' "$listing" | grep -Eq " ${link} -> ../../bin/busybox$" || {
+  grep -Eq " ${link} -> ../../bin/busybox$" <<<"$listing" || {
     echo "Hikari initramfs missing canonical BusyBox link $link -> ../../bin/busybox" >&2
     exit 1
   }
 done
-printf '%s\n' "$listing" | grep -Eq ' sbin/getty -> ../bin/busybox$' || {
+grep -Eq ' sbin/getty -> ../bin/busybox$' <<<"$listing" || {
   echo 'Hikari initramfs missing canonical BusyBox link sbin/getty -> ../bin/busybox' >&2
   exit 1
 }
-printf '%s\n' "$listing" | grep -Eq '^crw-------.* dev/console$' || {
+grep -Eq '^crw-------.* dev/console$' <<<"$listing" || {
   echo 'Hikari initramfs has no c 5:1 /dev/console' >&2
   exit 1
 }
-printf '%s\n' "$listing" | grep -Eq '^crw-rw-rw-.* dev/null$' || {
+grep -Eq '^crw-rw-rw-.* dev/null$' <<<"$listing" || {
   echo 'Hikari initramfs has no c 1:3 /dev/null' >&2
   exit 1
 }
