@@ -1,0 +1,65 @@
+From 208b516817c80e40d1c55ed7104900961c5722af Mon Sep 17 00:00:00 2001
+From: Hikari Patch Materializer <hikari-materializer@localhost>
+Date: Mon, 7 Sep 2026 19:05:12 +0700
+Subject: [PATCH] clk: qcom: model final MSM8x60 MDP LUT clock
+
+Preserve final hardware behavior while dropping superseded intermediate
+experiments. Original exports remain in the research archive.
+
+Supersedes: 0047-clk-qcom-alias-the-MSM8x60-MDP-LUT-clock.patch, 0048-clk-qcom-model-the-MSM8x60-MDP-LUT-clock-safely.patch
+---
+ drivers/clk/qcom/mmcc-msm8660.c | 31 ++++++++++++++++---------------
+ 1 file changed, 16 insertions(+), 15 deletions(-)
+
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+index f10c1dbc6b48cae3775a7043d844f93af308fe90..f780f3b2d47191c3b9a0b65eee87d47be05cbe9a 100644
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -1147,21 +1147,22 @@ static struct clk_branch mdp_clk = {
+ 	},
+ };
+ 
+-static struct clk_branch mdp_lut_clk = {
+-	.halt_reg = 0x01e8,
+-	.halt_bit = 13,
+-	.clkr = {
+-		.enable_reg = 0x016c,
+-		.enable_mask = BIT(0),
+-		.hw.init = &(struct clk_init_data){
+-			.parent_hws = (const struct clk_hw*[]){
+-				&mdp_src.clkr.hw
+-			},
+-			.num_parents = 1,
+-			.name = "mdp_lut_clk",
+-			.ops = &clk_branch_ops,
+-			.flags = CLK_SET_RATE_PARENT,
++/*
++ * MSM8x60 has no independently gateable MDP LUT clock.  Give MDP4 a
++ * distinct CCF handle whose prepare/enable and rate propagation reach the
++ * real MDP core clock, without touching the unrelated MSM8960 LUT gate.
++ */
++static const struct clk_ops mdp_lut_clk_ops = { };
++
++static struct clk_regmap mdp_lut_clk = {
++	.hw.init = &(struct clk_init_data) {
++		.name = "mdp_lut_clk",
++		.parent_hws = (const struct clk_hw *[]) {
++			&mdp_clk.clkr.hw,
+ 		},
++		.num_parents = 1,
++		.ops = &mdp_lut_clk_ops,
++		.flags = CLK_SET_RATE_PARENT,
+ 	},
+ };
+ 
+@@ -2299,7 +2300,7 @@ static struct clk_regmap *mmcc_msm8660_clks[] = {
+ 	[JPEGD_CLK] = &jpegd_clk.clkr,
+ 	[MDP_SRC] = &mdp_src.clkr,
+ 	[MDP_CLK] = &mdp_clk.clkr,
+-	[MDP_LUT_CLK] = &mdp_lut_clk.clkr,
++	[MDP_LUT_CLK] = &mdp_lut_clk,
+ 	[MDP_PIXEL_SRC] = &mdp_pixel_src.clkr,
+ 	[MDP_PIXEL_CLK] = &mdp_pixel_clk.clkr,
+ 	[MDP_LCDC_CLK] = &mdp_lcdc_clk.clkr,
+-- 
+2.53.0

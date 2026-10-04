@@ -11,7 +11,7 @@ The connected SYSTEM remains unchanged and Phosh remains active on GLES2.
 BOOT, production SD bundles, root SSH/USB access and diagnostic tools are
 untouched. The historical full resolved config remains a provenance artifact.
 
-## Export of the owner's port
+## Initial subsystem export of the owner's port (before functional retirement)
 
 | Active patch | Scope | Assessment |
 |---|---|---|
@@ -93,3 +93,11 @@ DSI timeout/halt quirks and regulator-always-on declarations also remain.
 Hardware wiring, original authorship, source provenance and acceptance evidence
 remain intact. Obsolete operational summaries are preserved in the document
 archive and replaced in `docs/` by current instructions and explicit limits.
+
+## Follow-up: functional rather than textual audit
+
+See [FUNCTIONAL-PATCH-AUDIT.md](FUNCTIONAL-PATCH-AUDIT.md). The subsequent
+review retired canceled LUT/DSI experiments and canonical-DTS duplicates while
+preserving the entire prepared kernel tree exactly. The earlier 67-commit
+omission table remains historical evidence; it is not the current patch count
+or a proof that every intermediate experiment must remain active.

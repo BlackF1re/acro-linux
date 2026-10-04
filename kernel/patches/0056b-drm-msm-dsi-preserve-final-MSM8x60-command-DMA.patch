@@ -1,0 +1,140 @@
+From 750cfc8af09a1c6d5aa46087c714a2c5228abfdf Mon Sep 17 00:00:00 2001
+From: Hikari Patch Materializer <hikari-materializer@localhost>
+Date: Thu, 10 Sep 2026 17:00:00 +0700
+Subject: [PATCH] drm/msm/dsi: accept idle MSM8x60 command DMA timeout
+
+Consolidate the complete final implementation, preserving ordering and
+barriers. Drop superseded intermediate implementations only.
+Original mail exports and authorship are retained in the research archive.
+
+Original-author: Hikari Patch Materializer <hikari-materializer@localhost>
+Original-author: Paul Levickij <plevickij57@gmail.com>
+Supersedes: 0054-drm-msm-dsi-tolerate-missed-MSM8x60-command-DMA-IRQ.patch
+Supersedes: 0055-drm-msm-dsi-match-Hikari-software-trigger.patch
+Supersedes: 0056-drm-msm-dsi-accept-idle-MSM8x60-command-DMA-timeout.patch
+---
+ drivers/gpu/drm/msm/dsi/dsi_cfg.c  |  1 +
+ drivers/gpu/drm/msm/dsi/dsi_cfg.h  |  1 +
+ drivers/gpu/drm/msm/dsi/dsi_host.c | 62 ++++++++++++++++++++++++++++--
+ 3 files changed, 60 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_cfg.c b/drivers/gpu/drm/msm/dsi/dsi_cfg.c
+index 03b3c9a5d06d2ccb9edcbf963a8923de7835a326..064e3bfbbe57638e714a69b3f556542cfe063ef8 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_cfg.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_cfg.c
+@@ -22,6 +22,7 @@ static const struct regulator_bulk_data msm8x60_dsi_regulators[] = {
+ static const struct msm_dsi_config msm8x60_dsi_cfg = {
+ 	.io_offset = 0,
+ 	.quiesce_msm8x60_boot_state = true,
++	.cmd_dma_irq_timeout_nonfatal = true,
+ 	.regulator_data = msm8x60_dsi_regulators,
+ 	.num_regulators = ARRAY_SIZE(msm8x60_dsi_regulators),
+ 	.bus_clk_names = dsi_v2_bus_clk_names,
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_cfg.h b/drivers/gpu/drm/msm/dsi/dsi_cfg.h
+index be3e8733f3dcde8b09f1e52f12f3fb55e6867a2f..3fb4bf7b15d2612d7c6d9342a7ea8fb64410489c 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_cfg.h
++++ b/drivers/gpu/drm/msm/dsi/dsi_cfg.h
+@@ -44,6 +44,7 @@
+ struct msm_dsi_config {
+ 	u32 io_offset;
+ 	bool quiesce_msm8x60_boot_state;
++	bool cmd_dma_irq_timeout_nonfatal;
+ 	const struct regulator_bulk_data *regulator_data;
+ 	int num_regulators;
+ 	const char * const *bus_clk_names;
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
+index b680d5aab7d472b5979c56a1180d5e297a33a6df..8af70a400344645399ced9976b26d42b6887f902 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -996,8 +996,14 @@ static void dsi_ctrl_enable(struct msm_dsi_host *msm_host,
+ 			DSI_CMD_DMA_CTRL_LOW_POWER);
+ 
+ 	data = 0;
+-	/* Always assume dedicated TE pin */
+-	data |= DSI_TRIG_CTRL_TE;
++	/*
++	 * Hikari's MSM8x60 downstream panel data leaves te_sel clear and uses
++	 * software triggers for both MDP and command DMA.  Selecting the
++	 * dedicated TE input here can prevent the V2 command engine from
++	 * consuming even the first panel command.
++	 */
++	if (!cfg_hnd->cfg->quiesce_msm8x60_boot_state)
++		data |= DSI_TRIG_CTRL_TE;
+ 	data |= DSI_TRIG_CTRL_MDP_TRIGGER(TRIGGER_NONE);
+ 	data |= DSI_TRIG_CTRL_DMA_TRIGGER(TRIGGER_SW);
+ 	data |= DSI_TRIG_CTRL_STREAM(msm_host->channel);
+@@ -1579,8 +1585,49 @@ static int dsi_cmd_dma_tx(struct msm_dsi_host *msm_host, int len)
+ 		ret = wait_for_completion_timeout(&msm_host->dma_comp,
+ 					msecs_to_jiffies(200));
+ 		DBG("ret=%d", ret);
+-		if (ret == 0)
+-			ret = -ETIMEDOUT;
++		if (ret == 0) {
++			u32 trigger = dsi_read(msm_host, REG_DSI_TRIG_DMA);
++			u32 intr = dsi_read(msm_host, REG_DSI_INTR_CTRL);
++			u32 status = dsi_read(msm_host, REG_DSI_STATUS0);
++			u32 fifo = dsi_read(msm_host, REG_DSI_FIFO_STATUS);
++			u32 ack = dsi_read(msm_host, REG_DSI_ACK_ERR_STATUS);
++			u32 timeout = dsi_read(msm_host, REG_DSI_TIMEOUT_STATUS);
++			u32 dln0 = dsi_read(msm_host, REG_DSI_DLN0_PHY_ERR);
++			u32 clk = dsi_read(msm_host, REG_DSI_CLK_STATUS);
++			bool idle, error_free;
++
++			idle = !(status & (DSI_STATUS0_CMD_MODE_ENGINE_BUSY |
++					  DSI_STATUS0_CMD_MODE_DMA_BUSY |
++					  DSI_STATUS0_DSI_BUSY));
++			error_free = !(status & DSI_STATUS0_INTERLEAVE_OP_CONTENTION) &&
++				     !(fifo & 0x44444489) && !ack &&
++				     !(timeout & 0x111) && !(dln0 & 0x11111);
++
++			/*
++			 * Sony's MSM8x60 host logs a missing completion interrupt but
++			 * continues with the command length.  A working Hikari likewise
++			 * leaves TRIG_DMA asserted, so that register cannot distinguish a
++			 * completed transfer.  Preserve the downstream behaviour only for
++			 * this configuration and only when the engine is idle and reports
++			 * no protocol, FIFO, timeout or lane-0 PHY error.
++			 */
++			if (cfg_hnd->cfg->cmd_dma_irq_timeout_nonfatal && idle &&
++			    error_free) {
++				dev_warn_once(&msm_host->pdev->dev,
++					      "command DMA completion IRQ missing; continuing on idle MSM8x60 engine (base=%#llx len=%d trigger=%#x intr=%#x fifo=%#x clk=%#x)\n",
++					      dma_base, len, trigger, intr, fifo, clk);
++				ret = len;
++			} else {
++				dev_err(&msm_host->pdev->dev,
++					"command DMA timeout: base=%#llx len=%d ctrl=%#x trig_ctrl=%#x trigger=%#x intr=%#x status=%#x fifo=%#x ack=%#x timeout=%#x dln0=%#x clk=%#x\n",
++					dma_base, len,
++					dsi_read(msm_host, REG_DSI_CTRL),
++					dsi_read(msm_host, REG_DSI_TRIG_CTRL),
++					trigger, intr, status, fifo, ack, timeout, dln0,
++					clk);
++				ret = -ETIMEDOUT;
++			}
++		}
+ 		else
+ 			ret = len;
+ 	} else {
+@@ -2315,6 +2362,9 @@ int msm_dsi_host_xfer_prepare(struct mipi_dsi_host *host,
+ 		msm_host->dma_cmd_ctrl_restore |
+ 		DSI_CTRL_CMD_MODE_EN |
+ 		DSI_CTRL_ENABLE);
++	/* MSM8x60 requires command mode to reach hardware before DMA setup. */
++	wmb();
++	(void)dsi_read(msm_host, REG_DSI_CTRL);
+ 	dsi_intr_ctrl(msm_host, DSI_IRQ_MASK_CMD_DMA_DONE, 1);
+ 
+ 	return 0;
+@@ -2491,6 +2541,10 @@ void msm_dsi_host_cmd_xfer_commit(struct mipi_dsi_host *host, u32 dma_base,
+ 
+ 	dsi_write(msm_host, REG_DSI_DMA_BASE, dma_base);
+ 	dsi_write(msm_host, REG_DSI_DMA_LEN, len);
++
++	/* Order and flush the DMA descriptor registers before triggering V2. */
++	wmb();
++	(void)dsi_read(msm_host, REG_DSI_DMA_LEN);
+ 	dsi_write(msm_host, REG_DSI_TRIG_DMA, 1);
+ 
+ 	/* Make sure trigger happens */
+-- 
+2.53.0

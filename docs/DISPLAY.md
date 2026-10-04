@@ -7,7 +7,7 @@ hardware adaptations, not disposable diagnostics.
 
 The A220 driver carries KGSL-derived context shadow banks, CP-ordered MMU
 synchronization and context rearm. This lifecycle implementation fixed the
-old stale-varying corruption and remains intact. Patches 0080–0085 reproduce
+old stale-varying corruption and remains intact. The driver integration and canonical DTS reproduce
 the signed source integration exactly; patch 0086 only reduces startup logs.
 No GPU register write, packet, shadow allocation, wait or barrier is removed.
 

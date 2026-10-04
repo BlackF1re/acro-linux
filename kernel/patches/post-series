@@ -4,5 +4,4 @@
 0082-regulator-add-MSM8660-per-core-SAW-voltage-control.patch
 0083-cpufreq-add-MSM8660-Scorpion-DVFS.patch
 0084-input-map-Hikari-navigation-strip-through-touch-overlays.patch
-0085-arm-dts-integrate-current-Hikari-hardware-configuration.patch
 0086-chore-quiet-Hikari-startup-diagnostics.patch

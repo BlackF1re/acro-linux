@@ -1,0 +1,46 @@
+NODE=/sys/bus/iio/devices/iio:device0
+as3676-als
+FILE=in_illuminance_raw
+0
+NODE=/sys/bus/iio/devices/iio:device1
+PM8058-XOADC
+NODE=/sys/bus/iio/devices/iio:device2
+msm-thermal-sensor
+NODE=/sys/bus/iio/devices/iio:device3
+battery-thermal-sensor
+NODE=/sys/bus/iio/devices/iio:device4
+apds9702
+FILE=in_proximity_raw
+0
+NODE=/sys/bus/iio/devices/iio:device5
+2-000c
+FILE=in_magn_x_raw
+-8
+FILE=in_magn_y_raw
+305
+FILE=in_magn_z_raw
+458
+NODE=/sys/bus/iio/devices/iio:device6
+mpu3050
+NODE=/sys/bus/iio/devices/iio:device7
+bma250
+Pin config settings per pin
+Format: pin (name): configs
+pin 0 (mpp1):
+pin 1 (mpp2):
+pin 2 (mpp3):
+pin 3 (mpp4):
+pin 4 (mpp5):
+pin 5 (mpp6):
+pin 6 (mpp7):
+pin 7 (mpp8):
+pin 8 (mpp9):
+pin 9 (mpp10):
+pin 10 (mpp11):
+pin 11 (mpp12):
+Pin config settings per pin
+Format: pin (name): configs
+pin 0 (mpp1):
+pin 1 (mpp2):
+pin 2 (mpp3):
+pin 3 (mpp4):

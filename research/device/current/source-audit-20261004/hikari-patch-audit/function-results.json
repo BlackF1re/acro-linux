@@ -1,0 +1,167 @@
+{
+  "a2xx_submit": {
+    "state": "EXECUTED",
+    "symbol": "a2xx_submit",
+    "hits": 57,
+    "misses": 0
+  },
+  "a2xx_gpummu_map": {
+    "state": "EXECUTED",
+    "symbol": "a2xx_gpummu_map",
+    "hits": 8,
+    "misses": 0
+  },
+  "a2xx_gpummu_unmap": {
+    "state": "EXECUTED",
+    "symbol": "a2xx_gpummu_unmap",
+    "hits": 8,
+    "misses": 0
+  },
+  "msm_framebuffer_prepare": {
+    "state": "NOT_EXERCISED",
+    "symbol": "msm_framebuffer_prepare",
+    "hits": 0,
+    "misses": 0
+  },
+  "msm_framebuffer_cleanup": {
+    "state": "NOT_EXERCISED",
+    "symbol": "msm_framebuffer_cleanup",
+    "hits": 0,
+    "misses": 0
+  },
+  "msm_gem_get_and_pin_phys": {
+    "state": "NOT_EXERCISED",
+    "symbol": "msm_gem_get_and_pin_phys",
+    "hits": 0,
+    "misses": 0
+  },
+  "msm_gem_unpin_phys": {
+    "state": "NOT_EXERCISED",
+    "symbol": "msm_gem_unpin_phys",
+    "hits": 0,
+    "misses": 0
+  },
+  "mdp4_enable": {
+    "state": "NOT_EXERCISED",
+    "symbol": "mdp4_enable",
+    "hits": 0,
+    "misses": 0
+  },
+  "mdp4_disable": {
+    "state": "NOT_EXERCISED",
+    "symbol": "mdp4_disable",
+    "hits": 0,
+    "misses": 0
+  },
+  "mdp4_crtc_commit_irq": {
+    "state": "NOT_EXERCISED",
+    "symbol": "mdp4_crtc_commit_irq",
+    "hits": 0,
+    "misses": 0
+  },
+  "msm8660_mmcc_scm_reg_read": {
+    "state": "EXECUTED",
+    "symbol": "msm8660_mmcc_scm_reg_read",
+    "hits": 509,
+    "misses": 0
+  },
+  "msm8660_mmcc_scm_reg_write": {
+    "state": "EXECUTED",
+    "symbol": "msm8660_mmcc_scm_reg_write",
+    "hits": 84,
+    "misses": 0
+  },
+  "qcom_scm_io_readl": {
+    "state": "EXECUTED",
+    "symbol": "qcom_scm_io_readl",
+    "hits": 509,
+    "misses": 0
+  },
+  "qcom_scm_io_writel": {
+    "state": "EXECUTED",
+    "symbol": "qcom_scm_io_writel",
+    "hits": 84,
+    "misses": 0
+  },
+  "bq24160_get_property": {
+    "state": "EXECUTED",
+    "symbol": "bq24160_get_property",
+    "hits": 48,
+    "misses": 0
+  },
+  "bq24160_sync_locked": {
+    "state": "EXECUTED",
+    "symbol": "bq24160_sync_locked",
+    "hits": 2,
+    "misses": 0
+  },
+  "bq24160_status_work": {
+    "state": "NOT_EXERCISED",
+    "symbol": "bq24160_status_work",
+    "hits": 0,
+    "misses": 0
+  },
+  "bq27xxx_battery_get_property": {
+    "state": "EXECUTED",
+    "symbol": "bq27xxx_battery_get_property",
+    "hits": 14,
+    "misses": 0
+  },
+  "bq27xxx_battery_read_soc": {
+    "state": "NO_SYMBOL_IN_RUNNING_IMAGE"
+  },
+  "bq27xxx_battery_voltage": {
+    "state": "NO_SYMBOL_IN_RUNNING_IMAGE"
+  },
+  "tsens_get_temp": {
+    "state": "EXECUTED",
+    "symbol": "tsens_get_temp",
+    "hits": 20,
+    "misses": 0
+  },
+  "pm8xxx_mpp_get": {
+    "state": "NOT_EXERCISED",
+    "symbol": "pm8xxx_mpp_get",
+    "hits": 0,
+    "misses": 0
+  },
+  "mmci_pio_read": {
+    "state": "NO_SYMBOL_IN_RUNNING_IMAGE"
+  },
+  "mmci_pio_irq": {
+    "state": "EXECUTED",
+    "symbol": "mmci_pio_irq",
+    "hits": 258,
+    "misses": 0
+  },
+  "rmi_2d_sensor_abs_report": {
+    "state": "NOT_EXERCISED",
+    "symbol": "rmi_2d_sensor_abs_report",
+    "hits": 0,
+    "misses": 0
+  },
+  "rmi_2d_sensor_sync_frame": {
+    "state": "NOT_EXERCISED",
+    "symbol": "rmi_2d_sensor_sync_frame",
+    "hits": 0,
+    "misses": 0
+  },
+  "as3676_backlight_update_status": {
+    "state": "NOT_EXERCISED",
+    "symbol": "as3676_backlight_update_status",
+    "hits": 0,
+    "misses": 0
+  },
+  "as3676_get_als": {
+    "state": "NO_SYMBOL_IN_RUNNING_IMAGE"
+  },
+  "qcom_icc_set": {
+    "state": "NOT_EXERCISED",
+    "symbol": "qcom_icc_set",
+    "hits": 0,
+    "misses": 0
+  },
+  "qcom_icc_rpm_set": {
+    "state": "NO_SYMBOL_IN_RUNNING_IMAGE"
+  }
+}

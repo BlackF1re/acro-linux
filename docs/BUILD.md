@@ -111,7 +111,7 @@ Historical test worktrees remain local references, not release branches.
 ## Maintenance patch audit
 
 See [PATCH-AUDIT.md](PATCH-AUDIT.md). The original integration export is
-archived; patches 0080–0085 preserve its exact tree. Patch 0086 only quiets
+archived; the subsystem driver patches plus canonical DTS preserve its exact prepared tree. Patch 0086 only quiets
 startup diagnostics. Root access, diagnostic packages, BOOT and GPU hardware
 sequencing are retained. No maintenance kernel has been deployed as part of
 this source cleanup.

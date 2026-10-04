@@ -1,0 +1,263 @@
+From 6a2827b60e25ddad9b077dc890885c05b2183c26 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Fri, 4 Sep 2026 11:57:47 +0700
+Subject: [PATCH] drm/msm/dsi: quiesce MSM8x60 boot state once
+
+Consolidate the complete final implementation, preserving ordering and
+barriers. Drop superseded intermediate implementations only.
+Original mail exports and authorship are retained in the research archive.
+
+Original-author: BlackF1re <plevickij57@gmail.com>
+Supersedes: 0023-drm-msm-dsi-quiesce-MSM8x60-clocks-before-gating.patch
+Supersedes: 0026-drm-msm-dsi-complete-MSM8x60-boot-state-quiesce.patch
+Supersedes: 0027-drm-msm-dsi-quiesce-MSM8x60-boot-state-once.patch
+---
+ drivers/gpu/drm/msm/dsi/dsi.c              |  9 +++-
+ drivers/gpu/drm/msm/dsi/dsi.h              |  5 ++-
+ drivers/gpu/drm/msm/dsi/dsi_cfg.c          |  1 +
+ drivers/gpu/drm/msm/dsi/dsi_cfg.h          |  2 +-
+ drivers/gpu/drm/msm/dsi/dsi_host.c         | 48 ++++++++++++++++++++++
+ drivers/gpu/drm/msm/dsi/phy/dsi_phy.c      |  6 +++
+ drivers/gpu/drm/msm/dsi/phy/dsi_phy.h      |  1 +
+ drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c | 13 ++++++
+ 8 files changed, 82 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/dsi/dsi.c b/drivers/gpu/drm/msm/dsi/dsi.c
+index 3c9f01ed62713313b2cfe8147415bc8733247cb7..71a194855ee0e9111267ffea431fc251ad583143 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi.c
++++ b/drivers/gpu/drm/msm/dsi/dsi.c
+@@ -103,6 +103,14 @@ static struct msm_dsi *dsi_init(struct platform_device *pdev)
+ 	if (ret)
+ 		goto destroy_dsi;
+ 
++	/* Discard firmware display state before normal runtime PM begins. */
++	ret = msm_dsi_host_quiesce_boot_state(msm_dsi->host,
++					      msm_dsi->phy);
++	if (ret) {
++		dev_err(&pdev->dev, "failed to quiesce boot state: %d\n", ret);
++		goto destroy_dsi;
++	}
++
+ 	/* Register to dsi manager */
+ 	ret = msm_dsi_manager_register(msm_dsi);
+ 	if (ret)
+@@ -267,4 +275,3 @@ void msm_dsi_snapshot(struct msm_disp_state *disp_state, struct msm_dsi *msm_dsi
+ 	msm_dsi_host_snapshot(disp_state, msm_dsi->host);
+ 	msm_dsi_phy_snapshot(disp_state, msm_dsi->phy);
+ }
+-
+diff --git a/drivers/gpu/drm/msm/dsi/dsi.h b/drivers/gpu/drm/msm/dsi/dsi.h
+index 86996d98512347bdccaf7e7781cc516d446857a6..9b3433d3f899e7abd5b72ac59bbdb732ee470ff6 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi.h
++++ b/drivers/gpu/drm/msm/dsi/dsi.h
+@@ -58,6 +58,7 @@ void msm_dsi_manager_tpg_enable(void);
+ 
+ /* dsi host */
+ struct msm_dsi_host;
++struct msm_dsi_phy;
+ int msm_dsi_host_xfer_prepare(struct mipi_dsi_host *host,
+ 					const struct mipi_dsi_msg *msg);
+ void msm_dsi_host_xfer_restore(struct mipi_dsi_host *host,
+@@ -95,6 +96,8 @@ void msm_dsi_host_destroy(struct mipi_dsi_host *host);
+ int msm_dsi_host_modeset_init(struct mipi_dsi_host *host,
+ 					struct drm_device *dev);
+ int msm_dsi_host_init(struct msm_dsi *msm_dsi);
++int msm_dsi_host_quiesce_boot_state(struct mipi_dsi_host *host,
++				    struct msm_dsi_phy *phy);
+ int msm_dsi_runtime_suspend(struct device *dev);
+ int msm_dsi_runtime_resume(struct device *dev);
+ int dsi_link_clk_set_rate_6g(struct msm_dsi_host *msm_host);
+@@ -128,7 +131,6 @@ struct drm_dsc_config *msm_dsi_host_get_dsc_config(struct mipi_dsi_host *host);
+ bool msm_dsi_host_is_wide_bus_enabled(struct mipi_dsi_host *host);
+ 
+ /* dsi phy */
+-struct msm_dsi_phy;
+ struct msm_dsi_phy_shared_timings {
+ 	u32 clk_post;
+ 	u32 clk_pre;
+@@ -147,6 +149,7 @@ int msm_dsi_phy_enable(struct msm_dsi_phy *phy,
+ 			struct msm_dsi_phy_clk_request *clk_req,
+ 			struct msm_dsi_phy_shared_timings *shared_timings);
+ void msm_dsi_phy_disable(struct msm_dsi_phy *phy);
++void msm_dsi_phy_quiesce_boot_state(struct msm_dsi_phy *phy);
+ void msm_dsi_phy_set_usecase(struct msm_dsi_phy *phy,
+ 			     enum msm_dsi_phy_usecase uc);
+ void msm_dsi_phy_pll_save_state(struct msm_dsi_phy *phy);
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_cfg.c b/drivers/gpu/drm/msm/dsi/dsi_cfg.c
+index 04c1dba7699e67ac0adb64f0fe117291181f17f3..ed5aa2b7b834c070ca004d2b7f8b381779dc0d8e 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_cfg.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_cfg.c
+@@ -21,6 +21,7 @@ static const struct regulator_bulk_data msm8x60_dsi_regulators[] = {
+  */
+ static const struct msm_dsi_config msm8x60_dsi_cfg = {
+ 	.io_offset = 0,
++	.quiesce_msm8x60_boot_state = true,
+ 	.regulator_data = msm8x60_dsi_regulators,
+ 	.num_regulators = ARRAY_SIZE(msm8x60_dsi_regulators),
+ 	.bus_clk_names = dsi_v2_bus_clk_names,
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_cfg.h b/drivers/gpu/drm/msm/dsi/dsi_cfg.h
+index ccf06679608e0387471cbbcc0e061da5ce9e6159..be3e8733f3dcde8b09f1e52f12f3fb55e6867a2f 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_cfg.h
++++ b/drivers/gpu/drm/msm/dsi/dsi_cfg.h
+@@ -43,6 +43,7 @@
+ 
+ struct msm_dsi_config {
+ 	u32 io_offset;
++	bool quiesce_msm8x60_boot_state;
+ 	const struct regulator_bulk_data *regulator_data;
+ 	int num_regulators;
+ 	const char * const *bus_clk_names;
+@@ -72,4 +73,3 @@ struct msm_dsi_cfg_handler {
+ const struct msm_dsi_cfg_handler *msm_dsi_cfg_get(u32 major, u32 minor);
+ 
+ #endif /* __MSM_DSI_CFG_H__ */
+-
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
+index bef189a84f2feb79c6077503d858cb10c1b31d73..2373b278e57228a7fbcd700eccf0bd0928665322 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -113,6 +113,7 @@ struct msm_dsi_host {
+ 
+ 	int num_bus_clks;
+ 	struct clk_bulk_data bus_clks[DSI_BUS_CLK_MAX];
++	bool keep_bus_clks_on;
+ 
+ 	struct clk *byte_clk;
+ 	struct clk *esc_clk;
+@@ -364,6 +365,41 @@ static int dsi_clk_init(struct msm_dsi_host *msm_host)
+ 	return ret;
+ }
+ 
++int msm_dsi_host_quiesce_boot_state(struct mipi_dsi_host *host,
++				    struct msm_dsi_phy *phy)
++{
++	struct msm_dsi_host *msm_host = to_msm_dsi_host(host);
++	int ret;
++
++	if (!msm_host->cfg_hnd->cfg->quiesce_msm8x60_boot_state)
++		return 0;
++
++	/*
++	 * S1Boot leaves the MSM8x60 DSI AHB branches enabled without a clock
++	 * framework reference. Take a real reference before accessing the
++	 * controller, then retain it for this early bring-up path. Hardware
++	 * shows that the three halt status bits do not assert during teardown;
++	 * retaining the narrow bus clocks avoids warnings and, more importantly,
++	 * keeps an ordinary runtime suspend from resetting an active panel.
++	 */
++	ret = clk_bulk_prepare_enable(msm_host->num_bus_clks,
++				      msm_host->bus_clks);
++	if (ret)
++		return ret;
++
++	dsi_write(msm_host, REG_DSI_CLK_CTRL, 0);
++	dsi_write(msm_host, REG_DSI_CTRL, 0);
++	msm_dsi_phy_quiesce_boot_state(phy);
++	/* Flush all posted writes while the slave AHB clock is accessible. */
++	dsi_read(msm_host, REG_DSI_CTRL);
++
++	msm_host->keep_bus_clks_on = true;
++	dev_info(&msm_host->pdev->dev,
++		 "quiesced MSM8x60 firmware state; retaining DSI AHB clocks\n");
++
++	return 0;
++}
++
+ int msm_dsi_runtime_suspend(struct device *dev)
+ {
+ 	struct platform_device *pdev = to_platform_device(dev);
+@@ -374,6 +410,9 @@ int msm_dsi_runtime_suspend(struct device *dev)
+ 	if (!msm_host->cfg_hnd)
+ 		return 0;
+ 
++	if (msm_host->keep_bus_clks_on)
++		return 0;
++
+ 	clk_bulk_disable_unprepare(msm_host->num_bus_clks, msm_host->bus_clks);
+ 
+ 	return 0;
+@@ -389,6 +428,9 @@ int msm_dsi_runtime_resume(struct device *dev)
+ 	if (!msm_host->cfg_hnd)
+ 		return 0;
+ 
++	if (msm_host->keep_bus_clks_on)
++		return 0;
++
+ 	return clk_bulk_prepare_enable(msm_host->num_bus_clks, msm_host->bus_clks);
+ }
+ 
+@@ -2173,6 +2215,12 @@ void msm_dsi_host_destroy(struct mipi_dsi_host *host)
+ 	mutex_destroy(&msm_host->cmd_mutex);
+ 	mutex_destroy(&msm_host->dev_mutex);
+ 
++	if (msm_host->keep_bus_clks_on) {
++		clk_bulk_disable_unprepare(msm_host->num_bus_clks,
++					   msm_host->bus_clks);
++		msm_host->keep_bus_clks_on = false;
++	}
++
+ 	pm_runtime_disable(&msm_host->pdev->dev);
+ }
+ 
+diff --git a/drivers/gpu/drm/msm/dsi/phy/dsi_phy.c b/drivers/gpu/drm/msm/dsi/phy/dsi_phy.c
+index 5ad2465689773b6fb39d368176fd2d8bc66fd85e..da77deeecba8a52382d4910503baba67119ce034 100644
+--- a/drivers/gpu/drm/msm/dsi/phy/dsi_phy.c
++++ b/drivers/gpu/drm/msm/dsi/phy/dsi_phy.c
+@@ -812,6 +812,12 @@ void msm_dsi_phy_disable(struct msm_dsi_phy *phy)
+ 	pm_runtime_put(&phy->pdev->dev);
+ }
+ 
++void msm_dsi_phy_quiesce_boot_state(struct msm_dsi_phy *phy)
++{
++	if (phy && phy->cfg->ops.quiesce_boot_state)
++		phy->cfg->ops.quiesce_boot_state(phy);
++}
++
+ void msm_dsi_phy_set_usecase(struct msm_dsi_phy *phy,
+ 			     enum msm_dsi_phy_usecase uc)
+ {
+diff --git a/drivers/gpu/drm/msm/dsi/phy/dsi_phy.h b/drivers/gpu/drm/msm/dsi/phy/dsi_phy.h
+index df56754578078af31182e094498698dd72aa934b..b5df76d87554ed86ae0fd9f1c2eab834ba354b43 100644
+--- a/drivers/gpu/drm/msm/dsi/phy/dsi_phy.h
++++ b/drivers/gpu/drm/msm/dsi/phy/dsi_phy.h
+@@ -18,6 +18,7 @@ struct msm_dsi_phy_ops {
+ 	int (*enable)(struct msm_dsi_phy *phy,
+ 			struct msm_dsi_phy_clk_request *clk_req);
+ 	void (*disable)(struct msm_dsi_phy *phy);
++	void (*quiesce_boot_state)(struct msm_dsi_phy *phy);
+ 	void (*save_pll_state)(struct msm_dsi_phy *phy);
+ 	int (*restore_pll_state)(struct msm_dsi_phy *phy);
+ 	bool (*set_continuous_clock)(struct msm_dsi_phy *phy, bool enable);
+diff --git a/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c b/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
+index be3a129d9e9cf83ba1b82de4b392fc419b9956c7..db7ca5f31d8be31092a389997558f3672047813b 100644
+--- a/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
++++ b/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
+@@ -157,6 +157,18 @@ static void dsi_45nm_disable(struct msm_dsi_phy *phy)
+ 	wmb();
+ }
+ 
++static void dsi_45nm_quiesce_boot_state(struct msm_dsi_phy *phy)
++{
++	/*
++	 * Fuji's no-continuous-splash handoff clears PLL_CTRL_0 before the
++	 * DSI AHB branches are gated.  This is separate from the normal PHY
++	 * disable path because the DRM driver has not enabled the PHY yet.
++	 */
++	writel(0, phy->pll_base);
++	/* Flush the posted write while the DSI slave AHB clock is still on. */
++	readl(phy->pll_base);
++}
++
+ static const struct regulator_bulk_data dsi_45nm_regulators[] = {
+ 	{ .supply = "vdda", .init_load_uA = 100000 }, /* PM8058 L0, 1.2 V */
+ };
+@@ -167,6 +179,7 @@ const struct msm_dsi_phy_cfg dsi_phy_45nm_msm8x60_cfgs = {
+ 	.ops = {
+ 		.enable = dsi_45nm_enable,
+ 		.disable = dsi_45nm_disable,
++		.quiesce_boot_state = dsi_45nm_quiesce_boot_state,
+ 		.pll_init = dsi_45nm_pll_init,
+ 	},
+ 	.min_pll_rate = HIKARI_BITCLK,
+-- 
+2.53.0

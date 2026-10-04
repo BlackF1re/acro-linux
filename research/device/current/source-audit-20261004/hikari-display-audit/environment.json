@@ -1,0 +1,11 @@
+{
+  "gui_exit": 0,
+  "phosh": {
+    "exit": 0,
+    "output": "active\n"
+  },
+  "kernel": {
+    "exit": 0,
+    "output": "Linux hikari 7.3.0-rc1-hikari-system-ga701a6f7854a-dirty #1 SMP PREEMPT Sun Oct  4 12:43:59 +07 2026 armv7l GNU/Linux\n"
+  }
+}

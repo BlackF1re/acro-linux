@@ -1,0 +1,40 @@
+From 7e5970df0e01fdef00bdda21b90dc391c2c5a0f6 Mon Sep 17 00:00:00 2001
+From: Xperia Hikari Linux Project <hikari-linux@localhost>
+Date: Thu, 10 Sep 2026 13:05:00 +0700
+Subject: [PATCH] clk: qcom: describe final MSM8x60 DSI pixel divider
+
+Preserve final hardware behavior while dropping superseded intermediate
+experiments. Original exports remain in the research archive.
+
+Supersedes: 0053-clk-qcom-use-pixel-RCG-ops-for-MSM8x60-DSI.patch, 0057-clk-qcom-route-MSM8x60-DSI-through-DSI-pixel-RCG.patch
+---
+ drivers/clk/qcom/mmcc-msm8660.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+index dbd17a6e9a9757ec1c646f8c452c7eba635adb5d..ab6971f4ab53cd0b61a594767b608e5ace1e38af 100644
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -668,6 +668,12 @@ static struct clk_branch dsi1_esc_clk = {
+ 	},
+ };
+ 
++static const struct freq_tbl clk_tbl_dsi1_pixel[] = {
++	/* Hikari MDV22: 209.018880 MHz DSI PLL / 3 = 69.672960 MHz. */
++	{ .freq = 69673000, .src = P_DSI1_PLL_DSICLK, .pre_div = 3 },
++	{ }
++};
++
+ static struct clk_rcg dsi1_pixel_src = {
+ 	.ns_reg = 0x0138,
+ 	.md_reg = 0x0134,
+@@ -687,6 +693,7 @@ static struct clk_rcg dsi1_pixel_src = {
+ 		.src_sel_shift = 0,
+ 		.parent_map = mmcc_pxo_dsi2_dsi1_map,
+ 	},
++	.freq_tbl = clk_tbl_dsi1_pixel,
+ 	.clkr = {
+ 		.enable_reg = 0x0130,
+ 		.enable_mask = BIT(2),
+-- 
+2.53.0

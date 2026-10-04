@@ -42,7 +42,7 @@ with tempfile.TemporaryDirectory(prefix='hikari-audit-') as d:
  combined,_=run(set(noop))
  out=Path(args.output_prefix+'.tsv')
  out.parent.mkdir(parents=True,exist_ok=True)
- out.write_text('commit\tsubject\tclassification\tdependent_patch\n'+''.join('\t'.join(r)+'\n' for r in rows))
+ out.write_text('commit\tsubject\tclassification\tdependent_patch\n'+''.join('\t'.join(value or '-' for value in r)+'\n' for r in rows))
  Path(args.output_prefix+'.json').write_text(json.dumps({'baseline_subset_tree':expected,'no_effect_commits':[commits[i] for i in noop],'combined_removal_same_tree':combined==expected},indent=2)+'\n')
  print('Audited',len(commits),'commits; no-effect commits:',len(noop),'combined equivalence:',combined==expected)
  for i in noop: print(commits[i],subjects[i])

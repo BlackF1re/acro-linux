@@ -1,0 +1,37 @@
+Linux hikari 7.3.0-rc1-hikari-system-ga701a6f7854a-dirty #1 SMP PREEMPT Sun Oct  4 12:43:59 +07 2026 armv7l GNU/Linux
+active
+Environment=LANG=C.UTF-8 XDG_CURRENT_DESKTOP=Phosh:GNOME XDG_SESSION_DESKTOP=phosh XDG_SESSION_TYPE=wayland WLR_RENDERER=gles2 LD_LIBRARY_PATH=/opt/hikari-mesa-a220/lib LIBGL_DRIVERS_PATH=/opt/hikari-mesa-a220/lib GBM_BACKENDS_PATH=/opt/hikari-mesa-a220/gbm
+/sys/bus/platform/devices/104000.rpm ../../../../bus/platform/drivers/qcom_rpm
+/sys/bus/platform/devices/104000.rpm:clock-controller ../../../../../bus/platform/drivers/qcom-clk-rpm
+/sys/bus/platform/devices/104000.rpm:regulators-0 ../../../../../bus/platform/drivers/qcom_rpm_reg
+/sys/bus/platform/devices/104000.rpm:regulators-1 ../../../../../bus/platform/drivers/qcom_rpm_reg
+/sys/bus/platform/devices/1200600.hwmutex ../../../../bus/platform/drivers/qcom_hwspinlock
+/sys/bus/platform/devices/12500000.usb ../../../bus/platform/drivers/msm_hsusb
+/sys/bus/platform/devices/16540000.serial ../../../../../bus/platform/drivers/msm_serial
+/sys/bus/platform/devices/2000000.timer ../../../../bus/platform/drivers/qcom_wdt
+/sys/bus/platform/devices/4000000.clock-controller ../../../bus/platform/drivers/mmcc-msm8660
+/sys/bus/platform/devices/4700000.dsi ../../../bus/platform/drivers/msm_dsi
+/sys/bus/platform/devices/47000f0.dsi-phy ../../../bus/platform/drivers/msm_dsi_phy
+/sys/bus/platform/devices/500000.ssbi:pmic:gpio@150 ../../../../../../bus/platform/drivers/qcom-ssbi-gpio
+/sys/bus/platform/devices/500000.ssbi:pmic:mpps@50 ../../../../../../bus/platform/drivers/qcom-ssbi-mpp
+/sys/bus/platform/devices/700000.efuse ../../../../bus/platform/drivers/qcom,qfprom
+/sys/bus/platform/devices/800000.pinctrl ../../../../bus/platform/drivers/msm8660-pinctrl
+/sys/bus/platform/devices/900000.clock-controller ../../../../bus/platform/drivers/gcc-msm8660
+/sys/bus/platform/devices/900000.clock-controller:thermal-sensor ../../../../../bus/platform/drivers/qcom-tsens
+/sys/bus/platform/devices/c00000.ssbi:pmic:mpps@50 ../../../../../bus/platform/drivers/qcom-ssbi-mpp
+/sys/bus/platform/devices/firmware:scm ../../../bus/platform/drivers/qcom_scm
+/sys/bus/platform/devices/interconnect-afab ../../../bus/platform/drivers/qnoc-msm8660
+/sys/bus/platform/devices/interconnect-dfab ../../../bus/platform/drivers/qnoc-msm8660
+/sys/bus/platform/devices/interconnect-mmfab ../../../bus/platform/drivers/qnoc-msm8660
+/sys/bus/platform/devices/interconnect-sfab ../../../bus/platform/drivers/qnoc-msm8660
+/sys/bus/platform/devices/qcom-socinfo ../../../../bus/platform/drivers/qcom-socinfo
+/sys/bus/platform/devices/smem ../../../bus/platform/drivers/qcom-smem
+/sys/bus/i2c/devices/0-002c ../../../../../../../bus/i2c/drivers/rmi4_i2c
+/sys/bus/i2c/devices/1-0040 ../../../../../../../bus/i2c/drivers/as3676-hikari
+/sys/bus/i2c/devices/1-0055 ../../../../../../../bus/i2c/drivers/bq27xxx-battery
+/sys/bus/i2c/devices/1-006b ../../../../../../../bus/i2c/drivers/bq24160
+          mdp_clk                    3       3        0        200000000   0          0     50000      Y            5100000.display-controller      core_clk
+             mdp_lut_clk             1       1        0        200000000   0          0     50000      Y               5100000.display-controller      lut_clk
+    dsi1_src                         1       1        0        209018880   0          0     50000      ?      deviceless                      no_connection_id
+    dsi1_pixel_src                   1       1        0        69672960    0          0     50000      ?      deviceless                      no_connection_id
+    mdp_pixel_src                    2       2        0        27000000    0          0     50000      ?      deviceless                      no_connection_id

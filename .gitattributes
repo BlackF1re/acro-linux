@@ -1,1 +1,2 @@
 kernel/patches/*.patch -whitespace
+research/patches/**/*.patch -whitespace
