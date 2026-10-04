@@ -1,0 +1,16 @@
+#!/bin/sh
+# Run as the desktop user. Back is forwarded to apps as standard XF86Back.
+set -eu
+exec python3 - <<'PYCODE'
+import ast, subprocess
+schema = 'org.gnome.shell.keybindings'
+for key, binding in [('toggle-overview', 'XF86HomePage'),
+                     ('toggle-message-tray', 'XF86MenuKB')]:
+    value = subprocess.check_output(['gsettings', 'get', schema, key], text=True).strip()
+    if value.startswith('@as '):
+        value = value[4:]
+    bindings = ast.literal_eval(value)
+    if binding not in bindings:
+        bindings.append(binding)
+        subprocess.run(['gsettings', 'set', schema, key, repr(bindings)], check=True)
+PYCODE

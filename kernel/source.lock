@@ -12,3 +12,7 @@ PATCH_SERIES=kernel/patches/series
 # kernel/patches/. The canonical Hikari DTS is sourced from kernel/dts/ after
 # patch application. This avoids depending on the historical
 # /home/paul/xperia/src/linux worktree for future builds.
+
+POST_PATCH_SERIES=kernel/patches/post-series
+# Signed source integration commit exported by post-series:
+HIKARI_INTEGRATION_COMMIT=f7a6e62ff206edff9cee8c04226e85f1102a9a85

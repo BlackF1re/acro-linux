@@ -120,6 +120,9 @@ sudo install -D -m 0644 "$repo_root/debian/etc/systemd/system/hikari-usb-gadget.
 sudo install -D -m 0644 \
 	"$repo_root/debian/etc/systemd/system/phosh.service.d/10-hikari-renderer.conf" \
 	"$rootfs/etc/systemd/system/phosh.service.d/10-hikari-renderer.conf"
+sudo install -D -m 0755 \
+	"$repo_root/debian/usr/local/sbin/hikari-phosh-renderer" \
+	"$rootfs/usr/local/sbin/hikari-phosh-renderer"
 sudo install -D -m 0644 "$repo_root/debian/etc/dconf/profile/user" \
 	"$rootfs/etc/dconf/profile/user"
 sudo install -D -m 0644 "$repo_root/debian/etc/dconf/db/local.d/00-hikari" \

@@ -41,6 +41,11 @@
 		#size-cells = <1>;
 		ranges;
 
+		smem_region: smem@40000000 {
+			reg = <0x40000000 0x00200000>;
+			no-map;
+		};
+
 		ramoops@7ffe0000 {
 			compatible = "ramoops";
 			reg = <0x7ffe0000 0x00020000>;
@@ -69,8 +74,8 @@
 		reg-names = "scpll", "acc0", "acc1";
 		qcom,l2cc = <&l2cc>;
 
-		cpu0-supply = <&pm8901_s0>;
-		cpu1-supply = <&pm8901_s1>;
+		cpu0-supply = <&saw0_reg>;
+		cpu1-supply = <&saw1_reg>;
 		mem-supply = <&pm8058_s0>;
 		dig-supply = <&pm8058_s1>;
 
@@ -455,6 +460,8 @@
 	/* Exact Fuji/Hikari GSBI8 addresses: BQ27520 = 0x55, BQ24160 = 0x6b. */
 	bq27520: fuel-gauge@55 {
 		compatible = "ti,bq27520g1";
+		/* Sony config disables automatic insertion of the fixed battery. */
+		ti,host-battery-insertion;
 		reg = <0x55>;
 		monitored-battery = <&battery>;
 		status = "okay";
@@ -466,6 +473,14 @@
 		interrupt-parent = <&tlmm>;
 		interrupts = <125 IRQ_TYPE_EDGE_BOTH>;
 		fuel-gauge = <&bq27520>;
+		/* Fuji/Hikari: GPIO126 low means the IN/cradle is connected. */
+		cradle-detect-gpios = <&tlmm 126 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&hikari_cradle_detect>;
+		ti,cradle-input-current-limit-microamp = <2500000>;
+		ti,in-vindpm-microvolt = <4520000>;
+		/* Owner-requested electrical probing; not USB current negotiation. */
+		ti,opportunistic-usb-input;
 		ti,usb-input-current-limit-microamp = <500000>;
 		ti,constant-charge-current-max-microamp = <1525000>;
 		ti,constant-charge-voltage-max-microvolt = <4200000>;
@@ -478,5 +493,62 @@
 			regulator-min-microvolt = <5000000>;
 			regulator-max-microvolt = <5000000>;
 		};
+	};
+};
+
+#include "qcom-msm8260-sony-hikari-hardware.dtsi"
+
+#include "qcom-msm8260-sony-hikari-wireless.dtsi"
+
+#include "qcom-msm8260-sony-hikari-gpu-base.dtsi"
+
+&tlmm {
+	hikari_cradle_detect: cradle-detect-state {
+		pins = "gpio126";
+		function = "gpio";
+		bias-pull-up;
+		input-enable;
+		drive-strength = <2>;
+	};
+};
+
+/* HIKARI MSM8X60 SMEM bring-up */
+/ {
+	smem {
+		compatible = "qcom,smem";
+		memory-region = <&smem_region>;
+		hwlocks = <&sfpb_mutex 3>;
+	};
+};
+
+&soc {
+	sfpb_mutex: hwmutex@1200600 {
+		compatible = "qcom,sfpb-mutex";
+		reg = <0x01200600 0x100>;
+		#hwlock-cells = <1>;
+	};
+};
+
+
+/* HIKARI MSM8X60 SAW CPU regulators */
+&soc {
+	saw0_reg: regulator@2042000 {
+		compatible = "qcom,msm8660-saw-regulator";
+		reg = <0x02042000 0x100>;
+		qcom,cpu = <0>;
+
+		regulator-name = "msm8660-saw-cpu0";
+		regulator-min-microvolt = <800000>;
+		regulator-max-microvolt = <1325000>;
+	};
+
+	saw1_reg: regulator@2052000 {
+		compatible = "qcom,msm8660-saw-regulator";
+		reg = <0x02052000 0x100>;
+		qcom,cpu = <1>;
+
+		regulator-name = "msm8660-saw-cpu1";
+		regulator-min-microvolt = <800000>;
+		regulator-max-microvolt = <1325000>;
 	};
 };

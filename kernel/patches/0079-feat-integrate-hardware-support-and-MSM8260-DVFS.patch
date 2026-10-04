@@ -1,0 +1,4272 @@
+From f7a6e62ff206edff9cee8c04226e85f1102a9a85 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Sun, 4 Oct 2026 21:30:39 +0700
+Subject: [PATCH] feat: integrate hardware support and MSM8260 DVFS
+
+---
+ .../bindings/power/supply/bq27xxx.yaml        |   16 +
+ .../bindings/power/supply/ti,bq24160.yaml     |   46 +-
+ .../qcom-msm8260-sony-hikari-gpu-base.dtsi    |   41 +
+ .../qcom-msm8260-sony-hikari-hardware.dtsi    |  722 +++++++++++
+ .../qcom-msm8260-sony-hikari-wireless.dtsi    |  165 +++
+ .../dts/qcom/qcom-msm8260-sony-hikari.dts     |  360 +++++-
+ drivers/cpufreq/Kconfig.arm                   |    9 +
+ drivers/cpufreq/Makefile                      |    1 +
+ drivers/cpufreq/qcom-msm8660-cpufreq.c        | 1134 +++++++++++++++++
+ drivers/gpu/drm/msm/adreno/a2xx_gpu.c         |  146 ++-
+ drivers/gpu/drm/msm/adreno/a2xx_gpu.h         |    4 +
+ drivers/gpu/drm/msm/adreno/a2xx_gpummu.c      |    8 +
+ drivers/input/rmi4/rmi_2d_sensor.c            |   59 +
+ drivers/input/rmi4/rmi_2d_sensor.h            |    3 +
+ drivers/input/rmi4/rmi_f11.c                  |    2 +-
+ drivers/input/rmi4/rmi_f12.c                  |    2 +-
+ drivers/input/touch-overlay.c                 |   22 +-
+ drivers/power/supply/bq24160_charger.c        |  391 +++++-
+ drivers/power/supply/bq27xxx_battery.c        |   53 +
+ drivers/regulator/Kconfig                     |    8 +
+ drivers/regulator/Makefile                    |    1 +
+ .../regulator/qcom-msm8660-saw-regulator.c    |  367 ++++++
+ include/linux/input/touch-overlay.h           |    4 +
+ 23 files changed, 3484 insertions(+), 80 deletions(-)
+ create mode 100644 arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-gpu-base.dtsi
+ create mode 100644 arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-hardware.dtsi
+ create mode 100644 arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-wireless.dtsi
+ create mode 100644 drivers/cpufreq/qcom-msm8660-cpufreq.c
+ create mode 100644 drivers/regulator/qcom-msm8660-saw-regulator.c
+
+diff --git a/Documentation/devicetree/bindings/power/supply/bq27xxx.yaml b/Documentation/devicetree/bindings/power/supply/bq27xxx.yaml
+index bc0540018..1fdc5c4d7 100644
+--- a/Documentation/devicetree/bindings/power/supply/bq27xxx.yaml
++++ b/Documentation/devicetree/bindings/power/supply/bq27xxx.yaml
+@@ -67,10 +67,26 @@ properties:
+        - voltage-min-design-microvolt
+        Both or neither of the *-full-design-*-hours properties must be set.
+ 
++  ti,host-battery-insertion:
++    type: boolean
++    description: |
++      The battery is permanently connected and the gauge's hardware battery
++      insertion detection is disabled. The host must send BAT_INSERT after
++      gauge power loss before state-of-charge reporting can be used.
++
+   power-supplies: true
+ 
+ allOf:
+   - $ref: power-supply.yaml#
++  - if:
++      not:
++        properties:
++          compatible:
++            contains:
++              const: ti,bq27520g1
++    then:
++      properties:
++        ti,host-battery-insertion: false
+   - if:
+       properties:
+         compatible:
+diff --git a/Documentation/devicetree/bindings/power/supply/ti,bq24160.yaml b/Documentation/devicetree/bindings/power/supply/ti,bq24160.yaml
+index 43aa22f4c..24fd5e247 100644
+--- a/Documentation/devicetree/bindings/power/supply/ti,bq24160.yaml
++++ b/Documentation/devicetree/bindings/power/supply/ti,bq24160.yaml
+@@ -28,7 +28,51 @@ properties:
+ 
+   ti,usb-input-current-limit-microamp:
+     description: Conservative USB input limit for an otherwise unknown source.
+-    enum: [100000, 150000, 500000, 800000, 900000, 1500000]
++    enum: [100000, 150000, 500000]
++
++  power-supplies:
++    maxItems: 1
++    description: |
++      USB source provider reporting USB_TYPE and CURRENT_MAX. Sources without
++      capability reporting retain the conservative limit unless electrical
++      probing is explicitly enabled.
++
++  ti,adapter-input-current-limit-microamp:
++    description: Board ceiling for a CDP/DCP source or explicitly enabled USB probing.
++    enum: [500000, 800000, 900000, 1500000]
++    default: 1500000
++
++  ti,usb-vindpm-microvolt:
++    description: USB input-voltage threshold for hardware droop regulation.
++    minimum: 4200000
++    maximum: 4760000
++    enum: [4200000, 4280000, 4360000, 4440000, 4520000, 4600000, 4680000, 4760000]
++    default: 4520000
++
++  cradle-detect-gpios:
++    maxItems: 1
++    description: Active-low input indicating attachment to a powered cradle.
++
++  ti,cradle-input-current-limit-microamp:
++    description: Board ceiling for the cradle IN input.
++    enum: [1500000, 2500000]
++    default: 2500000
++
++  ti,in-vindpm-microvolt:
++    description: IN input-voltage threshold for hardware droop regulation.
++    enum: [4200000, 4280000, 4360000, 4440000, 4520000, 4600000, 4680000, 4760000]
++    default: 4520000
++
++  ti,opportunistic-usb-input:
++    type: boolean
++    description: |
++      Explicitly permit electrical current probing on sources without USB
++      capability reporting. A USB2 device on a USB3 host is not guaranteed
++      permission above 500 mA. Known advertised limits are always respected.
++      Without this property, unknown sources stay at the conservative limit.
++
++  pinctrl-names: true
++  pinctrl-0: true
+ 
+   ti,constant-charge-current-max-microamp:
+     minimum: 550000
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-gpu-base.dtsi b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-gpu-base.dtsi
+new file mode 100644
+index 000000000..458c647cc
+--- /dev/null
++++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-gpu-base.dtsi
+@@ -0,0 +1,41 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Sony Xperia acro S (Hikari) Adreno A220 hardware description.
++ *
++ * The SYSTEM DT is the only production target, so the GPU is enabled here.
++ *
++ * Hardware facts come from Sony/CAF MSM8x60 board data: GFX3D is at
++ * 0x04300000..0x0431ffff, GIC SPI 80, and the five legacy operating points are
++ * 266.667, 228.571, 200, 177.778 and 27 MHz.  The clock topology follows the
++ * working MSM8x60/Tenderloin Freedreno port but explicitly supplies GFX3D AXI
++ * as the DRM/MSM "bus" clock instead of depending on bootloader clock state.
++ */
++
++/ {
++	gpu: gpu@4300000 {
++		compatible = "qcom,adreno-220.0", "qcom,adreno";
++		reg = <0x04300000 0x00020000>;
++		reg-names = "kgsl_3d0_reg_memory";
++		interrupts = <GIC_SPI 80 IRQ_TYPE_LEVEL_HIGH>;
++		interrupt-names = "kgsl_3d0_irq";
++
++		clocks = <&mmcc GFX3D_CLK>,
++			 <&mmcc GFX3D_AHB_CLK>,
++			 <&mmcc GMEM_AXI_CLK>,
++			 <&mmcc GFX3D_AXI_CLK>;
++		clock-names = "core", "iface", "mem_iface", "bus";
++		power-domains = <&mmcc GFX3D_GDSC>;
++		operating-points-v2 = <&gpu_opp_table>;
++		status = "okay";
++
++		gpu_opp_table: opp-table {
++			compatible = "operating-points-v2";
++
++			opp-266667000 { opp-hz = /bits/ 64 <266667000>; };
++			opp-228571000 { opp-hz = /bits/ 64 <228571000>; };
++			opp-200000000 { opp-hz = /bits/ 64 <200000000>; };
++			opp-177778000 { opp-hz = /bits/ 64 <177778000>; };
++			opp-27000000  { opp-hz = /bits/ 64 <27000000>; };
++		};
++	};
++};
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-hardware.dtsi b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-hardware.dtsi
+new file mode 100644
+index 000000000..f6d6142d0
+--- /dev/null
++++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-hardware.dtsi
+@@ -0,0 +1,722 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Sony Xperia acro S (Hikari) board hardware that is already backed by
++ * physical inventory plus exact Fuji/Hikari downstream wiring and by an
++ * existing mainline driver.  Keep speculative peripherals out of this file.
++ */
++
++#include <dt-bindings/input/input.h>
++#include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
++#include <dt-bindings/pinctrl/qcom,pmic-mpp.h>
++#include "pm8058.dtsi"
++
++/* Fuji/Hikari routes the PM8058 interrupt to MSM TLMM GPIO88, active low. */
++&pm8058 {
++	interrupts-extended = <&tlmm 88 IRQ_TYPE_LEVEL_LOW>;
++};
++
++/* MSM8x60's second SSBI arbiter connects the four-MPP PM8901. */
++&{/} {
++	/*
++	 * Fuji's board thermistor is routed through PM8058 MPP10 to XOADC
++	 * AMUX7.  The voltage/temperature curve is the exact scale_msm_therm
++	 * table from Sony's board kernel, expressed in the units returned by
++	 * the mainline XOADC consumer API (microvolts and millicelsius).
++	 */
++	hikari_msm_therm: msm-thermal-sensor {
++		compatible = "generic-adc-thermal";
++		#thermal-sensor-cells = <0>;
++		io-channels = <&pm8058_xoadc 0x00 0x07>;
++		io-channel-names = "sensor-channel";
++		temperature-lookup-table = <
++			(-30000) 2150000
++			(-20000) 2107000
++			(-10000) 2037000
++			(0)      1929000
++			(10000)  1776000
++			(20000)  1579000
++			(25000)  1467000
++			(30000)  1349000
++			(40000)  1108000
++			(50000)   878000
++			(60000)   677000
++			(70000)   513000
++			(80000)   385000
++			(90000)   287000
++			(100000)  215000
++			(110000)  186000
++			(120000)  107000
++		>;
++	};
++
++	/*
++	 * The removable pack NTC is fed from L18 (2.2 V) through 100 kOhm.
++	 * Hikari accepts two Sony battery families whose non-overlapping
++	 * resistance ranges allow one voltage-ordered table to describe both.
++	 */
++	hikari_battery_therm: battery-thermal-sensor {
++		compatible = "generic-adc-thermal";
++		#thermal-sensor-cells = <0>;
++		io-channels = <&pm8058_xoadc 0x00 0x06>;
++		io-channel-names = "sensor-channel";
++		temperature-lookup-table = <
++			(-20000) 1416245
++			(0)      1353846
++			(5000)   1329402
++			(10000)  1301674
++			(15000)  1270946
++			(20000)  1238041
++			(25000)  1204525
++			(30000)  1171001
++			(35000)  1138736
++			(40000)  1108189
++			(45000)  1080407
++			(50000)  1055359
++			(55000)  1033510
++			(60000)  1014655
++			(65000)   997814
++			(70000)   983858
++			(100000)  934905
++			(-20000)  885783
++			(0)       725469
++			(5000)    674341
++			(10000)   621808
++			(15000)   570370
++			(20000)   520611
++			(25000)   473155
++			(30000)   430088
++			(35000)   392276
++			(40000)   357454
++			(45000)   327660
++			(50000)   301812
++			(55000)   280279
++			(60000)   261674
++			(65000)   244444
++			(70000)   232200
++			(100000)  185348
++		>;
++	};
++
++	pm8901_ssbi: ssbi@c00000 {
++		compatible = "qcom,ssbi";
++		reg = <0x00c00000 0x1000>;
++		qcom,controller-type = "pmic-arbiter";
++
++		pm8901: pmic {
++			compatible = "qcom,pm8901";
++			interrupt-parent = <&tlmm>;
++			interrupts = <91 IRQ_TYPE_LEVEL_LOW>;
++			#interrupt-cells = <2>;
++			interrupt-controller;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			pm8901_mpps: mpps@50 {
++				compatible = "qcom,pm8901-mpp", "qcom,ssbi-mpp";
++				reg = <0x50>;
++				gpio-controller;
++				#gpio-cells = <2>;
++				gpio-ranges = <&pm8901_mpps 0 0 4>;
++				interrupt-controller;
++				#interrupt-cells = <2>;
++
++				hikari_ext_5v_enable: ext-5v-enable-state {
++					pins = "mpp1";
++					function = "digital";
++					output-low;
++					power-source = <PM8901_MPP_MSMIO>;
++				};
++			};
++		};
++	};
++
++	ext_5v: regulator-ext-5v {
++		compatible = "regulator-fixed";
++		regulator-name = "ext-5v";
++		regulator-min-microvolt = <5000000>;
++		regulator-max-microvolt = <5000000>;
++		vin-supply = <&usb_otg_guard>;
++		/* The BQ24160 parent driver registers this child regulator. */
++		post-init-providers = <&usb_otg_guard>;
++		gpio = <&pm8901_mpps 1 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_ext_5v_enable>;
++	};
++
++	usb_otg_vbus: regulator-usb-otg-vbus {
++		compatible = "regulator-fixed";
++		regulator-name = "usb-otg-vbus";
++		regulator-min-microvolt = <5000000>;
++		regulator-max-microvolt = <5000000>;
++		vin-supply = <&ext_5v>;
++		gpio = <&tlmm 28 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		startup-delay-us = <1000>;
++		interrupt-parent = <&tlmm>;
++		interrupts = <104 IRQ_TYPE_EDGE_FALLING>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_ncp373_enable &hikari_ncp373_fault>;
++	};
++};
++
++&{/thermal-zones} {
++	battery-pack {
++		polling-delay-passive = <2000>;
++		polling-delay = <10000>;
++		thermal-sensors = <&hikari_battery_therm>;
++	};
++
++	msm-board-thermal {
++		polling-delay-passive = <1000>;
++		polling-delay = <5000>;
++		thermal-sensors = <&hikari_msm_therm>;
++	};
++};
++
++/*
++ * Exact downstream rails:
++ *   ClearPad VDD        = PM8901 L1, 3.05 V
++ *   SDCC1/eMMC VDD     = PM8901 L5, 2.85 V, always on
++ *   SDCC1/eMMC VCCQ    = PM8901 LVS0, always on
++ *   shared sensor VIO  = PM8058 L8, 1.80 V, enabled at board init
++ *   shared sensor VDD  = PM8058 L10, 2.85 V, enabled at board init
++ *   SDCC3/microSD VDD  = PM8058 L14, 2.85 V
++ */
++&rpm {
++	regulators-0 {
++		pm8901_l1: l1 {
++			regulator-min-microvolt = <3050000>;
++			regulator-max-microvolt = <3050000>;
++		};
++
++		pm8901_l5: l5 {
++			regulator-min-microvolt = <2850000>;
++			regulator-max-microvolt = <2850000>;
++			regulator-always-on;
++		};
++
++		pm8901_lvs0: lvs0 {
++			regulator-always-on;
++		};
++	};
++
++	regulators-1 {
++		pm8058_l8: l8 {
++			regulator-min-microvolt = <1800000>;
++			regulator-max-microvolt = <1800000>;
++			regulator-always-on;
++		};
++
++		pm8058_l10: l10 {
++			regulator-min-microvolt = <2850000>;
++			regulator-max-microvolt = <2850000>;
++			regulator-always-on;
++		};
++
++		pm8058_l14: l14 {
++			regulator-min-microvolt = <2850000>;
++			regulator-max-microvolt = <2850000>;
++		};
++
++		/* Fuji/Hikari uses L18 as the 2.2 V XOADC reference supply. */
++		pm8058_l18: l18 {
++			regulator-min-microvolt = <2200000>;
++			regulator-max-microvolt = <2200000>;
++		};
++	};
++};
++
++&tlmm {
++	hikari_ncp373_enable: ncp373-enable-state {
++		pins = "gpio28";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++		output-low;
++	};
++
++	hikari_ncp373_fault: ncp373-fault-state {
++		pins = "gpio104";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++	hikari_gsbi3_i2c_pins: gsbi3-i2c-state {
++		pins = "gpio43", "gpio44";
++		function = "gsbi3";
++		drive-strength = <8>;
++		bias-disable;
++	};
++
++	hikari_touch_irq: touch-irq-state {
++		pins = "gpio127";
++		function = "gpio";
++		input-enable;
++		bias-disable;
++	};
++
++	hikari_gsbi12_i2c_pins: gsbi12-i2c-state {
++		pins = "gpio115", "gpio116";
++		function = "gsbi12";
++		drive-strength = <16>;
++		bias-disable;
++	};
++
++	hikari_mpu3050_irq: mpu3050-irq-state {
++		pins = "gpio30";
++		function = "gpio";
++		input-enable;
++		bias-disable;
++	};
++
++	hikari_akm8972_irq: akm8972-irq-state {
++		pins = "gpio31";
++		function = "gpio";
++		input-enable;
++		bias-disable;
++	};
++
++	hikari_apds9702_irq: apds9702-irq-state {
++		pins = "gpio34";
++		function = "gpio";
++		input-enable;
++		bias-disable;
++	};
++
++	hikari_bma250_irq: bma250-irq-state {
++		pins = "gpio41";
++		function = "gpio";
++		input-enable;
++		bias-disable;
++	};
++
++	hikari_volume_down: volume-down-state {
++		pins = "gpio73";
++		function = "gpio";
++		input-enable;
++		bias-disable;
++	};
++
++	hikari_sim_detect: sim-detect-state {
++		pins = "gpio94";
++		function = "gpio";
++		input-enable;
++		bias-disable;
++	};
++
++	/* Sony's simple-remote driver uses TLMM61 as the plug-presence IRQ. */
++	hikari_headset_detect: headset-detect-state {
++		pins = "gpio61";
++		function = "gpio";
++		input-enable;
++		bias-disable;
++	};
++};
++
++/* PM8058 GPIO22 is the Hikari microSD card-detect input, active low. */
++&pm8058_gpio {
++	/* PM8058 GPIO31: USB ID, legacy zero-based index 30. */
++	hikari_usb_id: usb-id-state {
++		pinconf {
++			pins = "gpio31";
++			function = "normal";
++			input-enable;
++			bias-pull-up;
++			qcom,pull-up-strength = <PMIC_GPIO_PULL_UP_1P5>;
++			power-source = <PM8058_GPIO_S3>;
++		};
++	};
++	hikari_sd_detect: sd-card-detect-state {
++		pinconf {
++			pins = "gpio22";
++			function = "normal";
++			input-enable;
++			bias-pull-up;
++			qcom,pull-up-strength = <PMIC_GPIO_PULL_UP_30>;
++		};
++	};
++
++	/* Sony configures PM8058 GPIO26 as the wake-capable volume-up input. */
++	hikari_volume_up: volume-up-state {
++		pinconf {
++			pins = "gpio26";
++			function = "normal";
++			input-enable;
++			bias-disable;
++			power-source = <PM8058_GPIO_S3>;
++		};
++	};
++
++	/* PN544 VEN is PM8058 GPIO17, open drain from VPH on Hikari ROW. */
++	hikari_nfc_enable: nfc-enable-state {
++		pinconf {
++			pins = "gpio17";
++			function = "normal";
++			output-low;
++			bias-disable;
++			drive-open-drain;
++			power-source = <PM8058_GPIO_VPH>;
++			qcom,drive-strength = <PMIC_GPIO_STRENGTH_MED>;
++		};
++	};
++
++	/* PN544 firmware-download select is PM8058 GPIO27 from S3. */
++	hikari_nfc_firmware: nfc-firmware-state {
++		pinconf {
++			pins = "gpio27";
++			function = "normal";
++			output-low;
++			bias-disable;
++			power-source = <PM8058_GPIO_S3>;
++			qcom,drive-strength = <PMIC_GPIO_STRENGTH_LOW>;
++		};
++	};
++
++	/* PN544 IRQ is PM8058 GPIO28, pulled down and sampled on a rising edge. */
++	hikari_nfc_irq: nfc-irq-state {
++		pinconf {
++			pins = "gpio28";
++			function = "normal";
++			input-enable;
++			bias-pull-down;
++			power-source = <PM8058_GPIO_S3>;
++		};
++	};
++};
++
++&pm8058_mpps {
++	/*
++	 * Exact Fuji/Hikari XOADC routing from board-semc_fuji.c:
++	 * MPP3 -> AMUX5 (headset), MPP7 -> AMUX6 (battery thermistor),
++	 * MPP10 -> AMUX7 (MSM thermistor), MPP8 -> AMUX8 (battery ID),
++	 * and MPP5 -> AMUX9 (charger current monitor).
++	 */
++	hikari_xoadc_mpp3: xoadc-mpp3-state {
++		pins = "mpp3";
++		function = "analog";
++		input-enable;
++		bias-high-impedance;
++		qcom,amux-route = <PMIC_MPP_AMUX_ROUTE_CH5>;
++	};
++
++	hikari_xoadc_mpp5: xoadc-mpp5-state {
++		pins = "mpp5";
++		function = "analog";
++		input-enable;
++		bias-high-impedance;
++		/* Value 4 is AMUX9 on the SSBI PM8058 MPP controller. */
++		qcom,amux-route = <4>;
++	};
++
++	hikari_xoadc_mpp7: xoadc-mpp7-state {
++		pins = "mpp7";
++		function = "analog";
++		input-enable;
++		bias-high-impedance;
++		qcom,amux-route = <PMIC_MPP_AMUX_ROUTE_CH6>;
++	};
++
++	hikari_xoadc_mpp8: xoadc-mpp8-state {
++		pins = "mpp8";
++		function = "analog";
++		input-enable;
++		bias-high-impedance;
++		qcom,amux-route = <PMIC_MPP_AMUX_ROUTE_CH8>;
++	};
++
++	hikari_xoadc_mpp10: xoadc-mpp10-state {
++		pins = "mpp10";
++		function = "analog";
++		input-enable;
++		bias-high-impedance;
++		qcom,amux-route = <PMIC_MPP_AMUX_ROUTE_CH7>;
++	};
++
++	/* PM8058 MPP11: VBUS detect, legacy zero-based index 10. */
++	hikari_usb_vbus_detect: usb-vbus-detect-state {
++		pins = "mpp11";
++		function = "digital";
++		input-enable;
++		power-source = <PM8058_MPP_S3>;
++	};
++};
++
++&pm8058_xoadc {
++	xoadc-ref-supply = <&pm8058_l18>;
++	pinctrl-names = "default";
++	pinctrl-0 = <&hikari_xoadc_mpp3 &hikari_xoadc_mpp5
++		     &hikari_xoadc_mpp7 &hikari_xoadc_mpp8
++		     &hikari_xoadc_mpp10>;
++
++	adc-channel@5 {
++		reg = <0x00 0x05>;
++		label = "headset-accessory";
++	};
++
++	adc-channel@6 {
++		reg = <0x00 0x06>;
++		label = "battery-thermistor";
++	};
++
++	adc-channel@7 {
++		reg = <0x00 0x07>;
++		label = "msm-thermistor";
++	};
++
++	adc-channel@8 {
++		reg = <0x00 0x08>;
++		label = "battery-id";
++	};
++
++	adc-channel@9 {
++		reg = <0x00 0x09>;
++		label = "charger-current-monitor";
++	};
++};
++
++/*
++ * Exact Hikari physical keys from keypad-fuji_hikari.c.  Camera focus and
++ * shutter use the PM8058 5x5 matrix at row 1, columns 0/1.  The old board
++ * data used 15 ms debounce, 2 ms scan delay and 122 us row hold and allowed
++ * the matrix to wake the phone.
++ */
++&pm8058_keypad {
++	linux,keymap = <
++		MATRIX_KEY(1, 0, KEY_CAMERA_FOCUS)
++		MATRIX_KEY(1, 1, KEY_CAMERA)
++	>;
++	keypad,num-rows = <5>;
++	keypad,num-columns = <5>;
++	debounce = <15>;
++	scan-delay = <2>;
++	row-hold = <122000>;
++	wakeup-source;
++};
++
++/ {
++	hikari_gpio_keys: gpio-keys {
++		compatible = "gpio-keys";
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_volume_up &hikari_volume_down
++			     &hikari_sim_detect &hikari_headset_detect>;
++
++		volume-up-key {
++			label = "Volume Up";
++			linux,code = <KEY_VOLUMEUP>;
++			/* Sony reads the PMIC real-time bit inverted: asserted is low. */
++			gpios = <&pm8058_gpio 25 GPIO_ACTIVE_LOW>;
++			debounce-interval = <10>;
++			wakeup-source;
++		};
++
++		volume-down-key {
++			label = "Volume Down";
++			linux,code = <KEY_VOLUMEDOWN>;
++			gpios = <&tlmm 73 GPIO_ACTIVE_HIGH>;
++			debounce-interval = <10>;
++			wakeup-source;
++		};
++
++		sim-detect-switch {
++			label = "SIM detection";
++			linux,input-type = <EV_SW>;
++			linux,code = <SW_JACK_PHYSICAL_INSERT>;
++			gpios = <&tlmm 94 GPIO_ACTIVE_HIGH>;
++			debounce-interval = <100>;
++			wakeup-source;
++		};
++
++		headset-detect-switch {
++			label = "Headset detection";
++			linux,input-type = <EV_SW>;
++			linux,code = <SW_HEADPHONE_INSERT>;
++			/* Physical testing and Sony's inverted status path: high = inserted. */
++			gpios = <&tlmm 61 GPIO_ACTIVE_HIGH>;
++			debounce-interval = <1500>;
++			wakeup-source;
++		};
++	};
++};
++
++/* Physical inventory: MAG2GA eMMC on MSM SDCC1, 8-bit. */
++&sdcc1 {
++	vmmc-supply = <&pm8901_l5>;
++	vqmmc-supply = <&pm8901_lvs0>;
++	status = "okay";
++};
++
++/* Physical inventory: removable microSD slot on MSM SDCC3. */
++&sdcc3 {
++	vmmc-supply = <&pm8058_l14>;
++	cd-gpios = <&pm8058_gpio 21 GPIO_ACTIVE_LOW>;
++	pinctrl-names = "default";
++	pinctrl-0 = <&hikari_sd_detect>;
++	status = "okay";
++};
++
++/*
++ * Hikari ClearPad is a Synaptics RMI4 device on GSBI3 I2C address 0x2c.
++ * Sony's legacy driver used F11 and a falling-edge IRQ on TLMM GPIO127.
++ * Its pointer area is 720x1280; the extra strip below Y=1279 was translated
++ * by Sony-specific software into BACK/HOME/MENU virtual keys, so do not
++ * invent an F1A hardware function here.
++ */
++&gsbi3 {
++	qcom,mode = <GSBI_PROT_I2C>;
++	status = "okay";
++};
++
++&gsbi3_i2c {
++	pinctrl-names = "default";
++	pinctrl-0 = <&hikari_gsbi3_i2c_pins>;
++	status = "okay";
++
++	touchscreen@2c {
++		compatible = "syna,rmi4-i2c";
++		reg = <0x2c>;
++		interrupts-extended = <&tlmm 127 IRQ_TYPE_EDGE_FALLING>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_touch_irq>;
++		vdd-supply = <&pm8901_l1>;
++		/* Hikari has one 3.05 V ClearPad rail.  RMI4 names both
++		 * logical consumers, so both map to the same physical supply. */
++		vio-supply = <&pm8901_l1>;
++		/* Sony's ClearPad driver waits 400 ms after enabling this rail. */
++		syna,startup-delay-ms = <400>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		rmi4-f11@11 {
++			reg = <0x11>;
++			syna,sensor-type = <1>;
++			syna,clip-x-high = <719>;
++			syna,clip-y-high = <1279>;
++
++			/* Sony touch-fuji_hikari.c: printed keys are F11 contacts,
++			 * not an F1A capacitive-key bank. Preserve their raw Y.
++			 */
++			touch-overlay {
++				segment-screen {
++					x-origin = <0>;
++					y-origin = <0>;
++					x-size = <720>;
++					y-size = <1280>;
++				};
++				segment-back {
++					label = "Back";
++					x-origin = <0>;
++					y-origin = <1315>;
++					x-size = <220>;
++					y-size = <13>;
++					linux,code = <KEY_F13>;
++				};
++				segment-home {
++					label = "Home";
++					x-origin = <260>;
++					y-origin = <1319>;
++					x-size = <200>;
++					y-size = <9>;
++					linux,code = <KEY_F14>;
++				};
++				segment-menu {
++					label = "Menu";
++					x-origin = <500>;
++					y-origin = <1315>;
++					x-size = <220>;
++					y-size = <13>;
++					linux,code = <KEY_F15>;
++				};
++			};
++		};
++	};
++};
++
++/*
++ * GSBI8 also carries the PN544 NFC controller.  Sony registers it at 0x28,
++ * with rising-edge IRQ on PM8058 GPIO28, VEN on GPIO17 and FWDL on GPIO27.
++ * The mainline PN544 HCI driver owns the exact OFF/ON/FWDL toggle sequence.
++ */
++&gsbi8_i2c {
++	proximity@54 {
++		compatible = "avago,apds9702";
++		reg = <0x54>;
++		interrupts-extended = <&tlmm 34 IRQ_TYPE_EDGE_BOTH>;
++		dout-gpios = <&tlmm 34 GPIO_ACTIVE_LOW>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_apds9702_irq>;
++		/* Exact Hikari trg/pwr/burst/freq/duration/threshold/filter. */
++		avago,control-word = <0xdfbc>;
++		wakeup-source;
++	};
++
++	nfc@28 {
++		compatible = "nxp,pn544-i2c";
++		reg = <0x28>;
++		interrupts-extended = <&pm8058_gpio 27 IRQ_TYPE_EDGE_RISING>;
++		enable-gpios = <&pm8058_gpio 16 GPIO_ACTIVE_HIGH>;
++		firmware-gpios = <&pm8058_gpio 26 GPIO_ACTIVE_HIGH>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_nfc_enable &hikari_nfc_firmware &hikari_nfc_irq>;
++	};
++};
++
++/*
++ * Motion stack.  Hikari's exact downstream data places MPU3050 on GSBI12
++ * primary I2C and BMA250 on the MPU3050 secondary bus.  Use the mainline
++ * MPU3050 i2c-gate instead of carrying the old InvenSense MPL glue.
++ */
++&gsbi12 {
++	qcom,mode = <GSBI_PROT_I2C>;
++	status = "okay";
++};
++
++&gsbi12_i2c {
++	pinctrl-names = "default";
++	pinctrl-0 = <&hikari_gsbi12_i2c_pins>;
++	status = "okay";
++
++	gyroscope@68 {
++		compatible = "invensense,mpu3050";
++		reg = <0x68>;
++		vlogic-supply = <&pm8058_l8>;
++		vdd-supply = <&pm8058_l10>;
++		interrupts-extended = <&tlmm 30 IRQ_TYPE_EDGE_RISING>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_mpu3050_irq>;
++		mount-matrix = "0", "1", "0",
++			       "1", "0", "0",
++			       "0", "0", "-1";
++
++		i2c-gate {
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			accelerometer@18 {
++				compatible = "bosch,bma250";
++				reg = <0x18>;
++				vddio-supply = <&pm8058_l8>;
++				vdd-supply = <&pm8058_l10>;
++				interrupts-extended = <&tlmm 41 IRQ_TYPE_EDGE_RISING>;
++				pinctrl-names = "default";
++				pinctrl-0 = <&hikari_bma250_irq>;
++				mount-matrix = "1", "0", "0",
++					       "0", "-1", "0",
++					       "0", "0", "-1";
++			};
++		};
++	};
++
++	magnetometer@c {
++		compatible = "asahi-kasei,ak8972";
++		reg = <0x0c>;
++		vdd-supply = <&pm8058_l10>;
++		vid-supply = <&pm8058_l8>;
++		interrupts-extended = <&tlmm 31 IRQ_TYPE_LEVEL_HIGH>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_akm8972_irq>;
++		mount-matrix = "-1", "0", "0",
++			       "0", "1", "0",
++			       "0", "0", "-1";
++	};
++};
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-wireless.dtsi b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-wireless.dtsi
+new file mode 100644
+index 000000000..944875c56
+--- /dev/null
++++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-wireless.dtsi
+@@ -0,0 +1,165 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Sony Xperia acro S (Hikari) Broadcom BCM4330 radio wiring.
++ *
++ * Downstream Sony sources place WLAN on MSM SDCC4 and Bluetooth on GSBI6
++ * UARTDM.  Keep firmware/calibration data out of DT: those remain userspace
++ * firmware assets and must come from the device/vendor firmware package.
++ */
++
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/interrupt-controller/irq.h>
++#include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
++#include <dt-bindings/soc/qcom,gsbi.h>
++
++/ {
++	hikari_wifi_vdd: wifi-vdd-regulator {
++		compatible = "regulator-fixed";
++		/*
++		 * Sony advertises MMC_VDD_27_28 | MMC_VDD_28_29 to the MMC
++		 * core although the physical PM8058 S3 rail is 1.8 V.  This fixed
++		 * regulator is therefore only an OCR adapter.  Its parent is the
++		 * real shared PM8058 S3 rail used by WLAN and the Timpani codec.
++		 */
++		regulator-name = "wlan-mmc-ocr-2v8";
++		regulator-min-microvolt = <2800000>;
++		regulator-max-microvolt = <2800000>;
++		regulator-always-on;
++		vin-supply = <&pm8058_s3>;
++	};
++
++	hikari_wifi_pwrseq: wifi-pwrseq {
++		compatible = "mmc-pwrseq-simple";
++		reset-gpios = <&tlmm 130 GPIO_ACTIVE_LOW>;
++		post-power-on-delay-ms = <200>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_wifi_sleep_clk>;
++	};
++};
++
++&pm8058_gpio {
++	/* PM8058 GPIO38 FUNC2 is the BCM4330 32.768 kHz sleep clock. */
++	hikari_wifi_sleep_clk: wifi-sleep-clk-state {
++		pins = "gpio38";
++		function = PM8058_GPIO38_39_CLK_32KHZ;
++		output-high;
++		bias-disable;
++		power-source = <PM8058_GPIO_S3>;
++		qcom,drive-strength = <PMIC_GPIO_STRENGTH_LOW>;
++	};
++};
++
++&tlmm {
++	/* Exact Sony Hikari SDC4 pad state: 8 mA and pulled-up CMD/DATA. */
++	hikari_sdc4_pins: sdc4-state {
++		clk-pins {
++			pins = "sdc4_clk";
++			drive-strength = <8>;
++			bias-disable;
++		};
++
++		cmd-data-pins {
++			pins = "sdc4_cmd", "sdc4_data";
++			drive-strength = <8>;
++			bias-pull-up;
++		};
++	};
++
++	hikari_wifi_hostwake: wifi-hostwake-state {
++		pins = "gpio128";
++		function = "gpio";
++		input-enable;
++		bias-disable;
++	};
++
++	/* GSBI6 UARTDM carries BCM4330 Bluetooth H4 with RTS/CTS flow control. */
++	hikari_bt_uart: bluetooth-uart-state {
++		pins = "gpio53", "gpio54", "gpio55", "gpio56";
++		function = "gsbi6";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
++	hikari_bt_reset: bluetooth-reset-state {
++		pins = "gpio23";
++		function = "gpio";
++		output-low;
++		bias-disable;
++		drive-strength = <2>;
++	};
++
++	hikari_bt_device_wake: bluetooth-device-wake-state {
++		pins = "gpio137";
++		function = "gpio";
++		output-low;
++		bias-disable;
++		drive-strength = <2>;
++	};
++
++	hikari_bt_host_wake: bluetooth-host-wake-state {
++		pins = "gpio63";
++		function = "gpio";
++		input-enable;
++		bias-pull-down;
++		drive-strength = <2>;
++	};
++};
++
++/*
++ * BCM4330 WLAN is permanently soldered to SDCC4.  Sony's board data uses a
++ * four-bit bus, defines 24 MHz as the intermediate operating point and 48 MHz
++ * as the maximum, and marks the card non-removable.  Mainline PL18x traffic at
++ * 48 MHz eventually corrupts an SDIO frame on this device, while 24 MHz keeps
++ * the source-defined operating point without relying on the unstable ceiling.
++ * The old virtual card-detect callback is unnecessary with DT non-removable.
++ * GPIO130 is WL_RST_N and GPIO128 is the separate out-of-band HOST_WAKE IRQ.
++ */
++&sdcc4 {
++	/* Logical OCR adapter backed by the real PM8058 S3 supply. */
++	vmmc-supply = <&hikari_wifi_vdd>;
++	bus-width = <4>;
++	max-frequency = <24000000>;
++	non-removable;
++	mmc-pwrseq = <&hikari_wifi_pwrseq>;
++	pinctrl-names = "default";
++	pinctrl-0 = <&hikari_sdc4_pins>;
++	#address-cells = <1>;
++	#size-cells = <0>;
++	status = "okay";
++
++	wifi@1 {
++		compatible = "brcm,bcm4330-fmac", "brcm,bcm4329-fmac";
++		reg = <1>;
++		interrupt-parent = <&tlmm>;
++		interrupts = <128 IRQ_TYPE_LEVEL_HIGH>;
++		interrupt-names = "host-wake";
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_wifi_hostwake>;
++	};
++};
++
++/*
++ * BCM4330 Bluetooth uses GSBI6 UARTDM.  Sony drives BT_RST_N high to power
++ * the controller, MSM_WAKES_BT on GPIO137 and samples BT_WAKES_MSM on GPIO63.
++ * Mainline hci_bcm/serdev replaces the legacy bt_power + bcm_bt_lpm glue.
++ */
++&gsbi6 {
++	qcom,mode = <GSBI_PROT_UART_W_FC>;
++	status = "okay";
++};
++
++&gsbi6_serial {
++	pinctrl-names = "default";
++	pinctrl-0 = <&hikari_bt_uart>;
++	uart-has-rtscts;
++	status = "okay";
++
++	bluetooth {
++		compatible = "brcm,bcm4330-bt";
++		shutdown-gpios = <&tlmm 23 GPIO_ACTIVE_HIGH>;
++		device-wakeup-gpios = <&tlmm 137 GPIO_ACTIVE_HIGH>;
++		host-wakeup-gpios = <&tlmm 63 GPIO_ACTIVE_HIGH>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_bt_reset &hikari_bt_device_wake &hikari_bt_host_wake>;
++	};
++};
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+index e26a96320..c4fc8678a 100644
+--- a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
++++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+@@ -14,25 +14,77 @@ / {
+ 	model = "Sony Xperia acro S (Hikari)";
+ 	compatible = "sony,hikari", "qcom,msm8660";
+ 
++	/*
++	 * The MSM8x60 multimedia clock controller is secure-only on Sony's
++	 * production firmware.  The qcom_scm convention probe alone does not
++	 * instantiate the SCM platform driver: it needs this firmware node before
++	 * MMCC can use qcom_scm_io_readl()/writel().  MSM8660's binding requires
++	 * the RPM Daytona fabric clock as its single core clock.
++	 */
++	firmware {
++		scm {
++			compatible = "qcom,scm-msm8660", "qcom,scm";
++			clocks = <&rpmcc RPM_DAYTONA_FABRIC_CLK>;
++			clock-names = "core";
++		};
++	};
++
+ 	/*
+ 	 * The legacy Fuji/TWRP kernel and a physical TWRP /proc/iomem capture
+ 	 * both identify this as the 128 KiB persistent ram_console region.
+-	 * Keep it mapped: ramoops writes the console itself.  Its zero ECC layout
+-	 * is deliberately compatible with the legacy TWRP ram_console reader.
++	 * Keep it mapped: ramoops writes the console itself.  The legacy recovery
++	 * enables Reed-Solomon ECC with its persistent_ram defaults, so mainline
++	 * must use the same 16-byte parity blocks for reliable full-ring capture.
+ 	 */
+ 	reserved-memory {
+ 		#address-cells = <1>;
+ 		#size-cells = <1>;
+ 		ranges;
+ 
++		smem_region: smem@40000000 {
++			reg = <0x40000000 0x00200000>;
++			no-map;
++		};
++
+ 		ramoops@7ffe0000 {
+ 			compatible = "ramoops";
+ 			reg = <0x7ffe0000 0x00020000>;
+ 			console-size = <0x00020000>;
+-			ecc-size = <0>;
++			ecc-size = <16>;
+ 		};
+ 	};
+ 
++	/* Sony-programmed BQ27520 gauge data is read-only to this kernel. */
++	battery: battery {
++		compatible = "simple-battery";
++		device-chemistry = "lithium-ion";
++		charge-full-design-microamp-hours = <1900000>;
++		voltage-min-design-microvolt = <3000000>;
++		voltage-max-design-microvolt = <4200000>;
++		constant-charge-current-max-microamp = <1525000>;
++		constant-charge-voltage-max-microvolt = <4200000>;
++		charge-term-current-microamp = <50000>;
++	};
++
++	cpufreq: cpu-frequency-controller@903000 {
++		compatible = "qcom,msm8660-cpufreq";
++		reg = <0x00903000 0x1000>,
++		      <0x02041000 0x1000>,
++		      <0x02051000 0x1000>;
++		reg-names = "scpll", "acc0", "acc1";
++		qcom,l2cc = <&l2cc>;
++
++		cpu0-supply = <&saw0_reg>;
++		cpu1-supply = <&saw1_reg>;
++		mem-supply = <&pm8058_s0>;
++		dig-supply = <&pm8058_s1>;
++
++		interconnects = <&afab AFAB_MAS_AMPSS_M0 &afab AFAB_SLV_EBI_CH0>;
++		interconnect-names = "cpu-mem";
++		nvmem-cells = <&speed_bin>;
++		nvmem-cell-names = "speed-bin";
++	};
++
+ 	/*
+ 	 * The low bank starts at the historical MSM8x60 shared-memory physical
+ 	 * base.  CONFIG_ARCH_QCOM_RESERVE_SMEM then retains its first 2 MiB for
+@@ -62,12 +114,28 @@ &gsbi12 {
+ 
+ /*
+  * HSUSB1 is the connector-facing ChipIdea controller.  The address and IRQ
+- * are shared MSM8x60 facts; `peripheral` and the two PHY rails come from the
+- * Fuji/Hikari downstream board code.  PMIC VBUS/ID callbacks were only used
+- * for legacy OTG role switching, so BOOT #5 deliberately supports device
+- * mode only and does not invent an extcon or host-role GPIO description.
++ * are shared MSM8x60 facts and the two PHY rails come from the Fuji/Hikari
++ * downstream board code.  USB ID, VBUS detection and the protected VBUS
++ * source below reproduce the exact Sony connector topology in current USB
++ * role-switch and regulator frameworks.
+  */
+ &{/} {
++	usb_connector: connector {
++		compatible = "gpio-usb-b-connector", "usb-b-connector";
++		type = "micro";
++		id-gpios = <&pm8058_gpio 31 GPIO_ACTIVE_HIGH>;
++		vbus-gpios = <&pm8058_mpps 11 GPIO_ACTIVE_LOW>;
++		vbus-supply = <&usb_otg_vbus>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_usb_id &hikari_usb_vbus_detect>;
++
++		port {
++			usb_connector_hs: endpoint {
++				remote-endpoint = <&usb_hs1_drd>;
++			};
++		};
++	};
++
+ 	usb_hs1: usb@12500000 {
+ 		compatible = "qcom,ci-hdrc";
+ 		reg = <0x12500000 0x200>, <0x12500200 0x200>;
+@@ -79,13 +147,21 @@ usb_hs1: usb@12500000 {
+ 		resets = <&gcc USB_HS1_RESET>;
+ 		reset-names = "core";
+ 		phy_type = "ulpi";
+-		dr_mode = "peripheral";
++		dr_mode = "otg";
++		usb-role-switch;
++		role-switch-default-mode = "peripheral";
+ 		ahb-burst-config = <0>;
+ 		phys = <&usb_hs1_phy>;
+ 		phy-names = "usb-phy";
+ 		#reset-cells = <1>;
+ 		status = "okay";
+ 
++		port {
++			usb_hs1_drd: endpoint {
++				remote-endpoint = <&usb_connector_hs>;
++			};
++		};
++
+ 		ulpi {
+ 			usb_hs1_phy: phy {
+ 				compatible = "qcom,usb-hs-phy-msm8660",
+@@ -108,18 +184,21 @@ mmcc: clock-controller@4000000 {
+ 		#clock-cells = <1>;
+ 		#reset-cells = <1>;
+ 		#power-domain-cells = <1>;
+-		/* MSM8x60 GCC exposes PLL8 as the shared MMSS parent. */
++		/*
++		 * MSM8x60 GCC exposes PLL8 as the shared MMSS parent.  Hikari has
++		 * only DSI1 wired here.  Do not alias the absent DSI2 inputs to the
++		 * DSI1 PHY: both names would then resolve to the same clk_hw and CCF
++		 * would select the first matching mux entry (hardware value 1/DSI2)
++		 * instead of value 3/DSI1.
++		 */
+ 		clocks = <&pxo_board>, <&gcc PLL8_VOTE>, <&gcc PLL8_VOTE>,
+-			 <&dsi_phy DSI_PIXEL_PLL_CLK>, <&dsi_phy DSI_BYTE_PLL_CLK>,
+ 			 <&dsi_phy DSI_PIXEL_PLL_CLK>, <&dsi_phy DSI_BYTE_PLL_CLK>;
+-		clock-names = "pxo", "pll3", "pll8_vote", "dsi1pll", "dsi1pllbyte",
+-			      "dsi2pll", "dsi2pllbyte";
++		clock-names = "pxo", "pll3", "pll8_vote", "dsi1pll", "dsi1pllbyte";
+ 		status = "okay";
+ 	};
+ 
+-	afab: interconnect@1000000 {
++	afab: interconnect-afab {
+ 		compatible = "qcom,msm8660-apps-fabric";
+-		reg = <0x01000000 0x1000>;
+ 		#interconnect-cells = <1>;
+ 		clocks = <&rpmcc RPM_APPS_FABRIC_CLK>, <&rpmcc RPM_APPS_FABRIC_A_CLK>,
+ 			 <&rpmcc RPM_EBI1_CLK>, <&rpmcc RPM_EBI1_A_CLK>;
+@@ -128,9 +207,8 @@ afab: interconnect@1000000 {
+ 		status = "okay";
+ 	};
+ 
+-	sfab: interconnect@4000000 {
++	sfab: interconnect-sfab {
+ 		compatible = "qcom,msm8660-system-fabric";
+-		reg = <0x04000000 0x1000>;
+ 		#interconnect-cells = <1>;
+ 		clocks = <&rpmcc RPM_SYS_FABRIC_CLK>, <&rpmcc RPM_SYS_FABRIC_A_CLK>;
+ 		clock-names = "bus", "bus_a";
+@@ -138,9 +216,8 @@ sfab: interconnect@4000000 {
+ 		status = "okay";
+ 	};
+ 
+-	mmfab: interconnect@5700000 {
++	mmfab: interconnect-mmfab {
+ 		compatible = "qcom,msm8660-mmss-fabric";
+-		reg = <0x05700000 0x1000>;
+ 		#interconnect-cells = <1>;
+ 		clocks = <&rpmcc RPM_MM_FABRIC_CLK>, <&rpmcc RPM_MM_FABRIC_A_CLK>,
+ 			 <&rpmcc RPM_SMI_CLK>, <&rpmcc RPM_SMI_A_CLK>;
+@@ -149,9 +226,8 @@ mmfab: interconnect@5700000 {
+ 		status = "okay";
+ 	};
+ 
+-	dfab: interconnect@6000000 {
++	dfab: interconnect-dfab {
+ 		compatible = "qcom,msm8660-daytona-fabric";
+-		reg = <0x06000000 0x1000>;
+ 		#interconnect-cells = <1>;
+ 		clocks = <&rpmcc RPM_DAYTONA_FABRIC_CLK>, <&rpmcc RPM_DAYTONA_FABRIC_A_CLK>;
+ 		clock-names = "bus", "bus_a";
+@@ -164,33 +240,84 @@ mmss_sfpb: syscon@5700000 {
+ 		reg = <0x05700000 0x1000>;
+ 	};
+ 
++	/*
++	 * MSM8x60 has two MDP IOMMU ports, each with two context banks. Sony's
++	 * devices-iommu.c gives these exact apertures and interrupt assignments;
++	 * the binding orders them non-secure first, secure second. Keep the
++	 * APQ8064 fallback because the upstream msm_iommu driver represents this
++	 * common first-generation Qualcomm IOMMU implementation.
++	 */
++	mdp_port0: iommu@7500000 {
++		compatible = "qcom,msm8660-iommu", "qcom,apq8064-iommu";
++		reg = <0x07500000 0x00100000>;
++		interrupts = <GIC_SPI 64 IRQ_TYPE_LEVEL_HIGH>,
++			     <GIC_SPI 63 IRQ_TYPE_LEVEL_HIGH>;
++		clocks = <&mmcc SMMU_AHB_CLK>, <&mmcc MDP_AXI_CLK>;
++		clock-names = "smmu_pclk", "iommu_clk";
++		#iommu-cells = <1>;
++		qcom,ncb = <2>;
++		/* Physical context writes read back zero; no production client. */
++		status = "disabled";
++	};
++
++	mdp_port1: iommu@7600000 {
++		compatible = "qcom,msm8660-iommu", "qcom,apq8064-iommu";
++		reg = <0x07600000 0x00100000>;
++		interrupts = <GIC_SPI 62 IRQ_TYPE_LEVEL_HIGH>,
++			     <GIC_SPI 61 IRQ_TYPE_LEVEL_HIGH>;
++		clocks = <&mmcc SMMU_AHB_CLK>, <&mmcc MDP_AXI_CLK>;
++		clock-names = "smmu_pclk", "iommu_clk";
++		#iommu-cells = <1>;
++		qcom,ncb = <2>;
++		/* Physical context writes read back zero; no production client. */
++		status = "disabled";
++	};
++
+ 	mdp: display-controller@5100000 {
+ 		compatible = "qcom,mdp4";
+ 		reg = <0x05100000 0x000f0000>;
+ 		interrupts = <GIC_SPI 75 IRQ_TYPE_LEVEL_HIGH>;
+ 		clocks = <&mmcc MDP_CLK>, <&mmcc MDP_AHB_CLK>,
+-			 <&mmcc MDP_AXI_CLK>, <&mmcc MDP_LUT_CLK>;
++			 <&mmcc MDP_AXI_CLK>, <&mmcc MDP_LUT_CLK>,
++			 <&mmcc HDMI_APP_CLK>, <&mmcc MDP_TV_CLK>;
+ 		/* Names are the MDP4 DRM driver's DT ABI, not descriptive labels. */
+-		clock-names = "core_clk", "iface_clk", "bus_clk", "lut_clk";
++		clock-names = "core_clk", "iface_clk", "bus_clk", "lut_clk",
++			      "hdmi_clk", "tv_clk";
+ 		power-domains = <&mmcc MDP_GDSC>;
+-		interconnects = <&mmfab MMFAB_MAS_MDP_PORT0 &mmfab MMFAB_SLV_SMI>;
+-		interconnect-names = "mdp-mem";
++		/*
++		 * The working Sony/TWRP Hikari configuration leaves MSM_IOMMU
++		 * disabled and scans out physically contiguous framebuffer memory.
++		 * Keep MDP detached until the MSM8x60 IOMMU register interface is
++		 * understood: on this device every context/MID write reads back zero.
++		 */
++		interconnects = <&mmfab MMFAB_MAS_MDP_PORT0
++				 &afab AFAB_SLV_EBI_CH0>;
++		interconnect-names = "mdp0-mem";
++		/*
++		 * The Sony MSM8x60 BSP powers mdp.0 through footswitch FS_MDP (4).
++		 * MMCC's MDP_GDSC is its genpd representation; the platform core
++		 * attaches and powers it before MDP4 may access 0x05100000.
++		 */
+ 		status = "okay";
+ 
+ 		ports {
+ 			#address-cells = <1>;
+ 			#size-cells = <0>;
+-			port@0 {
+-				reg = <0>;
++			/*
++			 * MDP4 port 0 is the internal LCDC/LVDS path. The DRM/MSM
++			 * component walker deliberately skips it; DSI1 is port 1.
++			 */
++			port@1 {
++				reg = <1>;
+ 				mdp_out: endpoint { remote-endpoint = <&dsi_in>; };
+ 			};
+ 		};
+ 	};
+ 
+-	/* The MSM8x60 PHY and PLL share the DSI register aperture. */
+-	dsi_phy: dsi-phy {
+-		compatible = "qcom,dsi-phy-45nm-msm8x60";
+-		reg = <0x04700000 0x400>, <0x04700000 0x400>;
++	/* The MSM8x60 PHY and PLL live inside the DSI register aperture. */
++	dsi_phy: dsi-phy@47000f0 {
++		compatible = "qcom,msm8660-dsi-phy-45nm";
++		reg = <0x047000f0 0x1e0>, <0x04700200 0xd0>;
+ 		reg-names = "dsi_phy", "dsi_pll";
+ 		vdda-supply = <&pm8058_l0>;
+ 		#clock-cells = <1>;
+@@ -199,20 +326,26 @@ dsi_phy: dsi-phy {
+ 	};
+ 
+ 	dsi: dsi@4700000 {
+-		compatible = "qcom,msm8660-dsi-ctrl";
++		compatible = "qcom,msm8660-dsi-ctrl", "qcom,mdss-dsi-ctrl";
+ 		reg = <0x04700000 0x200>;
++		reg-names = "dsi_ctrl";
+ 		interrupts = <GIC_SPI 82 IRQ_TYPE_LEVEL_HIGH>;
+ 		clocks = <&mmcc DSI_M_AHB_CLK>, <&mmcc DSI_S_AHB_CLK>,
+-			 <&mmcc AMP_AHB_CLK>, <&mmcc DSI_SRC>,
+-			 <&mmcc DSI1_BYTE_CLK>, <&mmcc DSI_PIXEL_CLK>,
+-			 <&mmcc DSI1_ESC_CLK>;
+-		clock-names = "iface", "bus", "core_mmss", "src", "byte", "pixel", "core";
+-		assigned-clocks = <&mmcc DSI_SRC>, <&mmcc DSI1_BYTE_CLK>,
+-			 <&mmcc DSI_PIXEL_CLK>, <&mmcc DSI1_ESC_CLK>;
+-		assigned-clock-parents = <&dsi_phy 0>, <&dsi_phy 0>, <&dsi_phy 1>, <&dsi_phy 1>;
++			 <&mmcc AMP_AHB_CLK>, <&mmcc DSI_CLK>,
++			 <&mmcc DSI1_BYTE_CLK>,
++			 <&mmcc DSI_PIXEL_CLK>,
++			 <&mmcc DSI1_ESC_CLK>,
++			 <&rpmcc RPM_SFPB_CLK>, <&rpmcc RPM_SFPB_A_CLK>,
++			 <&rpmcc RPM_MMFPB_A_CLK>;
++		clock-names = "iface", "bus", "core_mmss", "src", "byte", "pixel", "core",
++			      "sfpb", "sfpb_a", "mmfpb_a";
++		/* Both dedicated DSI RCGs select DSI1 PLL with source value 3. */
++		assigned-clocks = <&mmcc DSI_SRC>, <&mmcc DSI_PIXEL_SRC>;
++		assigned-clock-parents = <&dsi_phy DSI_PIXEL_PLL_CLK>,
++					 <&dsi_phy DSI_PIXEL_PLL_CLK>;
+ 		phys = <&dsi_phy>;
+-		phy-names = "dsi-phy";
+-		qcom,mmss-sfpb = <&mmss_sfpb>;
++		phy-names = "dsi";
++		syscon-sfpb = <&mmss_sfpb>;
+ 		vdda-supply = <&pm8058_l0>;
+ 		#address-cells = <1>;
+ 		#size-cells = <0>;
+@@ -226,13 +359,14 @@ ports {
+ 		};
+ 
+ 		panel@0 {
+-			compatible = "renesas,r63306-tmd-mdv22";
++			compatible = "sony,hikari-r63306-tmd-mdv22";
+ 			reg = <0>;
+ 			vci-supply = <&pm8901_l2>;
+ 			vddio-supply = <&pm8901_lvs1>;
++			backlight = <&lcd_backlight>;
+ 			power-gpios = <&tlmm 18 GPIO_ACTIVE_HIGH>;
+ 			reset-gpios = <&tlmm 70 GPIO_ACTIVE_HIGH>;
+-			ports { #address-cells = <1>; #size-cells = <0>; port { panel_in: endpoint { remote-endpoint = <&dsi_out>; }; }; };
++			port { panel_in: endpoint { remote-endpoint = <&dsi_out>; }; };
+ 		};
+ 	};
+ };
+@@ -241,12 +375,46 @@ panel@0 {
+ &rpm {
+ 	regulators-0 {
+ 		compatible = "qcom,rpm-pm8901-regulators";
++
++		pm8901_s0: s0 {
++			regulator-min-microvolt = <750000>;
++			regulator-max-microvolt = <1325000>;
++			qcom,switch-mode-frequency = <1600000>;
++		};
++
++		pm8901_s1: s1 {
++			regulator-min-microvolt = <750000>;
++			regulator-max-microvolt = <1325000>;
++			qcom,switch-mode-frequency = <1600000>;
++		};
++
+ 		pm8901_l2: l2 { regulator-min-microvolt = <2850000>; regulator-max-microvolt = <2850000>; };
+ 		pm8901_lvs1: lvs1 { regulator-always-on; };
+ 	};
+ 	regulators-1 {
+ 		compatible = "qcom,rpm-pm8058-regulators";
+ 
++		pm8058_s0: s0 {
++			regulator-min-microvolt = <800000>;
++			regulator-max-microvolt = <1325000>;
++			qcom,switch-mode-frequency = <1600000>;
++		};
++
++		pm8058_s1: s1 {
++			regulator-min-microvolt = <800000>;
++			regulator-max-microvolt = <1200000>;
++			qcom,switch-mode-frequency = <1600000>;
++		};
++
++		/* Shared WLAN/Timpani rail; exact voltage from Sony's Fuji BSP. */
++		pm8058_s3: s3 {
++			regulator-min-microvolt = <1800000>;
++			regulator-max-microvolt = <1800000>;
++			qcom,switch-mode-frequency = <1600000>;
++			regulator-always-on;
++			bias-pull-down;
++		};
++
+ 		pm8058_l6: l6 {
+ 			regulator-min-microvolt = <3050000>;
+ 			regulator-max-microvolt = <3050000>;
+@@ -266,6 +434,12 @@ pm8058_l0: l0 {
+ 	};
+ };
+ 
++&qfprom {
++	speed_bin: speed-bin@c0 {
++		reg = <0xc0 0x4>;
++	};
++};
++
+ &gsbi8 {
+ 	qcom,mode = <GSBI_PROT_I2C>;
+ 	status = "okay";
+@@ -275,8 +449,106 @@ &gsbi8_i2c {
+ 	clock-frequency = <400000>;
+ 	status = "okay";
+ 
+-	backlight@40 {
++	lcd_backlight: backlight@40 {
+ 		compatible = "ams,as3676-backlight";
+ 		reg = <0x40>;
+-		default-brightness = <32>;
++		/* Hikari routes the ambient-light photodiode to AS3676 GPIO2. */
++		ams,als-connected;
++		status = "okay";
++	};
++
++	/* Exact Fuji/Hikari GSBI8 addresses: BQ27520 = 0x55, BQ24160 = 0x6b. */
++	bq27520: fuel-gauge@55 {
++		compatible = "ti,bq27520g1";
++		/* Sony config disables automatic insertion of the fixed battery. */
++		ti,host-battery-insertion;
++		reg = <0x55>;
++		monitored-battery = <&battery>;
+ 		status = "okay";
++	};
++
++	bq24160: charger@6b {
++		compatible = "ti,bq24160";
++		reg = <0x6b>;
++		interrupt-parent = <&tlmm>;
++		interrupts = <125 IRQ_TYPE_EDGE_BOTH>;
++		fuel-gauge = <&bq27520>;
++		/* Fuji/Hikari: GPIO126 low means the IN/cradle is connected. */
++		cradle-detect-gpios = <&tlmm 126 GPIO_ACTIVE_LOW>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_cradle_detect>;
++		ti,cradle-input-current-limit-microamp = <2500000>;
++		ti,in-vindpm-microvolt = <4520000>;
++		/* Owner-requested electrical probing; not USB current negotiation. */
++		ti,opportunistic-usb-input;
++		ti,usb-input-current-limit-microamp = <500000>;
++		ti,constant-charge-current-max-microamp = <1525000>;
++		ti,constant-charge-voltage-max-microvolt = <4200000>;
++		ti,charge-term-current-microamp = <50000>;
++		wakeup-source;
++		status = "okay";
++
++		usb_otg_guard: usb-otg-guard {
++			regulator-name = "usb-otg-guard";
++			regulator-min-microvolt = <5000000>;
++			regulator-max-microvolt = <5000000>;
++		};
++	};
++};
++
++#include "qcom-msm8260-sony-hikari-hardware.dtsi"
++
++#include "qcom-msm8260-sony-hikari-wireless.dtsi"
++
++#include "qcom-msm8260-sony-hikari-gpu-base.dtsi"
++
++&tlmm {
++	hikari_cradle_detect: cradle-detect-state {
++		pins = "gpio126";
++		function = "gpio";
++		bias-pull-up;
++		input-enable;
++		drive-strength = <2>;
++	};
++};
++
++/* HIKARI MSM8X60 SMEM bring-up */
++/ {
++	smem {
++		compatible = "qcom,smem";
++		memory-region = <&smem_region>;
++		hwlocks = <&sfpb_mutex 3>;
++	};
++};
++
++&soc {
++	sfpb_mutex: hwmutex@1200600 {
++		compatible = "qcom,sfpb-mutex";
++		reg = <0x01200600 0x100>;
++		#hwlock-cells = <1>;
++	};
++};
++
++
++/* HIKARI MSM8X60 SAW CPU regulators */
++&soc {
++	saw0_reg: regulator@2042000 {
++		compatible = "qcom,msm8660-saw-regulator";
++		reg = <0x02042000 0x100>;
++		qcom,cpu = <0>;
++
++		regulator-name = "msm8660-saw-cpu0";
++		regulator-min-microvolt = <800000>;
++		regulator-max-microvolt = <1325000>;
++	};
++
++	saw1_reg: regulator@2052000 {
++		compatible = "qcom,msm8660-saw-regulator";
++		reg = <0x02052000 0x100>;
++		qcom,cpu = <1>;
++
++		regulator-name = "msm8660-saw-cpu1";
++		regulator-min-microvolt = <800000>;
++		regulator-max-microvolt = <1325000>;
++	};
++};
+diff --git a/drivers/cpufreq/Kconfig.arm b/drivers/cpufreq/Kconfig.arm
+index a441668f9..9379c00c0 100644
+--- a/drivers/cpufreq/Kconfig.arm
++++ b/drivers/cpufreq/Kconfig.arm
+@@ -273,3 +273,12 @@ config ARM_PXA2xx_CPUFREQ
+ 	  This add the CPUFreq driver support for Intel PXA2xx SOCs.
+ 
+ 	  If in doubt, say N.
++
++
++config ARM_QCOM_MSM8660_CPUFREQ
++	bool "Qualcomm MSM8660 CPU frequency driver"
++	depends on ARCH_QCOM && OF && REGULATOR && INTERCONNECT
++	select REGULATOR_QCOM_MSM8660_SAW
++	help
++	  CPU, shared L2 and voltage/fabric DVFS driver for Qualcomm
++	  MSM8260/MSM8660.
+diff --git a/drivers/cpufreq/Makefile b/drivers/cpufreq/Makefile
+index 6c7a39b7f..f92bab959 100644
+--- a/drivers/cpufreq/Makefile
++++ b/drivers/cpufreq/Makefile
+@@ -104,3 +104,4 @@ obj-$(CONFIG_LOONGSON3_CPUFREQ)		+= loongson3_cpufreq.o
+ obj-$(CONFIG_SH_CPU_FREQ)		+= sh-cpufreq.o
+ obj-$(CONFIG_SPARC_US2E_CPUFREQ)	+= sparc-us2e-cpufreq.o
+ obj-$(CONFIG_SPARC_US3_CPUFREQ)		+= sparc-us3-cpufreq.o
++obj-$(CONFIG_ARM_QCOM_MSM8660_CPUFREQ) += qcom-msm8660-cpufreq.o
+diff --git a/drivers/cpufreq/qcom-msm8660-cpufreq.c b/drivers/cpufreq/qcom-msm8660-cpufreq.c
+new file mode 100644
+index 000000000..aed6c8164
+--- /dev/null
++++ b/drivers/cpufreq/qcom-msm8660-cpufreq.c
+@@ -0,0 +1,1134 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Qualcomm MSM8660 / MSM8260 Scorpion cpufreq bring-up driver.
++ *
++ * Initial target: Sony Hikari LT26w, speed-bin 1 / PVS 1.
++ *
++ * Clock/voltage tables and sequencing are ported from the historical
++ * OpenSEMC/Caf acpuclock-8x60 implementation.  This version intentionally
++ * refuses unknown fuse/boot states and is opt-in while being validated.
++ *
++ * On successful cpufreq registration the module pins itself: reboot is the
++ * rollback.  Do not attempt to unload a live CPU clock owner.
++ */
++
++#include <linux/clk.h>
++#include <linux/cpu.h>
++#include <linux/cpufreq.h>
++#include <linux/delay.h>
++#include <linux/interconnect.h>
++#include <linux/io.h>
++#include <linux/iopoll.h>
++#include <linux/kernel.h>
++#include <linux/mfd/syscon.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/nvmem-consumer.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
++#include <linux/regmap.h>
++#include <linux/regulator/consumer.h>
++#include <linux/slab.h>
++
++#include <dt-bindings/clock/qcom,gcc-msm8660.h>
++
++#define DRV_NAME                        "qcom-msm8660-cpufreq"
++
++#define NR_SCORPION_CPUS                2
++
++#define SCPLL_CPU0_OFF                  0x200
++#define SCPLL_CPU1_OFF                  0x300
++#define SCPLL_L2_OFF                    0x400
++
++#define PLL_CTL                         0x04
++#define PLL_CAL                         0x08
++#define PLL_STATUS                      0x10
++#define PLL_CFG                         0x1c
++#define PLL_FSM                         0x24
++#define PLL_LUT(l)                      (0x38 + (((l) / 4) * 4))
++
++#define ACC_CTL                         0x04
++#define ACC_SEL                         0x08
++
++#define KPSS_L2_CLK_SEL                 0x38
++#define CORE_SRC_MASK                   0x3
++
++#define CORE_SRC_MUX                    0
++#define CORE_SRC_SCPLL                  1
++
++#define SHOT_SWITCH                     4
++#define COMPLEX_SLEW                    7
++#define SCPLL_POWER_DOWN                0
++#define SCPLL_STANDBY                   2
++#define SCPLL_NORMAL                    7
++
++#define SCPLL_CAL_MIN_L                 0x08
++#define SCPLL_CAL_MAX_L                 0x1c
++
++#define MAX_VDD_SC_UV                   1325000
++#define MAX_VDD_MEM_UV                  1325000
++#define MAX_VDD_DIG_UV                  1200000
++
++#define SCPLL_LOW_VDD_FMAX_KHZ          594000
++#define SCPLL_LOW_VDD_UV                1000000
++#define SCPLL_NOMINAL_VDD_UV            1100000
++
++/* Interconnect API uses kB/s. */
++#define MBPS_TO_ICC(x)                  ((u32)(x) * 1000U)
++
++struct msm8660_l2_level {
++        unsigned int khz;
++        u8 l;
++        unsigned int vdd_dig_uv;
++        unsigned int vdd_mem_uv;
++        u8 bw_level;
++};
++
++struct msm8660_opp {
++        unsigned int khz;
++        unsigned int vdd_sc_uv;
++        u8 l2_idx;
++};
++
++/*
++ * Historical l2_freq_tbl_v2, excluding the AFAB-only calibration row.
++ * Field order in the legacy source is:
++ * khz, src_sel, l_val, vdd_dig, vdd_mem, bw_level.
++ */
++static const struct msm8660_l2_level l2_levels[] = {
++        {  432000, 0x08, 1000000, 1100000, 0 },
++        {  486000, 0x09, 1000000, 1100000, 0 },
++        {  540000, 0x0a, 1000000, 1100000, 0 },
++        {  594000, 0x0b, 1000000, 1100000, 0 },
++        {  648000, 0x0c, 1000000, 1100000, 1 },
++        {  702000, 0x0d, 1100000, 1100000, 1 },
++        {  756000, 0x0e, 1100000, 1100000, 1 },
++        {  810000, 0x0f, 1100000, 1100000, 1 },
++        {  864000, 0x10, 1100000, 1100000, 1 },
++        {  918000, 0x11, 1100000, 1100000, 2 },
++        {  972000, 0x12, 1100000, 1100000, 2 },
++        { 1026000, 0x13, 1100000, 1100000, 2 },
++        { 1080000, 0x14, 1100000, 1200000, 2 },
++        { 1134000, 0x15, 1100000, 1200000, 2 },
++        { 1188000, 0x16, 1200000, 1200000, 3 },
++        { 1242000, 0x17, 1200000, 1212500, 3 },
++        { 1296000, 0x18, 1200000, 1225000, 3 },
++        { 1350000, 0x19, 1200000, 1225000, 3 },
++        { 1404000, 0x1a, 1200000, 1250000, 3 },
++};
++
++/* Historical speed-bin 1 / PVS 1 (1512 MHz nominal) table. */
++static const struct msm8660_opp opps[] = {
++        {  192000,  800000,  0 },
++        {  384000,  825000,  0 },
++        {  432000,  850000,  0 },
++        {  486000,  850000,  1 },
++        {  540000,  875000,  2 },
++        {  594000,  875000,  3 },
++        {  648000,  900000,  4 },
++        {  702000,  900000,  5 },
++        {  756000,  925000,  6 },
++        {  810000,  950000,  7 },
++        {  864000,  975000,  8 },
++        {  918000,  975000,  9 },
++        {  972000, 1000000, 10 },
++        { 1026000, 1000000, 11 },
++        { 1080000, 1025000, 12 },
++        { 1134000, 1025000, 13 },
++        { 1188000, 1050000, 14 },
++        { 1242000, 1075000, 15 },
++        { 1296000, 1100000, 16 },
++        { 1350000, 1125000, 17 },
++        { 1404000, 1150000, 18 },
++        { 1458000, 1150000, 18 },
++        { 1512000, 1175000, 18 },
++};
++
++#define FREQ_ENTRY(i) { .driver_data = (i), .frequency = opps[(i)].khz }
++
++static struct cpufreq_frequency_table freq_table[] = {
++        FREQ_ENTRY(0),  FREQ_ENTRY(1),  FREQ_ENTRY(2),  FREQ_ENTRY(3),
++        FREQ_ENTRY(4),  FREQ_ENTRY(5),  FREQ_ENTRY(6),  FREQ_ENTRY(7),
++        FREQ_ENTRY(8),  FREQ_ENTRY(9),  FREQ_ENTRY(10), FREQ_ENTRY(11),
++        FREQ_ENTRY(12), FREQ_ENTRY(13), FREQ_ENTRY(14), FREQ_ENTRY(15),
++        FREQ_ENTRY(16), FREQ_ENTRY(17), FREQ_ENTRY(18), FREQ_ENTRY(19),
++        FREQ_ENTRY(20), FREQ_ENTRY(21), FREQ_ENTRY(22),
++        { .frequency = CPUFREQ_TABLE_END },
++};
++
++static const u32 bw_mbps[] = {
++        824, 1336, 2008, 2480,
++};
++
++struct msm8660_cpufreq {
++        struct device *dev;
++
++        void __iomem *scpll;
++        void __iomem *pll[NR_SCORPION_CPUS];
++        void __iomem *l2_pll;
++        void __iomem *acc[NR_SCORPION_CPUS];
++
++        struct regmap *l2cc;
++
++        struct regulator *cpu_reg[NR_SCORPION_CPUS];
++        struct regulator *mem_reg;
++        struct regulator *dig_reg;
++        struct icc_path *icc;
++
++        struct mutex lock;
++
++        u8 cpu_idx[NR_SCORPION_CPUS];
++        u8 l2_idx;
++
++        unsigned int mem_uv;
++        unsigned int dig_uv;
++        unsigned int bw_level;
++
++        bool mem_enabled;
++        bool dig_enabled;
++        bool cpu_enabled[NR_SCORPION_CPUS];
++        bool registered;
++};
++
++static struct msm8660_cpufreq *drv;
++
++static inline unsigned int pll_lval(void __iomem *pll)
++{
++        return (readl_relaxed(pll + PLL_CTL) >> 3) & 0x3f;
++}
++
++static int find_opp(unsigned int khz)
++{
++        unsigned int i;
++
++        for (i = 0; i < ARRAY_SIZE(opps); i++)
++                if (opps[i].khz == khz)
++                        return i;
++
++        return -EINVAL;
++}
++
++static unsigned int cpu_hw_rate(struct msm8660_cpufreq *d, unsigned int cpu)
++{
++        u32 sel, ctl, bank, src, div;
++
++        if (cpu >= NR_SCORPION_CPUS)
++                return 0;
++
++        sel = readl_relaxed(d->acc[cpu] + ACC_SEL);
++        src = (sel >> 1) & 0x3;
++
++        if (src == CORE_SRC_SCPLL)
++                return pll_lval(d->pll[cpu]) * 54000;
++
++        if (src != CORE_SRC_MUX)
++                return 0;
++
++        /*
++         * ACC_SEL bit 0 names the inactive bank in the legacy programming
++         * sequence; the live bank is therefore the opposite bank.
++         */
++        bank = (sel & 1) ^ 1;
++        ctl = readl_relaxed(d->acc[cpu] + ACC_CTL);
++        ctl >>= bank * 8;
++        src = (ctl >> 4) & 0x7;
++        div = ctl & 0xf;
++
++        if (src == 3)             /* PLL8 = 384 MHz */
++                return 384000 / (div + 1);
++
++        if (src == 1)             /* AFAB boot source on Hikari */
++                return 384000;
++
++        return 0;
++}
++
++static unsigned int l2_hw_rate(struct msm8660_cpufreq *d)
++{
++        return pll_lval(d->l2_pll) * 54000;
++}
++
++static int scpll_wait(void __iomem *pll, u8 l)
++{
++        u32 v;
++        int ret;
++
++        ret = readl_poll_timeout_atomic(pll + PLL_CTL, v,
++                                        (((v >> 3) & 0x3f) == l),
++                                        1, 1000);
++        if (ret)
++                return ret;
++
++        return readl_poll_timeout_atomic(pll + PLL_STATUS, v,
++                                         !(v & 0x1),
++                                         1, 1000);
++}
++
++static int scpll_enable(void __iomem *pll, u8 l)
++{
++        writel_relaxed(SCPLL_STANDBY, pll + PLL_CTL);
++        mb();
++        udelay(10);
++
++        writel_relaxed(((u32)l << 3) | SHOT_SWITCH, pll + PLL_FSM);
++        writel_relaxed(SCPLL_NORMAL, pll + PLL_CTL);
++        mb();
++        udelay(20);
++
++        return scpll_wait(pll, l);
++}
++
++static int scpll_slew(void __iomem *pll, u8 l)
++{
++        writel_relaxed(((u32)l << 3) | COMPLEX_SLEW, pll + PLL_FSM);
++        writel_relaxed(SCPLL_NORMAL, pll + PLL_CTL);
++        mb();
++
++        return scpll_wait(pll, l);
++}
++
++static void scpll_disable(void __iomem *pll)
++{
++        writel_relaxed(SCPLL_POWER_DOWN, pll + PLL_CTL);
++        mb();
++}
++
++static void cpu_select_source(struct msm8660_cpufreq *d,
++                              unsigned int cpu, u32 source)
++{
++        u32 sel;
++
++        sel = readl_relaxed(d->acc[cpu] + ACC_SEL);
++        sel &= ~(0x3U << 1);
++        sel |= source << 1;
++        writel_relaxed(sel, d->acc[cpu] + ACC_SEL);
++}
++
++static void cpu_program_pll8(struct msm8660_cpufreq *d,
++                             unsigned int cpu, unsigned int khz)
++{
++        u32 sel, ctl, bank, div;
++
++        div = khz == 192000 ? 1 : 0;
++
++        sel = readl_relaxed(d->acc[cpu] + ACC_SEL);
++
++        /* Program the inactive bank, then flip to it. */
++        bank = sel & 1;
++        ctl = readl_relaxed(d->acc[cpu] + ACC_CTL);
++        ctl &= ~(0xffU << (bank * 8));
++        ctl |= ((0x30U | div) << (bank * 8));
++        writel_relaxed(ctl, d->acc[cpu] + ACC_CTL);
++
++        writel_relaxed(sel ^ 1U, d->acc[cpu] + ACC_SEL);
++}
++
++static int cpu_switch_clock(struct msm8660_cpufreq *d,
++                            unsigned int cpu, unsigned int target_khz)
++{
++        u32 sel, src;
++        int ret;
++
++        sel = readl_relaxed(d->acc[cpu] + ACC_SEL);
++        src = (sel >> 1) & 0x3;
++
++        if (target_khz == 192000 || target_khz == 384000) {
++                cpu_program_pll8(d, cpu, target_khz);
++
++                if (src == CORE_SRC_SCPLL) {
++                        cpu_select_source(d, cpu, CORE_SRC_MUX);
++                        mb();
++                        udelay(1);
++                        scpll_disable(d->pll[cpu]);
++                } else if (src != CORE_SRC_MUX) {
++                        return -EIO;
++                }
++
++                return cpu_hw_rate(d, cpu) == target_khz ? 0 : -EIO;
++        }
++
++        if (target_khz < 432000 || target_khz > 1512000 ||
++            target_khz % 54000)
++                return -EINVAL;
++
++        if (src == CORE_SRC_SCPLL) {
++                ret = scpll_slew(d->pll[cpu], target_khz / 54000);
++                if (ret)
++                        return ret;
++        } else if (src == CORE_SRC_MUX) {
++                ret = scpll_enable(d->pll[cpu], target_khz / 54000);
++                if (ret)
++                        return ret;
++
++                cpu_select_source(d, cpu, CORE_SRC_SCPLL);
++                mb();
++        } else {
++                return -EIO;
++        }
++
++        return cpu_hw_rate(d, cpu) == target_khz ? 0 : -EIO;
++}
++
++struct cpu_clock_work {
++        struct msm8660_cpufreq *d;
++        unsigned int cpu;
++        unsigned int khz;
++};
++
++static long cpu_clock_workfn(void *arg)
++{
++        struct cpu_clock_work *w = arg;
++
++        return cpu_switch_clock(w->d, w->cpu, w->khz);
++}
++
++struct cpu_voltage_work {
++        struct msm8660_cpufreq *d;
++        unsigned int cpu;
++        unsigned int uv;
++};
++
++static long cpu_voltage_workfn(void *arg)
++{
++        struct cpu_voltage_work *w = arg;
++
++        return regulator_set_voltage(w->d->cpu_reg[w->cpu],
++                                     w->uv, MAX_VDD_SC_UV);
++}
++
++static int set_cpu_clock_on_cpu(struct msm8660_cpufreq *d,
++                                unsigned int cpu, unsigned int khz)
++{
++        struct cpu_clock_work w = {
++                .d = d,
++                .cpu = cpu,
++                .khz = khz,
++        };
++
++        return (int)work_on_cpu(cpu, cpu_clock_workfn, &w);
++}
++
++static int set_cpu_voltage_on_cpu(struct msm8660_cpufreq *d,
++                                  unsigned int cpu, unsigned int uv)
++{
++        struct cpu_voltage_work w = {
++                .d = d,
++                .cpu = cpu,
++                .uv = uv,
++        };
++
++        return (int)work_on_cpu(cpu, cpu_voltage_workfn, &w);
++}
++
++static u8 compute_l2_vote(struct msm8660_cpufreq *d,
++                          unsigned int changing_cpu, u8 new_cpu_idx)
++{
++        u8 idx0 = d->cpu_idx[0];
++        u8 idx1 = d->cpu_idx[1];
++
++        if (changing_cpu == 0)
++                idx0 = new_cpu_idx;
++        else
++                idx1 = new_cpu_idx;
++
++        return max(opps[idx0].l2_idx, opps[idx1].l2_idx);
++}
++
++static unsigned int scpll_dig_requirement(unsigned int cpu_khz,
++                                          unsigned int l2_khz)
++{
++        if (l2_khz > SCPLL_LOW_VDD_FMAX_KHZ ||
++            cpu_khz > SCPLL_LOW_VDD_FMAX_KHZ)
++                return SCPLL_NOMINAL_VDD_UV;
++
++        return SCPLL_LOW_VDD_UV;
++}
++
++static void compute_shared_requirements(struct msm8660_cpufreq *d,
++                                        unsigned int changing_cpu,
++                                        u8 new_cpu_idx,
++                                        u8 new_l2_idx,
++                                        unsigned int *mem_uv,
++                                        unsigned int *dig_uv,
++                                        unsigned int *bw_level)
++{
++        u8 idx[2] = { d->cpu_idx[0], d->cpu_idx[1] };
++        const struct msm8660_l2_level *l2 = &l2_levels[new_l2_idx];
++        unsigned int pll_dig;
++
++        idx[changing_cpu] = new_cpu_idx;
++
++        *mem_uv = max(max(opps[idx[0]].vdd_sc_uv,
++                           opps[idx[1]].vdd_sc_uv),
++                       l2->vdd_mem_uv);
++
++        pll_dig = max(scpll_dig_requirement(opps[idx[0]].khz, l2->khz),
++                      scpll_dig_requirement(opps[idx[1]].khz, l2->khz));
++
++        *dig_uv = max(l2->vdd_dig_uv, pll_dig);
++        *bw_level = l2->bw_level;
++}
++
++static int set_icc_level(struct msm8660_cpufreq *d, unsigned int level)
++{
++        if (level >= ARRAY_SIZE(bw_mbps))
++                return -EINVAL;
++
++        return icc_set_bw(d->icc, 0, MBPS_TO_ICC(bw_mbps[level]));
++}
++
++static int set_l2_level(struct msm8660_cpufreq *d, u8 idx)
++{
++        unsigned int src;
++        int ret;
++
++        if (idx >= ARRAY_SIZE(l2_levels))
++                return -EINVAL;
++
++        ret = regmap_read(d->l2cc, KPSS_L2_CLK_SEL, &src);
++        if (ret)
++                return ret;
++
++        if ((src & CORE_SRC_MASK) != CORE_SRC_SCPLL)
++                return -EIO;
++
++        ret = scpll_slew(d->l2_pll, l2_levels[idx].l);
++        if (ret)
++                return ret;
++
++        if (l2_hw_rate(d) != l2_levels[idx].khz)
++                return -EIO;
++
++        d->l2_idx = idx;
++        return 0;
++}
++
++static int transition_cpu(struct msm8660_cpufreq *d,
++                          unsigned int cpu, u8 new_idx)
++{
++        u8 old_idx, old_l2_idx, new_l2_idx;
++        unsigned int old_cpu_uv, new_cpu_uv;
++        unsigned int new_mem_uv, new_dig_uv, new_bw;
++        unsigned int old_mem_uv, old_dig_uv, old_bw;
++        int ret;
++
++        if (cpu >= NR_SCORPION_CPUS || new_idx >= ARRAY_SIZE(opps))
++                return -EINVAL;
++
++        mutex_lock(&d->lock);
++
++        old_idx = d->cpu_idx[cpu];
++        if (old_idx == new_idx) {
++                ret = 0;
++                goto out;
++        }
++
++        old_l2_idx = d->l2_idx;
++        new_l2_idx = compute_l2_vote(d, cpu, new_idx);
++
++        old_cpu_uv = opps[old_idx].vdd_sc_uv;
++        new_cpu_uv = opps[new_idx].vdd_sc_uv;
++
++        old_mem_uv = d->mem_uv;
++        old_dig_uv = d->dig_uv;
++        old_bw = d->bw_level;
++
++        compute_shared_requirements(d, cpu, new_idx, new_l2_idx,
++                                    &new_mem_uv, &new_dig_uv, &new_bw);
++
++        /*
++         * Raise shared rails before CPU voltage, matching the historical
++         * MEM -> DIG -> SC ordering.  Raising ICC early is conservative on
++         * the modern interconnect API and was validated by the L2 step test.
++         */
++        if (new_mem_uv > old_mem_uv) {
++                ret = regulator_set_voltage(d->mem_reg, new_mem_uv,
++                                            MAX_VDD_MEM_UV);
++                if (ret)
++                        goto out;
++        }
++
++        if (new_dig_uv > old_dig_uv) {
++                ret = regulator_set_voltage(d->dig_reg, new_dig_uv,
++                                            MAX_VDD_DIG_UV);
++                if (ret)
++                        goto out;
++        }
++
++        if (new_cpu_uv > old_cpu_uv) {
++                ret = set_cpu_voltage_on_cpu(d, cpu, new_cpu_uv);
++                if (ret)
++                        goto out;
++        }
++
++        if (new_bw > old_bw) {
++                ret = set_icc_level(d, new_bw);
++                if (ret)
++                        goto out;
++        }
++
++        ret = set_cpu_clock_on_cpu(d, cpu, opps[new_idx].khz);
++        if (ret)
++                goto out;
++
++        /*
++         * Historical order: CPU first, then recomputed max L2 vote.
++         */
++        if (new_l2_idx != old_l2_idx) {
++                ret = set_l2_level(d, new_l2_idx);
++                if (ret) {
++                        int rb;
++
++                        rb = set_cpu_clock_on_cpu(d, cpu,
++                                                  opps[old_idx].khz);
++                        if (rb)
++                                dev_crit(d->dev,
++                                         "CPU%u rollback failed after L2 error: %d\n",
++                                         cpu, rb);
++                        goto out;
++                }
++        }
++
++        d->cpu_idx[cpu] = new_idx;
++
++        /*
++         * On decreases, clocks are already safe; now remove excess votes.
++         * CPU SC first, then DIG, then MEM mirrors the legacy order.
++         */
++        if (new_bw < old_bw) {
++                ret = set_icc_level(d, new_bw);
++                if (ret)
++                        dev_warn(d->dev, "ICC decrease failed: %d\n", ret);
++        }
++
++        if (new_cpu_uv < old_cpu_uv) {
++                ret = set_cpu_voltage_on_cpu(d, cpu, new_cpu_uv);
++                if (ret)
++                        dev_warn(d->dev, "CPU%u voltage decrease failed: %d\n",
++                                 cpu, ret);
++        }
++
++        if (new_dig_uv < old_dig_uv) {
++                ret = regulator_set_voltage(d->dig_reg, new_dig_uv,
++                                            MAX_VDD_DIG_UV);
++                if (ret)
++                        dev_warn(d->dev, "DIG decrease failed: %d\n", ret);
++        }
++
++        if (new_mem_uv < old_mem_uv) {
++                ret = regulator_set_voltage(d->mem_reg, new_mem_uv,
++                                            MAX_VDD_MEM_UV);
++                if (ret)
++                        dev_warn(d->dev, "MEM decrease failed: %d\n", ret);
++        }
++
++        d->mem_uv = new_mem_uv;
++        d->dig_uv = new_dig_uv;
++        d->bw_level = new_bw;
++
++        dev_dbg(d->dev,
++                "CPU%u %u->%u kHz, L2=%u kHz, MEM=%u DIG=%u BW=%u\n",
++                cpu, opps[old_idx].khz, opps[new_idx].khz,
++                l2_levels[new_l2_idx].khz,
++                new_mem_uv, new_dig_uv, new_bw);
++
++        ret = 0;
++out:
++        mutex_unlock(&d->lock);
++        return ret;
++}
++
++static unsigned int msm8660_get(unsigned int cpu)
++{
++        if (!drv || cpu >= NR_SCORPION_CPUS)
++                return 0;
++
++        return cpu_hw_rate(drv, cpu);
++}
++
++static int msm8660_target_index(struct cpufreq_policy *policy,
++                                unsigned int index)
++{
++        unsigned int opp_idx;
++
++        if (!drv || policy->cpu >= NR_SCORPION_CPUS)
++                return -ENODEV;
++
++        opp_idx = freq_table[index].driver_data;
++        if (opp_idx >= ARRAY_SIZE(opps))
++                return -EINVAL;
++
++        return transition_cpu(drv, policy->cpu, opp_idx);
++}
++
++static int msm8660_policy_init(struct cpufreq_policy *policy)
++{
++        unsigned int cur;
++
++        if (!drv || policy->cpu >= NR_SCORPION_CPUS)
++                return -ENODEV;
++
++        cpumask_copy(policy->cpus, cpumask_of(policy->cpu));
++        policy->freq_table = freq_table;
++        policy->cpuinfo.transition_latency = 1000000;
++
++        cur = msm8660_get(policy->cpu);
++        if (!cur || find_opp(cur) < 0)
++                return -EIO;
++
++        policy->cur = cur;
++        return 0;
++}
++
++static struct cpufreq_driver msm8660_cpufreq_driver = {
++        .name = "msm8660-scorpion",
++        .flags = CPUFREQ_NEED_INITIAL_FREQ_CHECK,
++        .verify = cpufreq_generic_frequency_table_verify,
++        .target_index = msm8660_target_index,
++        .get = msm8660_get,
++        .init = msm8660_policy_init,
++};
++
++static int read_fuse(struct device *dev, u32 *fuse)
++{
++        struct nvmem_cell *cell;
++        size_t len;
++        void *buf;
++
++        cell = devm_nvmem_cell_get(dev, "speed-bin");
++        if (IS_ERR(cell))
++                return PTR_ERR(cell);
++
++        buf = nvmem_cell_read(cell, &len);
++        if (IS_ERR(buf))
++                return PTR_ERR(buf);
++
++        if (len < sizeof(*fuse)) {
++                kfree(buf);
++                return -EINVAL;
++        }
++
++        memcpy(fuse, buf, sizeof(*fuse));
++        kfree(buf);
++        return 0;
++}
++
++static int validate_fuse(struct msm8660_cpufreq *d)
++{
++        u32 fuse, speed_bin, pvs;
++        int ret;
++
++        ret = read_fuse(d->dev, &fuse);
++        if (ret)
++                return ret;
++
++        speed_bin = fuse & 0xf;
++        if (speed_bin == 0xf)
++                speed_bin = (fuse >> 4) & 0xf;
++
++        pvs = (fuse >> 10) & 0x7;
++        if (pvs == 0x7)
++                pvs = (fuse >> 13) & 0x7;
++
++        dev_info(d->dev, "QFPROM fuse=%#010x speed-bin=%u PVS=%u\n",
++                 fuse, speed_bin, pvs);
++
++        if (speed_bin != 1 || pvs != 1) {
++                dev_err(d->dev,
++                        "this validation build requires speed-bin 1 / PVS 1\n");
++                return -EINVAL;
++        }
++
++        return 0;
++}
++
++static int validate_scpll(struct msm8660_cpufreq *d,
++                          const char *name, void __iomem *pll)
++{
++        u32 cal, cfg, status;
++
++        cal = readl_relaxed(pll + PLL_CAL);
++        cfg = readl_relaxed(pll + PLL_CFG);
++        status = readl_relaxed(pll + PLL_STATUS);
++
++        dev_info(d->dev, "%s CAL=%#010x CFG=%#010x STATUS=%#010x L=%#x\n",
++                 name, cal, cfg, status, pll_lval(pll));
++
++        if (((cal >> 24) & 0xff) < SCPLL_CAL_MAX_L ||
++            ((cal >> 16) & 0xff) != SCPLL_CAL_MIN_L ||
++            !readl_relaxed(pll + PLL_LUT(SCPLL_CAL_MAX_L)) ||
++            (cfg & BIT(4)) ||
++            (status & 0x3))
++                return -EINVAL;
++
++        return 0;
++}
++
++static int validate_pll8_384(void)
++{
++        struct of_phandle_args args = {
++                .args_count = 1,
++                .args = { PLL8 },
++        };
++        struct device_node *np;
++        struct clk *pll8;
++        int ret = 0;
++
++        np = of_find_compatible_node(NULL, NULL, "qcom,gcc-msm8660");
++        if (!np)
++                return -ENODEV;
++
++        args.np = np;
++        pll8 = of_clk_get_from_provider(&args);
++        of_node_put(np);
++        if (IS_ERR(pll8))
++                return PTR_ERR(pll8);
++
++        if (clk_get_rate(pll8) != 384000000)
++                ret = -EINVAL;
++
++        clk_put(pll8);
++        return ret;
++}
++
++static int validate_boot_state(struct msm8660_cpufreq *d,
++                               int *cpu0_idx, int *cpu1_idx)
++{
++        unsigned int l2sel;
++        unsigned int c0, c1, l2;
++        int ret;
++
++        ret = validate_scpll(d, "CPU0 SCPLL", d->pll[0]);
++        if (ret)
++                return ret;
++
++        ret = validate_scpll(d, "CPU1 SCPLL", d->pll[1]);
++        if (ret)
++                return ret;
++
++        ret = validate_scpll(d, "L2 SCPLL", d->l2_pll);
++        if (ret)
++                return ret;
++
++        ret = regmap_read(d->l2cc, KPSS_L2_CLK_SEL, &l2sel);
++        if (ret)
++                return ret;
++
++        c0 = cpu_hw_rate(d, 0);
++        c1 = cpu_hw_rate(d, 1);
++        l2 = l2_hw_rate(d);
++
++        dev_info(d->dev,
++                 "boot clocks: CPU0=%u CPU1=%u L2=%u kHz L2src=%u\n",
++                 c0, c1, l2, l2sel & CORE_SRC_MASK);
++
++        /*
++         * Exact Hikari state established during bring-up:
++         * CPU0 756 SCPLL, CPU1 384 AFAB/mux, L2 432 SCPLL.
++         */
++        if (((readl_relaxed(d->acc[0] + ACC_SEL) >> 1) & 0x3) !=
++                    CORE_SRC_SCPLL ||
++            ((readl_relaxed(d->acc[1] + ACC_SEL) >> 1) & 0x3) !=
++                    CORE_SRC_MUX ||
++            (l2sel & CORE_SRC_MASK) != CORE_SRC_SCPLL ||
++            c0 != 756000 || c1 != 384000 || l2 != 432000)
++                return -EINVAL;
++
++        *cpu0_idx = find_opp(c0);
++        *cpu1_idx = find_opp(c1);
++        if (*cpu0_idx < 0 || *cpu1_idx < 0)
++                return -EINVAL;
++
++        return 0;
++}
++
++static void disable_probe_votes(struct msm8660_cpufreq *d)
++{
++        if (d->cpu_enabled[1]) {
++                regulator_disable(d->cpu_reg[1]);
++                d->cpu_enabled[1] = false;
++        }
++
++        if (d->cpu_enabled[0]) {
++                regulator_disable(d->cpu_reg[0]);
++                d->cpu_enabled[0] = false;
++        }
++
++        if (d->dig_enabled) {
++                regulator_disable(d->dig_reg);
++                d->dig_enabled = false;
++        }
++
++        if (d->mem_enabled) {
++                regulator_disable(d->mem_reg);
++                d->mem_enabled = false;
++        }
++}
++
++static int adopt_boot_state(struct msm8660_cpufreq *d,
++                            u8 cpu0_idx, u8 cpu1_idx)
++{
++        u8 target_l2;
++        unsigned int mem_uv, dig_uv, bw;
++        int ret;
++
++        d->cpu_idx[0] = cpu0_idx;
++        d->cpu_idx[1] = cpu1_idx;
++        d->l2_idx = 0; /* validated boot L2 = 432 MHz */
++
++        target_l2 = max(opps[cpu0_idx].l2_idx, opps[cpu1_idx].l2_idx);
++
++        compute_shared_requirements(d, 0, cpu0_idx, target_l2,
++                                    &mem_uv, &dig_uv, &bw);
++
++        /*
++         * Establish Linux-owned votes before touching clocks.  At the known
++         * boot state this is CPU0=925mV, CPU1=825mV, MEM=1100mV,
++         * DIG=1100mV and ICC level 1.
++         */
++        ret = regulator_set_voltage(d->mem_reg, mem_uv, MAX_VDD_MEM_UV);
++        if (ret)
++                return ret;
++        ret = regulator_enable(d->mem_reg);
++        if (ret) {
++                dev_err(d->dev, "MEM regulator_enable failed: %d\n", ret);
++                return ret;
++        }
++        d->mem_enabled = true;
++
++        ret = regulator_set_voltage(d->dig_reg, dig_uv, MAX_VDD_DIG_UV);
++        if (ret)
++                goto err;
++        ret = regulator_enable(d->dig_reg);
++        if (ret) {
++                dev_err(d->dev, "DIG regulator_enable failed: %d\n", ret);
++                goto err;
++        }
++        d->dig_enabled = true;
++
++        ret = set_cpu_voltage_on_cpu(d, 0, opps[cpu0_idx].vdd_sc_uv);
++        if (ret) {
++                dev_err(d->dev, "CPU0 initial VDD vote failed: %d\n", ret);
++                goto err;
++        }
++        ret = regulator_enable(d->cpu_reg[0]);
++        if (ret) {
++                dev_err(d->dev, "CPU0 regulator_enable failed: %d\n", ret);
++                goto err;
++        }
++        d->cpu_enabled[0] = true;
++
++        ret = set_cpu_voltage_on_cpu(d, 1, opps[cpu1_idx].vdd_sc_uv);
++        if (ret) {
++                dev_err(d->dev, "CPU1 initial VDD vote failed: %d\n", ret);
++                goto err;
++        }
++        ret = regulator_enable(d->cpu_reg[1]);
++        if (ret) {
++                dev_err(d->dev, "CPU1 regulator_enable failed: %d\n", ret);
++                goto err;
++        }
++        d->cpu_enabled[1] = true;
++
++        ret = set_icc_level(d, bw);
++        if (ret) {
++                dev_err(d->dev, "initial ICC vote failed: %d\n", ret);
++                goto err;
++        }
++
++        /*
++         * Boot left CPU0 at 756 while L2 stayed at 432.  Bring L2 up to the
++         * historical max-vote requirement before cpufreq becomes autonomous.
++         * The identical 432->756 live slew was already validated separately.
++         */
++        if (target_l2 != d->l2_idx) {
++                ret = set_l2_level(d, target_l2);
++                if (ret) {
++                        set_icc_level(d, 0);
++                        goto err;
++                }
++        }
++
++        d->mem_uv = mem_uv;
++        d->dig_uv = dig_uv;
++        d->bw_level = bw;
++
++        dev_info(d->dev,
++                 "adopted: CPU0=%u CPU1=%u L2=%u kHz MEM=%u DIG=%u ICC=%u MB/s\n",
++                 opps[d->cpu_idx[0]].khz, opps[d->cpu_idx[1]].khz,
++                 l2_levels[d->l2_idx].khz, d->mem_uv, d->dig_uv,
++                 bw_mbps[d->bw_level]);
++
++        return 0;
++
++err:
++        disable_probe_votes(d);
++        return ret;
++}
++
++static int map_resources(struct platform_device *pdev,
++                         struct msm8660_cpufreq *d)
++{
++        struct resource *res;
++
++        /*
++         * This 0x00903000 SCPLL resource overlaps the modern GCC mapping.
++         * Map it without request_mem_region(), as in the successful L2
++         * diagnostic.
++         */
++        res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "scpll");
++        if (!res)
++                return -ENODEV;
++
++        d->scpll = devm_ioremap(&pdev->dev, res->start, resource_size(res));
++        if (!d->scpll)
++                return -ENOMEM;
++
++        d->pll[0] = d->scpll + SCPLL_CPU0_OFF;
++        d->pll[1] = d->scpll + SCPLL_CPU1_OFF;
++        d->l2_pll = d->scpll + SCPLL_L2_OFF;
++
++        d->acc[0] = devm_platform_ioremap_resource_byname(pdev, "acc0");
++        if (IS_ERR(d->acc[0]))
++                return PTR_ERR(d->acc[0]);
++
++        d->acc[1] = devm_platform_ioremap_resource_byname(pdev, "acc1");
++        if (IS_ERR(d->acc[1]))
++                return PTR_ERR(d->acc[1]);
++
++        d->l2cc = syscon_regmap_lookup_by_phandle(pdev->dev.of_node,
++                                                  "qcom,l2cc");
++        if (IS_ERR(d->l2cc))
++                return PTR_ERR(d->l2cc);
++
++        return 0;
++}
++
++static int get_power_resources(struct msm8660_cpufreq *d)
++{
++        d->cpu_reg[0] = devm_regulator_get(d->dev, "cpu0");
++        if (IS_ERR(d->cpu_reg[0]))
++                return PTR_ERR(d->cpu_reg[0]);
++
++        d->cpu_reg[1] = devm_regulator_get(d->dev, "cpu1");
++        if (IS_ERR(d->cpu_reg[1]))
++                return PTR_ERR(d->cpu_reg[1]);
++
++        d->mem_reg = devm_regulator_get(d->dev, "mem");
++        if (IS_ERR(d->mem_reg))
++                return PTR_ERR(d->mem_reg);
++
++        d->dig_reg = devm_regulator_get(d->dev, "dig");
++        if (IS_ERR(d->dig_reg))
++                return PTR_ERR(d->dig_reg);
++
++        d->icc = devm_of_icc_get(d->dev, "cpu-mem");
++        if (IS_ERR(d->icc))
++                return PTR_ERR(d->icc);
++
++        return 0;
++}
++
++static int msm8660_probe(struct platform_device *pdev)
++{
++        struct msm8660_cpufreq *d;
++        int cpu0_idx, cpu1_idx;
++        int ret;
++
++
++        if (num_possible_cpus() < NR_SCORPION_CPUS)
++                return -ENODEV;
++
++        d = devm_kzalloc(&pdev->dev, sizeof(*d), GFP_KERNEL);
++        if (!d)
++                return -ENOMEM;
++
++        d->dev = &pdev->dev;
++        mutex_init(&d->lock);
++        platform_set_drvdata(pdev, d);
++
++        ret = map_resources(pdev, d);
++        if (ret)
++                return dev_err_probe(&pdev->dev, ret,
++                                     "failed to map clock resources\n");
++
++        ret = get_power_resources(d);
++        if (ret)
++                return dev_err_probe(&pdev->dev, ret,
++                                     "failed to get DVFS resources\n");
++
++        ret = validate_pll8_384();
++        if (ret)
++                return dev_err_probe(&pdev->dev, ret,
++                                     "PLL8 is not 384 MHz\n");
++
++        ret = validate_fuse(d);
++        if (ret)
++                return dev_err_probe(&pdev->dev, ret,
++                                     "unsupported fuse plan\n");
++
++        ret = validate_boot_state(d, &cpu0_idx, &cpu1_idx);
++        if (ret)
++                return dev_err_probe(&pdev->dev, ret,
++                                     "unsupported boot clock state\n");
++
++        ret = adopt_boot_state(d, cpu0_idx, cpu1_idx);
++        if (ret)
++                return dev_err_probe(&pdev->dev, ret,
++                                     "failed to adopt boot DVFS state\n");
++
++        drv = d;
++
++        ret = cpufreq_register_driver(&msm8660_cpufreq_driver);
++        if (ret) {
++                drv = NULL;
++
++                /*
++                 * Restore the pre-driver L2 state before dropping our votes.
++                 * CPU clocks themselves have not been changed yet.
++                 */
++                if (d->l2_idx != 0) {
++                        int rb = set_l2_level(d, 0);
++
++                        if (rb)
++                                dev_crit(d->dev,
++                                         "failed to restore boot L2: %d\n", rb);
++                }
++                set_icc_level(d, 0);
++                disable_probe_votes(d);
++                return dev_err_probe(&pdev->dev, ret,
++                                     "cpufreq registration failed\n");
++        }
++
++        d->registered = true;
++
++        /*
++         * This validation module owns live CPU clocks after registration.
++         * Reboot is the rollback; make accidental rmmod impossible.
++         */
++
++        dev_info(&pdev->dev,
++                 "ACTIVE: dual-core cpufreq 192-1512 MHz, nominal PVS, governors enabled\n");
++
++        return 0;
++}
++
++static const struct of_device_id msm8660_match[] = {
++        { .compatible = "qcom,msm8660-cpufreq" },
++        { }
++};
++MODULE_DEVICE_TABLE(of, msm8660_match);
++
++static struct platform_driver msm8660_platform_driver = {
++        .probe = msm8660_probe,
++        .driver = {
++                .name = DRV_NAME,
++                .of_match_table = msm8660_match,
++                .suppress_bind_attrs = true,
++        },
++};
++
++module_platform_driver(msm8660_platform_driver);
++
++MODULE_DESCRIPTION("MSM8660/8260 dual-core Scorpion cpufreq/DVFS validation driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/gpu/drm/msm/adreno/a2xx_gpu.c b/drivers/gpu/drm/msm/adreno/a2xx_gpu.c
+index df4cded91..41e0516e8 100644
+--- a/drivers/gpu/drm/msm/adreno/a2xx_gpu.c
++++ b/drivers/gpu/drm/msm/adreno/a2xx_gpu.c
+@@ -10,11 +10,120 @@ extern bool hang_debug;
+ static void a2xx_dump(struct msm_gpu *gpu);
+ static bool a2xx_idle(struct msm_gpu *gpu);
+ 
++/* Diagnostic KGSL lifecycle compatibility, A220 only.
++ * OpenSEMC c4784b04: build_regrestore_cmds and adreno_gpummu_setstate.
++ * Keep DRM VM/fences and application shaders/descriptors owned by Mesa.
++ */
++static const u32 a220_shadow_ranges[][2] = {
++	{ 0x2000, 0x2002 },
++	{ 0x2006, 0x200f },
++	{ 0x2080, 0x2082 },
++	{ 0x210c, 0x2114 },
++	{ 0x2180, 0x2184 },
++	{ 0x2300, 0x2308 },
++	{ 0x2312, 0x2312 },
++	{ 0x2324, 0x2326 },
++	{ 0x2380, 0x2383 },
++	{ 0x2100, 0x2102 },
++	{ 0x2104, 0x2109 },
++	{ 0x2200, 0x2202 },
++	{ 0x2204, 0x2206 },
++	{ 0x2208, 0x220a },
++	{ 0x2280, 0x2282 },
++	{ 0x2316, 0x2316 },
++	{ 0x2318, 0x231d },
++};
++
++static void a220_legacy_shadow_init(struct msm_gpu *gpu)
++{
++ struct a2xx_gpu *a2xx = to_a2xx_gpu(to_adreno_gpu(gpu));
++ struct msm_ringbuffer *ring = gpu->rb[0];
++ unsigned int i;
++
++ OUT_PKT3(ring, CP_WAIT_FOR_IDLE, 1);
++ OUT_RING(ring, 0);
++ OUT_PKT3(ring, CP_SET_PROTECTED_MODE, 1);
++ OUT_RING(ring, 0);
++ OUT_PKT0(ring, REG_A2XX_MH_MMU_INVALIDATE, 1);
++ OUT_RING(ring, 3);
++ OUT_PKT3(ring, CP_INVALIDATE_STATE, 1);
++ OUT_RING(ring, 0x7fff);
++ /* KGSL's initial context register / ALU / fetch constant shadow banks.
++  * Hardware shadowing is global for this single-ring diagnostic.  Mesa
++  * still provides the context restore IB and all draw-specific values.
++  */
++ OUT_PKT3(ring, CP_LOAD_CONSTANT_CONTEXT, 1 + 2 * ARRAY_SIZE(a220_shadow_ranges));
++ OUT_RING(ring, a2xx->legacy_shadow_iova + SZ_8K);
++ for (i = 0; i < ARRAY_SIZE(a220_shadow_ranges); i++) {
++  u32 reg = (4 << 16) | (a220_shadow_ranges[i][0] - 0x2000);
++  if (!i)
++   reg |= BIT(24);
++  OUT_RING(ring, reg);
++  OUT_RING(ring, a220_shadow_ranges[i][1] - a220_shadow_ranges[i][0] + 1);
++ }
++ OUT_PKT0(ring, REG_A2XX_SQ_GPR_MANAGEMENT, 1);
++ OUT_RING(ring, 0x00040400);
++ OUT_PKT3(ring, CP_WAIT_FOR_IDLE, 1);
++ OUT_RING(ring, 0);
++ OUT_PKT0(ring, REG_A2XX_TP0_CHICKEN, 1);
++ OUT_RING(ring, 0);
++ OUT_PKT3(ring, CP_LOAD_CONSTANT_CONTEXT, 3);
++ OUT_RING(ring, a2xx->legacy_shadow_iova);
++ OUT_RING(ring, BIT(24));
++ OUT_RING(ring, 2048);
++ OUT_PKT3(ring, CP_LOAD_CONSTANT_CONTEXT, 3);
++ OUT_RING(ring, a2xx->legacy_shadow_iova + 2 * SZ_8K);
++ OUT_RING(ring, BIT(24) | (1 << 16));
++ OUT_RING(ring, 192);
++ OUT_PKT3(ring, CP_SET_PROTECTED_MODE, 1);
++ OUT_RING(ring, !a2xx->protection_disabled);
++}
++
++static void a220_legacy_submit_prepare(struct msm_gpu *gpu,
++          struct msm_gem_submit *submit)
++{
++ struct msm_ringbuffer *ring = submit->ring;
++ struct a2xx_gpu *a2xx = to_a2xx_gpu(to_adreno_gpu(gpu));
++ bool changed = ring->cur_ctx_seqno != submit->queue->ctx->seqno;
++
++ /* kgsl GPUMMU setstate: idle -> TLB/TC -> base invalidate, in CP order.
++  * PTE writes are made visible before this batch can execute.
++  */
++ wmb();
++ OUT_PKT3(ring, CP_WAIT_FOR_IDLE, 1);
++ OUT_RING(ring, 0);
++ OUT_PKT3(ring, CP_SET_PROTECTED_MODE, 1);
++ OUT_RING(ring, 0);
++ OUT_PKT0(ring, REG_A2XX_MH_MMU_INVALIDATE, 1);
++ OUT_RING(ring, 3);
++ OUT_PKT3(ring, CP_INVALIDATE_STATE, 1);
++ OUT_RING(ring, 0x7fff);
++ if (changed) {
++  OUT_PKT0(ring, REG_A2XX_SQ_GPR_MANAGEMENT, 1);
++  OUT_RING(ring, 0x00040400);
++  OUT_PKT3(ring, CP_WAIT_FOR_IDLE, 1);
++  OUT_RING(ring, 0);
++  /* A20x/A220 context switch shader-space re-arm from KGSL. */
++  OUT_PKT3(ring, CP_SET_SHADER_BASES, 1);
++  OUT_RING(ring, 0x80000180);
++ }
++ OUT_PKT3(ring, CP_SET_PROTECTED_MODE, 1);
++ OUT_RING(ring, !a2xx->protection_disabled);
++ OUT_PKT0(ring, REG_AXXX_CP_SCRATCH_REG0, 1);
++ OUT_RING(ring, submit->seqno);
++ OUT_PKT3(ring, CP_MEM_WRITE, 2);
++ OUT_RING(ring, a2xx->legacy_shadow_iova + 3 * SZ_8K);
++ OUT_RING(ring, submit->seqno);
++}
++
+ static void a2xx_submit(struct msm_gpu *gpu, struct msm_gem_submit *submit)
+ {
+ 	struct msm_ringbuffer *ring = submit->ring;
+ 	unsigned int i;
+ 
++	if (adreno_is_revn(to_adreno_gpu(gpu), 220))
++		a220_legacy_submit_prepare(gpu, submit);
++
+ 	for (i = 0; i < submit->nr_cmds; i++) {
+ 		switch (submit->cmd[i].type) {
+ 		case MSM_SUBMIT_CMD_IB_TARGET_BUF:
+@@ -127,7 +236,9 @@ static int a2xx_hw_init(struct msm_gpu *gpu)
+ 	gpu_write(gpu, REG_A2XX_RBBM_PM_OVERRIDE2, 0xffffffff);
+ 
+ 	/* note: kgsl uses 0x00000001 after first reset on a22x */
+-	gpu_write(gpu, REG_A2XX_RBBM_SOFT_RESET, 0xffffffff);
++	gpu_write(gpu, REG_A2XX_RBBM_SOFT_RESET,
++		adreno_is_revn(adreno_gpu, 220) && a2xx_gpu->legacy_reset_done ? 1 : 0xffffffff);
++	a2xx_gpu->legacy_reset_done = true;
+ 	msleep(30);
+ 	gpu_write(gpu, REG_A2XX_RBBM_SOFT_RESET, 0x00000000);
+ 
+@@ -186,7 +297,8 @@ static int a2xx_hw_init(struct msm_gpu *gpu)
+ 	gpu_write(gpu, REG_A2XX_SQ_PS_PROGRAM, 0x00000000);
+ 
+ 	gpu_write(gpu, REG_A2XX_RBBM_PM_OVERRIDE1, 0); /* 0x200 for msm8960? */
+-	gpu_write(gpu, REG_A2XX_RBBM_PM_OVERRIDE2, 0); /* 0x80/0x1a0 for a22x? */
++	gpu_write(gpu, REG_A2XX_RBBM_PM_OVERRIDE2,
++		adreno_is_revn(adreno_gpu, 220) ? 0x80 : 0); /* 0x80/0x1a0 for a22x? */
+ 
+ 	/* note: gsl doesn't set this */
+ 	gpu_write(gpu, REG_A2XX_RBBM_DEBUG, 0x00080000);
+@@ -258,12 +370,36 @@ static int a2xx_hw_init(struct msm_gpu *gpu)
+ 	for (i = 1; i < len; i++)
+ 		gpu_write(gpu, REG_A2XX_CP_PFP_UCODE_DATA, ptr[i]);
+ 
+-	gpu_write(gpu, REG_AXXX_CP_QUEUE_THRESHOLDS, 0x000C0804);
++	if (!adreno_is_revn(adreno_gpu, 220))
++		gpu_write(gpu, REG_AXXX_CP_QUEUE_THRESHOLDS, 0x000C0804);
+ 
+ 	/* clear ME_HALT to start micro engine */
+ 	gpu_write(gpu, REG_AXXX_CP_ME_CNTL, 0);
+ 
+-	return a2xx_me_init(gpu) ? 0 : -EINVAL;
++	if (!a2xx_me_init(gpu))
++  return -EINVAL;
++ if (adreno_is_revn(adreno_gpu, 220)) {
++  if (!a2xx_gpu->legacy_shadow_bo) {
++   void *map = msm_gem_kernel_new(gpu->dev, SZ_64K, MSM_BO_WC,
++      gpu->vm, &a2xx_gpu->legacy_shadow_bo, &a2xx_gpu->legacy_shadow_base);
++   if (IS_ERR(map)) {
++    a2xx_gpu->legacy_shadow_bo = NULL;
++    return PTR_ERR(map);
++   }
++   memset(map, 0, SZ_64K);
++   a2xx_gpu->legacy_shadow_iova = ALIGN(a2xx_gpu->legacy_shadow_base, SZ_8K);
++  }
++  wmb();
++  gpu_write(gpu, REG_AXXX_CP_RB_WPTR_DELAY, 0);
++  gpu_write(gpu, REG_AXXX_CP_INT_ACK, 0xffffffff);
++  a220_legacy_shadow_init(gpu);
++  adreno_flush(gpu, gpu->rb[0], REG_AXXX_CP_RB_WPTR);
++  if (!a2xx_idle(gpu))
++   return -EINVAL;
++  dev_info(gpu->dev->dev, "A220 KGSL lifecycle compat v1: shadow=%llx, CP-ordered MMU, GPR/context rearm\n",
++    a2xx_gpu->legacy_shadow_iova);
++ }
++ return 0;
+ }
+ 
+ static void a2xx_recover(struct msm_gpu *gpu)
+@@ -294,6 +430,8 @@ static void a2xx_destroy(struct msm_gpu *gpu)
+ 
+ 	DBG("%s", gpu->name);
+ 
++	if (a2xx_gpu->legacy_shadow_bo)
++		msm_gem_kernel_put(a2xx_gpu->legacy_shadow_bo, gpu->vm);
+ 	adreno_gpu_cleanup(adreno_gpu);
+ 
+ 	kfree(a2xx_gpu);
+diff --git a/drivers/gpu/drm/msm/adreno/a2xx_gpu.h b/drivers/gpu/drm/msm/adreno/a2xx_gpu.h
+index 162ef9895..e4c3d99b6 100644
+--- a/drivers/gpu/drm/msm/adreno/a2xx_gpu.h
++++ b/drivers/gpu/drm/msm/adreno/a2xx_gpu.h
+@@ -16,6 +16,10 @@ struct a2xx_gpu {
+ 	struct adreno_gpu base;
+ 	bool pm_enabled;
+ 	bool protection_disabled;
++	bool legacy_reset_done;
++	struct drm_gem_object *legacy_shadow_bo;
++	u64 legacy_shadow_base;
++	u64 legacy_shadow_iova;
+ };
+ #define to_a2xx_gpu(x) container_of(x, struct a2xx_gpu, base)
+ 
+diff --git a/drivers/gpu/drm/msm/adreno/a2xx_gpummu.c b/drivers/gpu/drm/msm/adreno/a2xx_gpummu.c
+index e2225c5ba..469c6a8ee 100644
+--- a/drivers/gpu/drm/msm/adreno/a2xx_gpummu.c
++++ b/drivers/gpu/drm/msm/adreno/a2xx_gpummu.c
+@@ -53,6 +53,10 @@ static int a2xx_gpummu_map(struct msm_mmu *mmu, uint64_t iova,
+ 	}
+ 
+ 	/* we can improve by deferring flush for multiple map() */
++	wmb(); /* PTE visibility before invalidation (KGSL setstate ordering). */
++	/* A220 invalidates through CP at the next submit, after WAIT_FOR_IDLE. */
++	if (adreno_is_revn(to_adreno_gpu(gpummu->gpu), 220))
++		return 0;
+ 	gpu_write(gpummu->gpu, REG_A2XX_MH_MMU_INVALIDATE,
+ 		A2XX_MH_MMU_INVALIDATE_INVALIDATE_ALL |
+ 		A2XX_MH_MMU_INVALIDATE_INVALIDATE_TC);
+@@ -68,6 +72,10 @@ static int a2xx_gpummu_unmap(struct msm_mmu *mmu, uint64_t iova, size_t len)
+ 	for (i = 0; i < len / GPUMMU_PAGE_SIZE; i++, idx++)
+                 gpummu->table[idx] = 0;
+ 
++	wmb(); /* PTE visibility before invalidation (KGSL setstate ordering). */
++	/* A220 invalidates through CP at the next submit, after WAIT_FOR_IDLE. */
++	if (adreno_is_revn(to_adreno_gpu(gpummu->gpu), 220))
++		return 0;
+ 	gpu_write(gpummu->gpu, REG_A2XX_MH_MMU_INVALIDATE,
+ 		A2XX_MH_MMU_INVALIDATE_INVALIDATE_ALL |
+ 		A2XX_MH_MMU_INVALIDATE_INVALIDATE_TC);
+diff --git a/drivers/input/rmi4/rmi_2d_sensor.c b/drivers/input/rmi4/rmi_2d_sensor.c
+index ea3eb87a8..82579d7b5 100644
+--- a/drivers/input/rmi4/rmi_2d_sensor.c
++++ b/drivers/input/rmi4/rmi_2d_sensor.c
+@@ -10,6 +10,7 @@
+ #include <linux/of.h>
+ #include <linux/input.h>
+ #include <linux/input/mt.h>
++#include <linux/input/touch-overlay.h>
+ #include <linux/rmi.h>
+ #include "rmi_driver.h"
+ #include "rmi_2d_sensor.h"
+@@ -50,6 +51,13 @@ void rmi_2d_sensor_abs_process(struct rmi_2d_sensor *sensor,
+ 	obj->x += axis_align->offset_x;
+ 	obj->y += axis_align->offset_y;
+ 
++	/* Overlay buttons may lie beyond the visible screen's clipping limit. */
++	if (!list_empty(&sensor->overlay_list)) {
++		sensor->tracking_pos[slot].x = obj->x;
++		sensor->tracking_pos[slot].y = obj->y;
++		return;
++	}
++
+ 	obj->x =  max(axis_align->clip_x_low, obj->x);
+ 	obj->y =  max(axis_align->clip_y_low, obj->y);
+ 
+@@ -71,6 +79,36 @@ void rmi_2d_sensor_abs_report(struct rmi_2d_sensor *sensor,
+ 	struct rmi_2d_axis_alignment *axis_align = &sensor->axis_align;
+ 	struct input_dev *input = sensor->input;
+ 	int wide, major, minor;
++	int mt_slot = sensor->kernel_tracking ? sensor->tracking_slots[slot] : slot;
++
++	if (mt_slot < 0 || mt_slot >= input->mt->num_slots)
++		return;
++
++	if (obj->type == RMI_2D_OBJECT_NONE &&
++	    !list_empty(&sensor->overlay_list)) {
++		struct input_mt_slot *s = &input->mt->slots[mt_slot];
++		unsigned int previous_frame = s->frame;
++
++		input_mt_slot(input, mt_slot);
++		input_mt_report_slot_state(input, obj->mt_tool, false);
++		/* Explicit inactive RMI slots must remain unused for key release. */
++		s->frame = previous_frame;
++		return;
++	}
++
++	if (obj->type != RMI_2D_OBJECT_NONE &&
++	    !list_empty(&sensor->overlay_list)) {
++		struct input_mt_pos pos = sensor->tracking_pos[slot];
++
++		if (touch_overlay_process_contact(&sensor->overlay_list,
++						  input, &pos, mt_slot)) {
++			/* End a previous screen contact if it slid onto a button. */
++			input_mt_slot(input, mt_slot);
++			input_mt_report_slot_state(input, obj->mt_tool, false);
++			return;
++		}
++		sensor->tracking_pos[slot] = pos;
++	}
+ 
+ 	if (sensor->kernel_tracking)
+ 		input_mt_slot(input, sensor->tracking_slots[slot]);
+@@ -157,6 +195,14 @@ static void rmi_2d_sensor_set_input_params(struct rmi_2d_sensor *sensor)
+ 
+ 		max_x = sensor->max_x;
+ 		max_y = sensor->max_y;
++		if (touch_overlay_mapped_touchscreen(&sensor->overlay_list)) {
++			u16 overlay_x = max_x, overlay_y = max_y;
++
++			touch_overlay_get_touchscreen_abs(&sensor->overlay_list,
++						  &overlay_x, &overlay_y);
++			max_x = overlay_x;
++			max_y = overlay_y;
++		}
+ 		if (sensor->axis_align.swap_axes)
+ 			swap(max_x, max_y);
+ 		input_set_abs_params(input, ABS_MT_POSITION_X, 0, max_x, 0, 0);
+@@ -211,17 +257,30 @@ int rmi_2d_sensor_configure_input(struct rmi_function *fn,
+ {
+ 	struct rmi_device *rmi_dev = fn->rmi_dev;
+ 	struct rmi_driver_data *drv_data = dev_get_drvdata(&rmi_dev->dev);
++	int ret;
+ 
+ 	if (!drv_data->input)
+ 		return -ENODEV;
+ 
+ 	sensor->input = drv_data->input;
++	INIT_LIST_HEAD(&sensor->overlay_list);
++	ret = touch_overlay_map_fwnode(&sensor->overlay_list, sensor->input,
++				       dev_fwnode(&fn->dev));
++	if (ret)
++		return ret;
+ 	rmi_2d_sensor_set_input_params(sensor);
+ 
+ 	return 0;
+ }
+ EXPORT_SYMBOL_GPL(rmi_2d_sensor_configure_input);
+ 
++void rmi_2d_sensor_sync_frame(struct rmi_2d_sensor *sensor)
++{
++	touch_overlay_sync_frame(&sensor->overlay_list, sensor->input);
++	input_mt_sync_frame(sensor->input);
++}
++EXPORT_SYMBOL_GPL(rmi_2d_sensor_sync_frame);
++
+ #ifdef CONFIG_OF
+ int rmi_2d_sensor_of_probe(struct device *dev,
+ 			struct rmi_2d_sensor_platform_data *pdata)
+diff --git a/drivers/input/rmi4/rmi_2d_sensor.h b/drivers/input/rmi4/rmi_2d_sensor.h
+index f9d9c1dd5..5a848dcf8 100644
+--- a/drivers/input/rmi4/rmi_2d_sensor.h
++++ b/drivers/input/rmi4/rmi_2d_sensor.h
+@@ -8,6 +8,7 @@
+ #define _RMI_2D_SENSOR_H
+ 
+ #include <linux/rmi.h>
++#include <linux/list.h>
+ #include <linux/types.h>
+ 
+ enum rmi_2d_sensor_object_type {
+@@ -44,6 +45,7 @@ struct rmi_2d_sensor_abs_object {
+  * @input_phys - buffer for the absolute phys name for this sensor.
+  */
+ struct rmi_2d_sensor {
++	struct list_head overlay_list;
+ 	struct rmi_2d_axis_alignment axis_align;
+ 	struct input_mt_pos *tracking_pos;
+ 	int *tracking_slots;
+@@ -86,4 +88,5 @@ void rmi_2d_sensor_rel_report(struct rmi_2d_sensor *sensor, int x, int y);
+ 
+ int rmi_2d_sensor_configure_input(struct rmi_function *fn,
+ 					struct rmi_2d_sensor *sensor);
++void rmi_2d_sensor_sync_frame(struct rmi_2d_sensor *sensor);
+ #endif /* _RMI_2D_SENSOR_H */
+diff --git a/drivers/input/rmi4/rmi_f11.c b/drivers/input/rmi4/rmi_f11.c
+index 9ade74b36..f0c1e30f3 100644
+--- a/drivers/input/rmi4/rmi_f11.c
++++ b/drivers/input/rmi4/rmi_f11.c
+@@ -640,7 +640,7 @@ static void rmi_f11_finger_handler(struct f11_data *f11,
+ 			rmi_2d_sensor_abs_report(sensor, &sensor->objs[i], i);
+ 		}
+ 
+-		input_mt_sync_frame(sensor->input);
++		rmi_2d_sensor_sync_frame(sensor);
+ 	} else if (sensor->report_rel) {
+ 		if ((abs_size + sensor->nbr_fingers * RMI_F11_REL_BYTES) > size)
+ 			rel_fingers = (size - abs_size) / RMI_F11_REL_BYTES;
+diff --git a/drivers/input/rmi4/rmi_f12.c b/drivers/input/rmi4/rmi_f12.c
+index 841884d96..81df4e673 100644
+--- a/drivers/input/rmi4/rmi_f12.c
++++ b/drivers/input/rmi4/rmi_f12.c
+@@ -282,7 +282,7 @@ static irqreturn_t rmi_f12_attention(int irq, void *ctx)
+ 		rmi_f12_process_objects(f12, &sensor->data_pkt[f12->data1_offset],
+ 					valid_bytes);
+ 
+-	input_mt_sync_frame(sensor->input);
++	rmi_2d_sensor_sync_frame(sensor);
+ 
+ 	return IRQ_HANDLED;
+ }
+diff --git a/drivers/input/touch-overlay.c b/drivers/input/touch-overlay.c
+index b9fd82c48..266ae6f84 100644
+--- a/drivers/input/touch-overlay.c
++++ b/drivers/input/touch-overlay.c
+@@ -61,16 +61,18 @@ static int touch_overlay_get_segment(struct fwnode_handle *segment_node,
+ }
+ 
+ /**
+- * touch_overlay_map - map overlay objects from the device tree and set
++ * touch_overlay_map_fwnode - map overlay objects from a firmware node and set
+  * key capabilities if buttons are defined.
+  * @list: pointer to the list that will hold the segments
+  * @input: pointer to the already allocated input_dev
++ * @fwnode: firmware node describing the sensor, possibly a function child
+  *
+  * Returns 0 on success and error number otherwise.
+  *
+  * If buttons are defined, key capabilities are set accordingly.
+  */
+-int touch_overlay_map(struct list_head *list, struct input_dev *input)
++int touch_overlay_map_fwnode(struct list_head *list, struct input_dev *input,
++			     struct fwnode_handle *fwnode)
+ {
+ 	struct fwnode_handle *fw_segment;
+ 	struct device *dev = input->dev.parent;
+@@ -78,7 +80,7 @@ int touch_overlay_map(struct list_head *list, struct input_dev *input)
+ 	int error;
+ 
+ 	struct fwnode_handle *overlay __free(fwnode_handle) =
+-		device_get_named_child_node(dev, "touch-overlay");
++		fwnode_get_named_child_node(fwnode, "touch-overlay");
+ 	if (!overlay)
+ 		return 0;
+ 
+@@ -98,6 +100,20 @@ int touch_overlay_map(struct list_head *list, struct input_dev *input)
+ 
+ 	return 0;
+ }
++EXPORT_SYMBOL(touch_overlay_map_fwnode);
++
++/**
++ * touch_overlay_map - map overlays from the input device parent's firmware node
++ * @list: list that will hold the segments
++ * @input: allocated input device
++ *
++ * Return: zero on success, or a negative error code.
++ */
++int touch_overlay_map(struct list_head *list, struct input_dev *input)
++{
++	return touch_overlay_map_fwnode(list, input,
++					dev_fwnode(input->dev.parent));
++}
+ EXPORT_SYMBOL(touch_overlay_map);
+ 
+ /**
+diff --git a/drivers/power/supply/bq24160_charger.c b/drivers/power/supply/bq24160_charger.c
+index ed133b090..48153965d 100644
+--- a/drivers/power/supply/bq24160_charger.c
++++ b/drivers/power/supply/bq24160_charger.c
+@@ -3,14 +3,17 @@
+  * TI BQ24160 power-path charger
+  *
+  * This deliberately keeps the policy surface small: Hikari's first native
+- * Linux charging configuration treats an unknown USB data source as 500 mA,
+- * and obtains temperature and battery voltage from the existing BQ27520.
++ * Linux charging configuration treats an unknown USB source conservatively.
++ * VIN-DPM bounds both inputs; unknown USB probing requires explicit opt-in.
++ * Temperature and battery voltage come from the existing BQ27520.
+  * It never writes BQ27520 state or NVM.
+  */
+ 
+ #include <linux/delay.h>
+ #include <linux/i2c.h>
++#include <linux/gpio/consumer.h>
+ #include <linux/interrupt.h>
++#include <linux/jiffies.h>
+ #include <linux/module.h>
+ #include <linux/of.h>
+ #include <linux/pm_wakeup.h>
+@@ -25,12 +28,19 @@
+ #define BQ24160_REG_VOLTAGE		0x03
+ #define BQ24160_REG_VENDOR		0x04
+ #define BQ24160_REG_CURRENT		0x05
++#define BQ24160_REG_DPM		0x06
+ #define BQ24160_REG_NTC			0x07
+ 
+ #define BQ24160_STATUS_TMR_RST		BIT(7)
+ #define BQ24160_STATUS_STAT_MASK	GENMASK(6, 4)
+ #define BQ24160_STATUS_SUPPLY_SEL_USB	BIT(3)
+ #define BQ24160_STATUS_FAULT_MASK	GENMASK(2, 0)
++#define BQ24160_BR_IN_STATUS_MASK	GENMASK(7, 6)
++#define BQ24160_IN_LIMIT_2500		BIT(1)
++#define BQ24160_DPM_IN_MASK		GENMASK(2, 0)
++#define BQ24160_BR_USB_STATUS_MASK	GENMASK(5, 4)
++#define BQ24160_DPM_ACTIVE		BIT(6)
++#define BQ24160_DPM_USB_MASK		GENMASK(5, 3)
+ #define BQ24160_BR_STATUS_OTG_LOCK	BIT(3)
+ #define BQ24160_CTRL_RESET		BIT(7)
+ #define BQ24160_CTRL_IUSB_MASK		GENMASK(6, 4)
+@@ -59,12 +69,29 @@ struct bq24160 {
+ 	struct regmap *regmap;
+ 	struct power_supply *psy;
+ 	struct power_supply *fuel_gauge;
++	struct power_supply *cradle_psy;
++	struct gpio_desc *cradle_det;
+ 	struct power_supply_desc psy_desc;
+ 	struct delayed_work watchdog_work;
+ 	struct delayed_work status_work;
+ 	struct mutex lock;
+ 	int irq;
+-	u32 usb_limit_ua;
++	u32 input_limit_ua;
++	u32 safe_usb_limit_ua;
++	u32 adapter_limit_ua;
++	u32 input_request_ua;
++	u32 source_ceiling_ua;
++	u32 learned_limit_ua;
++	u32 vindpm_uv;
++	u32 in_vindpm_uv;
++	u32 cradle_max_ua;
++	u32 cradle_request_ua;
++	bool opportunistic_usb;
++	bool use_cradle;
++	unsigned long input_step_after;
++	enum power_supply_usb_type usb_type;
++	bool source_online;
++	bool input_limited;
+ 	u32 charge_limit_ua;
+ 	u32 charge_voltage_uv;
+ 	u32 term_current_ua;
+@@ -84,6 +111,7 @@ static const enum power_supply_property bq24160_props[] = {
+ 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX,
+ 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE_MAX,
+ 	POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
++	POWER_SUPPLY_PROP_USB_TYPE,
+ };
+ 
+ static int bq24160_read(struct bq24160 *bq, unsigned int reg, unsigned int *val)
+@@ -134,6 +162,10 @@ static int bq24160_disable(struct bq24160 *bq)
+ 				       BQ24160_CTRL_CE);
+ }
+ 
++static const unsigned int bq24160_usb_limits[] = {
++	100000, 150000, 500000, 800000, 900000, 1500000,
++};
++
+ static int bq24160_usb_code(unsigned int ua)
+ {
+ 	/* BQ24160 IUSB encodings: 100, 150, 500, 800, 900, 1500 mA. */
+@@ -150,6 +182,159 @@ static int bq24160_usb_code(unsigned int ua)
+ 	return 0;
+ }
+ 
++/* Known advertised limits still take precedence over electrical probing. */
++static unsigned int bq24160_source_limit(struct bq24160 *bq)
++{
++	union power_supply_propval type, source_current;
++	unsigned int limit = bq->opportunistic_usb ? bq->adapter_limit_ua :
++						   bq->safe_usb_limit_ua;
++
++	bq->usb_type = POWER_SUPPLY_USB_TYPE_UNKNOWN;
++	if (power_supply_get_property_from_supplier(bq->psy,
++				POWER_SUPPLY_PROP_USB_TYPE, &type))
++		return limit;
++	if (type.intval != POWER_SUPPLY_USB_TYPE_SDP &&
++	    type.intval != POWER_SUPPLY_USB_TYPE_CDP &&
++	    type.intval != POWER_SUPPLY_USB_TYPE_DCP)
++		return limit;
++	bq->usb_type = type.intval;
++	/* A positively identified USB2 SDP never gets the probing override. */
++	if (type.intval == POWER_SUPPLY_USB_TYPE_SDP)
++		limit = bq->safe_usb_limit_ua;
++	if (power_supply_get_property_from_supplier(bq->psy,
++				POWER_SUPPLY_PROP_CURRENT_MAX, &source_current) ||
++	    source_current.intval < 100000)
++		return limit;
++
++	if (type.intval == POWER_SUPPLY_USB_TYPE_SDP)
++		limit = min_t(unsigned int, source_current.intval, 500000);
++	else
++		limit = min_t(unsigned int, source_current.intval, bq->adapter_limit_ua);
++	return bq24160_usb_limits[bq24160_usb_code(limit)];
++}
++
++static const unsigned int bq24160_in_limits[] = { 1500000, 2500000 };
++
++static int bq24160_select_input(struct bq24160 *bq, unsigned int *status)
++{
++	unsigned int supply;
++	bool cradle = false;
++	int detected, ret;
++
++	ret = bq24160_read(bq, BQ24160_REG_BR_STATUS, &supply);
++	if (ret)
++		return ret;
++	if (bq->cradle_det) {
++		detected = gpiod_get_value_cansleep(bq->cradle_det);
++		if (detected < 0)
++			return detected;
++		cradle = detected &&
++			 (FIELD_GET(BQ24160_BR_IN_STATUS_MASK, supply) == 0 ||
++			  FIELD_GET(BQ24160_BR_IN_STATUS_MASK, supply) == 2);
++	}
++	/* Never adopt a previous session's high limit when switching inputs. */
++	if (cradle != bq->use_cradle) {
++		ret = regmap_update_bits(bq->regmap, BQ24160_REG_VOLTAGE,
++					 BQ24160_IN_LIMIT_2500, 0);
++		if (ret)
++			return ret;
++		ret = bq24160_update_control(bq, BQ24160_CTRL_IUSB_MASK,
++					    bq24160_usb_code(bq->safe_usb_limit_ua) << 4);
++		if (ret)
++			return ret;
++	}
++	/* Selecting a different supply triggers the chip's own safe soft-start. */
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_STATUS,
++				 BQ24160_STATUS_SUPPLY_SEL_USB,
++				 cradle ? 0 : BQ24160_STATUS_SUPPLY_SEL_USB);
++	if (ret)
++		return ret;
++	if (cradle != bq->use_cradle) {
++		bq->source_online = false;
++		bq->use_cradle = cradle;
++	}
++	return bq24160_read(bq, BQ24160_REG_STATUS, status);
++}
++
++static int bq24160_adjust_input(struct bq24160 *bq, unsigned int status)
++{
++	const unsigned int *limits = bq->use_cradle ? bq24160_in_limits :
++						    bq24160_usb_limits;
++	unsigned int count = bq->use_cradle ? ARRAY_SIZE(bq24160_in_limits) :
++						ARRAY_SIZE(bq24160_usb_limits);
++	unsigned int supply, supply_state, dpm, ceiling, code;
++	bool online;
++	int ret;
++
++	ret = bq24160_read(bq, BQ24160_REG_BR_STATUS, &supply);
++	if (ret)
++		return ret;
++	ret = bq24160_read(bq, BQ24160_REG_DPM, &dpm);
++	if (ret)
++		return ret;
++
++	supply_state = bq->use_cradle ?
++		FIELD_GET(BQ24160_BR_IN_STATUS_MASK, supply) :
++		FIELD_GET(BQ24160_BR_USB_STATUS_MASK, supply);
++	/* A weak source remains the same session: do not retry its failed step. */
++	online = supply_state == 0 || supply_state == 2;
++	ceiling = bq->use_cradle ? min(bq->cradle_max_ua, bq->cradle_request_ua) :
++				 min(bq24160_source_limit(bq), bq->input_request_ua);
++	if (!online || !bq->source_online || ceiling != bq->source_ceiling_ua) {
++		bq->input_limit_ua = bq->use_cradle ? limits[0] :
++					min(bq->safe_usb_limit_ua, ceiling);
++		bq->learned_limit_ua = ceiling;
++		bq->input_limited = false;
++		bq->input_step_after = jiffies + msecs_to_jiffies(2000);
++	}
++	bq->source_online = online;
++	bq->source_ceiling_ua = ceiling;
++	if (!online)
++		return 0;
++
++	code = bq->use_cradle ? (bq->input_limit_ua >= 2500000) :
++				bq24160_usb_code(bq->input_limit_ua);
++	if ((dpm & BQ24160_DPM_ACTIVE) || supply_state == 2) {
++		/* At IN's lowest 1.5 A setting hardware DPM reduces actual draw. */
++		if (supply_state == 2 || time_after_eq(jiffies, bq->input_step_after)) {
++			if (code)
++				code--;
++			bq->input_limit_ua = limits[code];
++			bq->learned_limit_ua = bq->input_limit_ua;
++			bq->input_limited = true;
++			bq->input_step_after = jiffies + msecs_to_jiffies(2000);
++		}
++	} else if (!bq->input_limited &&
++		   FIELD_GET(BQ24160_STATUS_STAT_MASK, status) ==
++			(bq->use_cradle ? BQ24160_STAT_CHARGING_IN :
++					  BQ24160_STAT_CHARGING_USB) &&
++		   time_after_eq(jiffies, bq->input_step_after) &&
++		   bq->input_limit_ua < bq->learned_limit_ua) {
++		if (code + 1 < count && limits[code + 1] <= bq->learned_limit_ua)
++			bq->input_limit_ua = limits[code + 1];
++		bq->input_step_after = jiffies + msecs_to_jiffies(2000);
++	}
++	return 0;
++}
++
++static int bq24160_program_input(struct bq24160 *bq)
++{
++	int ret;
++
++	ret = bq24160_update_control(bq,
++				    BQ24160_CTRL_EN_STAT | BQ24160_CTRL_TE,
++				    BQ24160_CTRL_EN_STAT | BQ24160_CTRL_TE);
++	if (ret)
++		return ret;
++	if (bq->use_cradle)
++		return regmap_update_bits(bq->regmap, BQ24160_REG_VOLTAGE,
++					 BQ24160_IN_LIMIT_2500,
++					 bq->input_limit_ua >= 2500000 ?
++					 BQ24160_IN_LIMIT_2500 : 0);
++	return bq24160_update_control(bq, BQ24160_CTRL_IUSB_MASK,
++				     bq24160_usb_code(bq->input_limit_ua) << 4);
++}
++
+ static int bq24160_set_limits(struct bq24160 *bq, unsigned int charge_ua)
+ {
+ 	unsigned int vcode, icode, tcode, actual_ua;
+@@ -221,22 +406,30 @@ static int bq24160_sync_locked(struct bq24160 *bq)
+ 				 BQ24160_STATUS_TMR_RST, BQ24160_STATUS_TMR_RST);
+ 	if (ret)
+ 		return ret;
++	/* A charger watchdog reset also resets the DPM threshold. */
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_DPM,
++				 BQ24160_DPM_USB_MASK | BQ24160_DPM_IN_MASK,
++				 ((bq->vindpm_uv - 4200000) / 80000) << 3 |
++				 (bq->in_vindpm_uv - 4200000) / 80000);
++	if (ret)
++		return ret;
+ 	/* Host mode deliberately disconnects the USB charger input from VBUS. */
+ 	if (bq->otg_locked)
+ 		return regmap_update_bits(bq->regmap, BQ24160_REG_BR_STATUS,
+ 					  BQ24160_BR_STATUS_OTG_LOCK,
+ 					  BQ24160_BR_STATUS_OTG_LOCK);
+-	/*
+-	 * Keep the USB power path at its board policy even when battery charging
+-	 * is held off by temperature, gauge failure or the revision-23 voltage
+-	 * workaround.  Otherwise the reset/default 100 mA limit lets the running
+-	 * system discharge its battery while visibly connected to USB power.
+-	 */
+-	ret = bq24160_update_control(bq,
+-				      BQ24160_CTRL_IUSB_MASK |
+-				      BQ24160_CTRL_EN_STAT | BQ24160_CTRL_TE,
+-				      bq24160_usb_code(bq->usb_limit_ua) << 4 |
+-				      BQ24160_CTRL_EN_STAT | BQ24160_CTRL_TE);
++	ret = bq24160_select_input(bq, &status);
++	if (ret)
++		return ret;
++	ret = bq24160_adjust_input(bq, status);
++	if (ret) {
++		bq->input_limit_ua = bq->use_cradle ? 1500000 :
++				min(bq->safe_usb_limit_ua,
++				    min(bq->input_request_ua, bq24160_source_limit(bq)));
++		bq24160_program_input(bq);
++		return ret;
++	}
++	ret = bq24160_program_input(bq);
+ 	if (ret)
+ 		return ret;
+ 
+@@ -249,8 +442,9 @@ static int bq24160_sync_locked(struct bq24160 *bq)
+ 	 * charge cycle solely because a stale fault code accompanied READY.
+ 	 */
+ 	if (stat == BQ24160_STAT_FAULT ||
+-	    (stat != BQ24160_STAT_USB_READY &&
+-	     stat != BQ24160_STAT_CHARGING_USB && stat != BQ24160_STAT_DONE))
++	    (stat != BQ24160_STAT_USB_READY && stat != BQ24160_STAT_IN_READY &&
++	     stat != BQ24160_STAT_CHARGING_USB &&
++	     stat != BQ24160_STAT_CHARGING_IN && stat != BQ24160_STAT_DONE))
+ 		return bq24160_disable(bq);
+ 	/*
+ 	 * Hardware termination already stopped the charge cycle.  Do not toggle
+@@ -295,7 +489,8 @@ static int bq24160_sync_locked(struct bq24160 *bq)
+ 	 * the HZ/CE programming sequence only when charging needs to start or
+ 	 * when thermal policy selected a different fast-charge current.
+ 	 */
+-	if (bq->charging && stat == BQ24160_STAT_CHARGING_USB &&
++	if (bq->charging && (stat == BQ24160_STAT_CHARGING_USB ||
++			     stat == BQ24160_STAT_CHARGING_IN) &&
+ 	    bq->programmed_charge_ua == charge_ua)
+ 		return 0;
+ 
+@@ -319,10 +514,18 @@ static void bq24160_sync(struct bq24160 *bq)
+ 
+ 	mutex_lock(&bq->lock);
+ 	ret = bq24160_sync_locked(bq);
++	/* Recheck a newly raised final step before falling back to watchdog rate. */
++	if (!ret && bq->source_online && !bq->input_limited && bq->charging &&
++	    (bq->input_limit_ua < bq->learned_limit_ua ||
++	     time_before(jiffies, bq->input_step_after)))
++		mod_delayed_work(system_wq, &bq->status_work,
++				 msecs_to_jiffies(2000));
+ 	mutex_unlock(&bq->lock);
+ 	if (ret)
+ 		dev_warn_ratelimited(bq->dev, "charger policy update failed: %d\n", ret);
+ 	power_supply_changed(bq->psy);
++	if (bq->cradle_psy)
++		power_supply_changed(bq->cradle_psy);
+ }
+ 
+ static void bq24160_watchdog_work(struct work_struct *work)
+@@ -357,20 +560,32 @@ static int bq24160_get_property(struct power_supply *psy,
+ 				union power_supply_propval *val)
+ {
+ 	struct bq24160 *bq = power_supply_get_drvdata(psy);
+-	unsigned int status;
+-	int ret;
++	unsigned int status, supply;
++	bool cradle = psy == bq->cradle_psy;
++	int detected, ret;
+ 
+ 	ret = bq24160_read(bq, BQ24160_REG_STATUS, &status);
+ 	if (ret)
+ 		return ret;
+ 	switch (prop) {
+ 	case POWER_SUPPLY_PROP_ONLINE:
+-		val->intval = FIELD_GET(BQ24160_STATUS_STAT_MASK, status) == BQ24160_STAT_USB_READY ||
+-			      FIELD_GET(BQ24160_STATUS_STAT_MASK, status) == BQ24160_STAT_CHARGING_USB ||
+-			      FIELD_GET(BQ24160_STATUS_STAT_MASK, status) == BQ24160_STAT_DONE;
++		ret = bq24160_read(bq, BQ24160_REG_BR_STATUS, &supply);
++		if (ret)
++			return ret;
++		if (cradle) {
++			detected = gpiod_get_value_cansleep(bq->cradle_det);
++			if (detected < 0)
++				return detected;
++			val->intval = detected &&
++				!FIELD_GET(BQ24160_BR_IN_STATUS_MASK, supply);
++		} else
++			val->intval = !bq->otg_locked &&
++				!FIELD_GET(BQ24160_BR_USB_STATUS_MASK, supply);
+ 		return 0;
+ 	case POWER_SUPPLY_PROP_STATUS:
+-		if (FIELD_GET(BQ24160_STATUS_STAT_MASK, status) == BQ24160_STAT_DONE)
++		if (cradle != bq->use_cradle)
++			val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
++		else if (FIELD_GET(BQ24160_STATUS_STAT_MASK, status) == BQ24160_STAT_DONE)
+ 			val->intval = POWER_SUPPLY_STATUS_FULL;
+ 		else
+ 			val->intval = bq->charging ? POWER_SUPPLY_STATUS_CHARGING :
+@@ -388,13 +603,69 @@ static int bq24160_get_property(struct power_supply *psy,
+ 		val->intval = bq->charge_voltage_uv;
+ 		return 0;
+ 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
+-		val->intval = bq->usb_limit_ua;
++		if (cradle) {
++			ret = bq24160_read(bq, BQ24160_REG_VOLTAGE, &status);
++			if (ret)
++				return ret;
++			val->intval = status & BQ24160_IN_LIMIT_2500 ? 2500000 : 1500000;
++			return 0;
++		}
++		ret = bq24160_read(bq, BQ24160_REG_CONTROL, &status);
++		if (ret)
++			return ret;
++		status = FIELD_GET(BQ24160_CTRL_IUSB_MASK, status);
++		if (status >= ARRAY_SIZE(bq24160_usb_limits))
++			return -EIO;
++		val->intval = bq24160_usb_limits[status];
++		return 0;
++	case POWER_SUPPLY_PROP_USB_TYPE:
++		val->intval = bq->usb_type;
+ 		return 0;
+ 	default:
+ 		return -EINVAL;
+ 	}
+ }
+ 
++static int bq24160_set_property(struct power_supply *psy,
++				enum power_supply_property prop,
++				const union power_supply_propval *val)
++{
++	struct bq24160 *bq = power_supply_get_drvdata(psy);
++	int ret;
++
++	if (prop != POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT)
++		return -EINVAL;
++	if (psy == bq->cradle_psy) {
++		if (val->intval != 1500000 && val->intval != 2500000)
++			return -EINVAL;
++	} else if (val->intval < 100000 || val->intval > 1500000)
++		return -EINVAL;
++
++	mutex_lock(&bq->lock);
++	if (psy == bq->cradle_psy)
++		bq->cradle_request_ua = val->intval;
++	else
++		bq->input_request_ua = bq24160_usb_limits[bq24160_usb_code(val->intval)];
++	ret = bq24160_sync_locked(bq);
++	mutex_unlock(&bq->lock);
++	mod_delayed_work(system_wq, &bq->status_work, msecs_to_jiffies(2000));
++	power_supply_changed(psy);
++	return ret;
++}
++
++static int bq24160_property_is_writeable(struct power_supply *psy,
++				       enum power_supply_property prop)
++{
++	return prop == POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT;
++}
++
++static void bq24160_external_power_changed(struct power_supply *psy)
++{
++	struct bq24160 *bq = power_supply_get_drvdata(psy);
++
++	mod_delayed_work(system_wq, &bq->status_work, 0);
++}
++
+ static const struct regmap_config bq24160_regmap_config = {
+ 	.reg_bits = 8,
+ 	.val_bits = 8,
+@@ -412,6 +683,7 @@ static int bq24160_otg_guard_enable(struct regulator_dev *rdev)
+ 				 BQ24160_BR_STATUS_OTG_LOCK);
+ 	if (!ret) {
+ 		bq->otg_locked = true;
++		bq->source_online = false;
+ 		ret = bq24160_disable(bq);
+ 		if (ret) {
+ 			bq->otg_locked = false;
+@@ -472,6 +744,7 @@ static int bq24160_probe(struct i2c_client *client)
+ 	struct power_supply_config psy_cfg = {};
+ 	struct regulator_config regulator_cfg = {};
+ 	struct regulator_dev *rdev;
++	struct power_supply_desc *cradle_desc;
+ 	struct bq24160 *bq;
+ 	int ret;
+ 
+@@ -486,13 +759,44 @@ static int bq24160_probe(struct i2c_client *client)
+ 	if (IS_ERR(bq->fuel_gauge))
+ 		return dev_err_probe(&client->dev, PTR_ERR(bq->fuel_gauge), "fuel gauge unavailable\n");
+ 
+-	device_property_read_u32(&client->dev, "ti,usb-input-current-limit-microamp", &bq->usb_limit_ua);
++	device_property_read_u32(&client->dev, "ti,usb-input-current-limit-microamp",
++				&bq->input_limit_ua);
+ 	device_property_read_u32(&client->dev, "ti,constant-charge-current-max-microamp", &bq->charge_limit_ua);
+ 	device_property_read_u32(&client->dev, "ti,constant-charge-voltage-max-microvolt", &bq->charge_voltage_uv);
+ 	device_property_read_u32(&client->dev, "ti,charge-term-current-microamp", &bq->term_current_ua);
+-	if (!bq->usb_limit_ua || bq->usb_limit_ua > 500000 || !bq->charge_limit_ua ||
++	if (!bq->input_limit_ua || bq->input_limit_ua > 500000 || !bq->charge_limit_ua ||
+ 	    !bq->charge_voltage_uv || !bq->term_current_ua)
+ 		return dev_err_probe(&client->dev, -EINVAL, "unsafe or incomplete charging policy\n");
++	bq->safe_usb_limit_ua = bq24160_usb_limits[bq24160_usb_code(bq->input_limit_ua)];
++	bq->input_limit_ua = bq->safe_usb_limit_ua;
++	bq->adapter_limit_ua = 1500000;
++	device_property_read_u32(&client->dev,
++				"ti,adapter-input-current-limit-microamp",
++				&bq->adapter_limit_ua);
++	bq->vindpm_uv = 4520000;
++	device_property_read_u32(&client->dev, "ti,usb-vindpm-microvolt", &bq->vindpm_uv);
++	if (bq->adapter_limit_ua < 500000 || bq->adapter_limit_ua > 1500000 ||
++	    bq->vindpm_uv < 4200000 || bq->vindpm_uv > 4760000 ||
++	    (bq->vindpm_uv - 4200000) % 80000)
++		return dev_err_probe(&client->dev, -EINVAL, "invalid input DPM policy\n");
++	bq->input_request_ua = bq->adapter_limit_ua;
++	bq->opportunistic_usb = device_property_read_bool(&client->dev,
++							"ti,opportunistic-usb-input");
++	bq->cradle_max_ua = 2500000;
++	bq->in_vindpm_uv = 4520000;
++	device_property_read_u32(&client->dev, "ti,cradle-input-current-limit-microamp",
++				&bq->cradle_max_ua);
++	device_property_read_u32(&client->dev, "ti,in-vindpm-microvolt",
++				&bq->in_vindpm_uv);
++	if ((bq->cradle_max_ua != 1500000 && bq->cradle_max_ua != 2500000) ||
++	    bq->in_vindpm_uv < 4200000 || bq->in_vindpm_uv > 4760000 ||
++	    (bq->in_vindpm_uv - 4200000) % 80000)
++		return dev_err_probe(&client->dev, -EINVAL, "invalid IN input policy\n");
++	bq->cradle_request_ua = bq->cradle_max_ua;
++	bq->cradle_det = devm_gpiod_get_optional(&client->dev, "cradle-detect", GPIOD_IN);
++	if (IS_ERR(bq->cradle_det))
++		return dev_err_probe(&client->dev, PTR_ERR(bq->cradle_det),
++				     "cradle detection unavailable\n");
+ 	bq->cold_degc = 5;
+ 	bq->warm_degc = 45;
+ 	bq->hot_degc = 55;
+@@ -505,12 +809,43 @@ static int bq24160_probe(struct i2c_client *client)
+ 	bq->psy_desc.properties = bq24160_props;
+ 	bq->psy_desc.num_properties = ARRAY_SIZE(bq24160_props);
+ 	bq->psy_desc.get_property = bq24160_get_property;
++	bq->psy_desc.set_property = bq24160_set_property;
++	bq->psy_desc.property_is_writeable = bq24160_property_is_writeable;
++	bq->psy_desc.external_power_changed = bq24160_external_power_changed;
++	bq->psy_desc.usb_types = BIT(POWER_SUPPLY_USB_TYPE_UNKNOWN) |
++				 BIT(POWER_SUPPLY_USB_TYPE_SDP) |
++				 BIT(POWER_SUPPLY_USB_TYPE_CDP) |
++				 BIT(POWER_SUPPLY_USB_TYPE_DCP);
+ 	psy_cfg.drv_data = bq;
+ 	psy_cfg.fwnode = dev_fwnode(&client->dev);
+ 	bq->psy = devm_power_supply_register(&client->dev, &bq->psy_desc, &psy_cfg);
+ 	if (IS_ERR(bq->psy))
+ 		return PTR_ERR(bq->psy);
+ 
++	if (bq->cradle_det) {
++		cradle_desc = devm_kmemdup(&client->dev, &bq->psy_desc,
++					  sizeof(*cradle_desc), GFP_KERNEL);
++		if (!cradle_desc)
++			return -ENOMEM;
++		cradle_desc->name = "bq24160-cradle";
++		cradle_desc->type = POWER_SUPPLY_TYPE_MAINS;
++		/* USB_TYPE is the last property and has no meaning for the IN input. */
++		cradle_desc->num_properties--;
++		cradle_desc->usb_types = 0;
++		bq->cradle_psy = devm_power_supply_register(&client->dev, cradle_desc, &psy_cfg);
++		if (IS_ERR(bq->cradle_psy))
++			return dev_err_probe(&client->dev, PTR_ERR(bq->cradle_psy),
++					     "failed to register cradle supply\n");
++	}
++
++	/* The USB and cradle voltage-regulation loops have separate thresholds. */
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_DPM,
++				 BQ24160_DPM_USB_MASK | BQ24160_DPM_IN_MASK,
++				 ((bq->vindpm_uv - 4200000) / 80000) << 3 |
++				 (bq->in_vindpm_uv - 4200000) / 80000);
++	if (ret)
++		return dev_err_probe(&client->dev, ret, "failed to set USB DPM\n");
++
+ 	/* Sony's USB sink setup explicitly selects USB and releases OTG lock. */
+ 	ret = regmap_update_bits(bq->regmap, BQ24160_REG_STATUS,
+ 				 BQ24160_STATUS_SUPPLY_SEL_USB,
+@@ -538,6 +873,10 @@ static int bq24160_probe(struct i2c_client *client)
+ 		if (ret)
+ 			return dev_err_probe(&client->dev, ret, "failed to request IRQ\n");
+ 	}
++	/*
++	 * The charger's status IRQ also reports IN insertion/removal. Sample the
++	 * cradle GPIO there and at every watchdog tick; no second IRQ is needed.
++	 */
+ 	device_init_wakeup(&client->dev, true);
+ 	i2c_set_clientdata(client, bq);
+ 	/* Immediately adopt valid boot charging, then maintain its watchdog. */
+diff --git a/drivers/power/supply/bq27xxx_battery.c b/drivers/power/supply/bq27xxx_battery.c
+index 01c9ec111..22a3ff8c3 100644
+--- a/drivers/power/supply/bq27xxx_battery.c
++++ b/drivers/power/supply/bq27xxx_battery.c
+@@ -53,12 +53,18 @@
+ #include <linux/power_supply.h>
+ #include <linux/slab.h>
+ #include <linux/of.h>
++#include <linux/property.h>
+ 
+ #include <linux/power/bq27xxx_battery.h>
+ 
+ #define BQ27XXX_MANUFACTURER	"Texas Instruments"
+ 
+ /* BQ27XXX Flags */
++#define BQ27520_FLAG_BAT_DET	BIT(3)
++#define BQ27520_CTRL_BAT_INSERT	0x000d
++#define BQ27520_CTRL_INITCOMP	BIT(7)
++#define BQ27520_CTRL_QEN	BIT(0)
++
+ #define BQ27XXX_FLAG_DSC	BIT(0)
+ #define BQ27XXX_FLAG_SOCF	BIT(1) /* State-of-Charge threshold final */
+ #define BQ27XXX_FLAG_SOC1	BIT(2) /* State-of-Charge threshold 1 */
+@@ -1912,6 +1918,52 @@ static int bq27xxx_battery_current_and_status(
+ 	return 0;
+ }
+ 
++/*
++ * Boards without hardware battery insertion detection must tell the gauge
++ * when their permanently connected battery is present. Without BAT_INSERT,
++ * a powered gauge can report an uninitialised 100%/FC at an empty voltage.
++ * Do not reset, unseal or modify the battery's learned data.
++ */
++static int bq27520_battery_insert(struct bq27xxx_device_info *di, int flags)
++{
++	int ret, status, i;
++
++	if (flags < 0 || (flags & BQ27520_FLAG_BAT_DET) ||
++	    di->chip != BQ27520G1 ||
++	    !device_property_read_bool(di->dev, "ti,host-battery-insertion"))
++		return flags;
++
++	ret = bq27xxx_write(di, BQ27XXX_REG_CTRL,
++			    BQ27520_CTRL_BAT_INSERT, false);
++	if (ret < 0)
++		return ret;
++
++	/* Wait for gauging to start before publishing any state of charge. */
++	for (i = 0; i < 50; i++) {
++		msleep(100);
++		ret = bq27xxx_write(di, BQ27XXX_REG_CTRL, 0, false);
++		if (ret < 0)
++			return ret;
++		usleep_range(1000, 2000);
++		status = bq27xxx_read(di, BQ27XXX_REG_CTRL, false);
++		if (status < 0)
++			return status;
++		if ((status & (BQ27520_CTRL_INITCOMP | BQ27520_CTRL_QEN)) ==
++		    (BQ27520_CTRL_INITCOMP | BQ27520_CTRL_QEN)) {
++			flags = bq27xxx_read(di, BQ27XXX_REG_FLAGS, false);
++			if (flags < 0)
++				return flags;
++			if (flags & BQ27520_FLAG_BAT_DET) {
++				dev_info(di->dev, "host battery insertion complete\n");
++				return flags;
++			}
++		}
++	}
++
++	dev_warn_ratelimited(di->dev, "battery insertion did not initialise gauge\n");
++	return -ETIMEDOUT;
++}
++
+ static void bq27xxx_battery_update_unlocked(struct bq27xxx_device_info *di)
+ {
+ 	union power_supply_propval status = di->last_status;
+@@ -1919,6 +1971,7 @@ static void bq27xxx_battery_update_unlocked(struct bq27xxx_device_info *di)
+ 	bool has_singe_flag = di->opts & BQ27XXX_O_ZERO;
+ 
+ 	cache.flags = bq27xxx_read(di, BQ27XXX_REG_FLAGS, has_singe_flag);
++	cache.flags = bq27520_battery_insert(di, cache.flags);
+ 	if (di->chip == BQ27000 && (cache.flags & 0xff) == 0xff)
+ 		cache.flags = -ENODEV; /* bq27000 hdq read error */
+ 	if (cache.flags >= 0) {
+diff --git a/drivers/regulator/Kconfig b/drivers/regulator/Kconfig
+index 89789ac7a..8d5058fb4 100644
+--- a/drivers/regulator/Kconfig
++++ b/drivers/regulator/Kconfig
+@@ -1897,3 +1897,11 @@ config REGULATOR_QCOM_LABIBB
+ 	  for LCD display panel.
+ 
+ endif
++
++
++config REGULATOR_QCOM_MSM8660_SAW
++	bool "Qualcomm MSM8660 SAW CPU regulator"
++	depends on ARCH_QCOM && OF
++	help
++	  CPU voltage regulator driver for the SAW v1 blocks used by
++	  Qualcomm MSM8260/MSM8660.
+diff --git a/drivers/regulator/Makefile b/drivers/regulator/Makefile
+index 5a764cec8..c15403490 100644
+--- a/drivers/regulator/Makefile
++++ b/drivers/regulator/Makefile
+@@ -220,3 +220,4 @@ obj-$(CONFIG_REGULATOR_WM8400) += wm8400-regulator.o
+ obj-$(CONFIG_REGULATOR_WM8994) += wm8994-regulator.o
+ 
+ ccflags-$(CONFIG_REGULATOR_DEBUG) += -DDEBUG
++obj-$(CONFIG_REGULATOR_QCOM_MSM8660_SAW) += qcom-msm8660-saw-regulator.o
+diff --git a/drivers/regulator/qcom-msm8660-saw-regulator.c b/drivers/regulator/qcom-msm8660-saw-regulator.c
+new file mode 100644
+index 000000000..b6b86477f
+--- /dev/null
++++ b/drivers/regulator/qcom-msm8660-saw-regulator.c
+@@ -0,0 +1,367 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Qualcomm MSM8660 / MSM8260 SAW v1 CPU regulator
++ *
++ * Hikari/Fuji legacy-compatible implementation.
++ *
++ * The SAW SPM initialization deliberately does NOT touch:
++ *   VCTL     +0x08
++ *   STS      +0x0c
++ *   PMIC_CTL +0x20
++ *
++ * CPU voltage changes are performed through VCTL and verified through STS.
++ */
++
++#include <linux/cpu.h>
++#include <linux/delay.h>
++#include <linux/io.h>
++#include <linux/iopoll.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
++#include <linux/regulator/driver.h>
++#include <linux/regulator/machine.h>
++#include <linux/regulator/of_regulator.h>
++
++/* MSM8x60 SAW v1 register layout */
++#define SAW_AVS_CTL              0x04
++#define SAW_VCTL                 0x08
++#define SAW_STS                  0x0c
++#define SAW_CFG                  0x10
++#define SAW_SPM_CTL              0x14
++#define SAW_SLP_TMR_DLY          0x18
++#define SAW_WAKE_TMR_DLY         0x1c
++#define SAW_PMIC_CTL             0x20
++#define SAW_SLP_CLK_EN           0x24
++#define SAW_PRECLMP_EN           0x28
++#define SAW_POSTCLMP_EN          0x2c
++#define SAW_CLMP_EN              0x30
++#define SAW_RST_EN               0x34
++#define SAW_MPM_CFG              0x38
++
++#define SAW_STS_PMIC_STATE(v)    (((v) >> 20) & 0x3)
++#define SAW_STS_PMIC_DATA(v)     (((v) >> 10) & 0xff)
++
++#define FTSMPS_BAND2             0x80
++#define FTSMPS_BAND2_MIN_UV      700000
++#define FTSMPS_BAND2_STEP_UV     12500
++
++/* Exact historical Hikari/Fuji regulator constraints. */
++#define HIKARI_MIN_UV            800000
++#define HIKARI_MAX_UV            1325000
++#define HIKARI_STEP_UV           12500
++#define HIKARI_N_VOLTAGES \
++	(((HIKARI_MAX_UV - HIKARI_MIN_UV) / HIKARI_STEP_UV) + 1)
++
++/* Legacy driver value: PMIC internal slew rate. */
++#define REGULATOR_SLEW_RATE_UV_US 1250
++
++struct msm8660_saw {
++	struct device *dev;
++	void __iomem *base;
++	unsigned int cpu;
++	int last_uV;
++	struct mutex lock;
++
++	struct regulator_desc desc;
++	struct regulator_dev *rdev;
++};
++
++struct msm8660_vdd_req {
++	struct msm8660_saw *saw;
++	u8 vlevel;
++	u32 sts;
++};
++
++/*
++ * Exact msm_spm_data[] initialization for MSM8x60 SoC major != 1.
++ *
++ * CONFIG_MSM_AVS_HW=n on this Hikari legacy configuration, therefore
++ * AVS_CTL is zero.
++ *
++ * VCTL, STS and PMIC_CTL are intentionally excluded, matching
++ * MSM_SPM_REG_NR_INITIALIZE in the legacy driver.
++ */
++static void msm8660_saw_hw_init(struct msm8660_saw *saw)
++{
++	writel_relaxed(0x00000000, saw->base + SAW_AVS_CTL);
++	writel_relaxed(0x0000001c, saw->base + SAW_CFG);
++	writel_relaxed(0x00000068, saw->base + SAW_SPM_CTL);
++	writel_relaxed(0x0c0cffff, saw->base + SAW_SLP_TMR_DLY);
++	writel_relaxed(0x78780fff, saw->base + SAW_WAKE_TMR_DLY);
++
++	writel_relaxed(saw->cpu ? 0x13 : 0x01,
++		       saw->base + SAW_SLP_CLK_EN);
++
++	writel_relaxed(0x00000007, saw->base + SAW_PRECLMP_EN);
++	writel_relaxed(0x00000000, saw->base + SAW_POSTCLMP_EN);
++	writel_relaxed(0x00000001, saw->base + SAW_CLMP_EN);
++	writel_relaxed(0x00000000, saw->base + SAW_RST_EN);
++	writel_relaxed(0x00000000, saw->base + SAW_MPM_CFG);
++
++	/* Match the legacy mb() after flushing the shadow registers. */
++	mb();
++}
++
++static int msm8660_uv_to_vlevel(int min_uV, int max_uV,
++				int *actual_uV, u8 *vlevel)
++{
++	int uV, vprog;
++
++	if (min_uV < HIKARI_MIN_UV)
++		min_uV = HIKARI_MIN_UV;
++
++	if (min_uV > HIKARI_MAX_UV || max_uV < HIKARI_MIN_UV)
++		return -EINVAL;
++
++	uV = FTSMPS_BAND2_MIN_UV +
++	     DIV_ROUND_UP(min_uV - FTSMPS_BAND2_MIN_UV,
++			  FTSMPS_BAND2_STEP_UV) *
++	     FTSMPS_BAND2_STEP_UV;
++
++	if (uV > max_uV || uV > HIKARI_MAX_UV)
++		return -EINVAL;
++
++	vprog = (uV - FTSMPS_BAND2_MIN_UV) / FTSMPS_BAND2_STEP_UV;
++
++	if (vprog < 0 || vprog > 0x3f)
++		return -EINVAL;
++
++	*actual_uV = uV;
++	*vlevel = FTSMPS_BAND2 | vprog;
++
++	return 0;
++}
++
++/*
++ * Must execute on the CPU whose SAW controls the requested Scorpion rail.
++ */
++static long msm8660_saw_set_vdd_cpu(void *arg)
++{
++	struct msm8660_vdd_req *req = arg;
++	struct msm8660_saw *saw = req->saw;
++	u32 sts;
++	int ret;
++
++	writel_relaxed(req->vlevel, saw->base + SAW_VCTL);
++	mb();
++
++	ret = readl_poll_timeout_atomic(saw->base + SAW_STS, sts,
++				       SAW_STS_PMIC_STATE(sts) == 0,
++				       1, 50);
++	if (ret) {
++		req->sts = sts;
++		return ret;
++	}
++
++	req->sts = sts;
++
++	if (SAW_STS_PMIC_DATA(sts) != req->vlevel)
++		return -EIO;
++
++	return 0;
++}
++
++static int msm8660_saw_set_voltage(struct regulator_dev *rdev,
++				   int min_uV, int max_uV,
++				   unsigned int *selector)
++{
++	struct msm8660_saw *saw = rdev_get_drvdata(rdev);
++	struct msm8660_vdd_req req;
++	int actual_uV;
++	int old_uV;
++	u8 vlevel;
++	long ret;
++
++	ret = msm8660_uv_to_vlevel(min_uV, max_uV,
++				  &actual_uV, &vlevel);
++	if (ret)
++		return ret;
++
++	mutex_lock(&saw->lock);
++
++	old_uV = saw->last_uV;
++
++	req.saw = saw;
++	req.vlevel = vlevel;
++	req.sts = 0;
++
++	ret = work_on_cpu(saw->cpu, msm8660_saw_set_vdd_cpu, &req);
++	if (ret) {
++		dev_err(saw->dev,
++			"cpu%u set %duV vlevel=0x%02x failed: %ld "
++			"STS=%08x state=%u data=0x%02x\n",
++			saw->cpu, actual_uV, vlevel, ret, req.sts,
++			SAW_STS_PMIC_STATE(req.sts),
++			SAW_STS_PMIC_DATA(req.sts));
++		goto out;
++	}
++
++	/*
++	 * Preserve the legacy SAW regulator's stabilization delay.
++	 * For the first request last_uV is unknown, so conservatively
++	 * behave like the zero-initialized historical driver.
++	 */
++	if (actual_uV > old_uV)
++		udelay(DIV_ROUND_UP(actual_uV - max(old_uV, 0),
++				    REGULATOR_SLEW_RATE_UV_US));
++
++	saw->last_uV = actual_uV;
++
++	if (selector)
++		*selector = (actual_uV - HIKARI_MIN_UV) / HIKARI_STEP_UV;
++out:
++	mutex_unlock(&saw->lock);
++	return ret;
++}
++
++static int msm8660_saw_get_voltage(struct regulator_dev *rdev)
++{
++	struct msm8660_saw *saw = rdev_get_drvdata(rdev);
++
++	/*
++	 * Bootloader VCTL is not trustworthy as the actual current voltage;
++	 * don't fabricate a voltage until this driver has successfully
++	 * programmed one itself.
++	 */
++	if (!saw->last_uV)
++		return -ENODATA;
++
++	return saw->last_uV;
++}
++
++static int msm8660_saw_list_voltage(struct regulator_dev *rdev,
++				    unsigned int selector)
++{
++	if (selector >= HIKARI_N_VOLTAGES)
++		return 0;
++
++	return HIKARI_MIN_UV + selector * HIKARI_STEP_UV;
++}
++
++static int msm8660_saw_map_voltage(struct regulator_dev *rdev,
++				   int min_uV, int max_uV)
++{
++	int uV;
++	int sel;
++
++	if (min_uV < HIKARI_MIN_UV)
++		min_uV = HIKARI_MIN_UV;
++
++	sel = DIV_ROUND_UP(min_uV - HIKARI_MIN_UV, HIKARI_STEP_UV);
++	if (sel < 0 || sel >= HIKARI_N_VOLTAGES)
++		return -EINVAL;
++
++	uV = HIKARI_MIN_UV + sel * HIKARI_STEP_UV;
++
++	if (uV > max_uV)
++		return -EINVAL;
++
++	return sel;
++}
++
++static const struct regulator_ops msm8660_saw_ops = {
++	.get_voltage = msm8660_saw_get_voltage,
++	.set_voltage = msm8660_saw_set_voltage,
++	.list_voltage = msm8660_saw_list_voltage,
++	.map_voltage = msm8660_saw_map_voltage,
++};
++
++static int msm8660_saw_probe(struct platform_device *pdev)
++{
++	struct regulator_config config = { };
++	struct regulator_init_data *init_data;
++	struct msm8660_saw *saw;
++	struct resource *res;
++	u32 cpu;
++	int ret;
++
++	ret = of_property_read_u32(pdev->dev.of_node, "qcom,cpu", &cpu);
++	if (ret)
++		return dev_err_probe(&pdev->dev, ret,
++				     "missing qcom,cpu\n");
++
++	if (cpu > 1)
++		return dev_err_probe(&pdev->dev, -EINVAL,
++				     "invalid qcom,cpu=%u\n", cpu);
++
++	saw = devm_kzalloc(&pdev->dev, sizeof(*saw), GFP_KERNEL);
++	if (!saw)
++		return -ENOMEM;
++
++	saw->dev = &pdev->dev;
++	saw->cpu = cpu;
++	mutex_init(&saw->lock);
++
++	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	saw->base = devm_ioremap_resource(&pdev->dev, res);
++	if (IS_ERR(saw->base))
++		return PTR_ERR(saw->base);
++
++	/*
++	 * First record the bootloader/current-kernel state, then perform
++	 * the exact legacy MSM8x60 SPM initialization.
++	 */
++	msm8660_saw_hw_init(saw);
++	saw->desc.name = devm_kasprintf(&pdev->dev, GFP_KERNEL,
++					"msm8660-saw-cpu%u", cpu);
++	if (!saw->desc.name)
++		return -ENOMEM;
++
++	saw->desc.id = cpu;
++	saw->desc.type = REGULATOR_VOLTAGE;
++	saw->desc.owner = THIS_MODULE;
++	saw->desc.ops = &msm8660_saw_ops;
++	saw->desc.n_voltages = HIKARI_N_VOLTAGES;
++
++	init_data = of_get_regulator_init_data(&pdev->dev,
++					       pdev->dev.of_node,
++					       &saw->desc);
++	if (!init_data)
++		return -ENOMEM;
++
++	/*
++	 * The bootloader/kernel already has a live CPU rail.  Parse the DT
++	 * voltage constraints, but do not let regulator registration itself
++	 * choose/apply a voltage.  cpufreq will explicitly adopt the boot
++	 * operating point afterwards.
++	 */
++	init_data->constraints.apply_uV = false;
++	config.dev = &pdev->dev;
++	config.driver_data = saw;
++	config.of_node = pdev->dev.of_node;
++	config.init_data = init_data;
++
++	saw->rdev = devm_regulator_register(&pdev->dev,
++					    &saw->desc, &config);
++	if (IS_ERR(saw->rdev))
++		return dev_err_probe(&pdev->dev, PTR_ERR(saw->rdev),
++				     "regulator registration failed\n");
++
++	platform_set_drvdata(pdev, saw);
++
++	dev_info(&pdev->dev,
++		 "MSM8660 SAW CPU%u regulator registered\n", cpu);
++
++
++	return 0;
++}
++
++static const struct of_device_id msm8660_saw_of_match[] = {
++	{ .compatible = "qcom,msm8660-saw-regulator" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, msm8660_saw_of_match);
++
++static struct platform_driver msm8660_saw_driver = {
++	.probe = msm8660_saw_probe,
++	.driver = {
++		.name = "qcom-msm8660-saw-regulator",
++		.of_match_table = msm8660_saw_of_match,
++	},
++};
++module_platform_driver(msm8660_saw_driver);
++
++MODULE_DESCRIPTION("Qualcomm MSM8660/MSM8260 SAW v1 CPU regulator");
++MODULE_LICENSE("GPL");
+diff --git a/include/linux/input/touch-overlay.h b/include/linux/input/touch-overlay.h
+index 0253e554d..15a901385 100644
+--- a/include/linux/input/touch-overlay.h
++++ b/include/linux/input/touch-overlay.h
+@@ -9,6 +9,10 @@
+ #include <linux/types.h>
+ 
+ struct input_dev;
++struct fwnode_handle;
++
++int touch_overlay_map_fwnode(struct list_head *list, struct input_dev *input,
++			     struct fwnode_handle *fwnode);
+ 
+ int touch_overlay_map(struct list_head *list, struct input_dev *input);
+ 
+-- 
+2.53.0
+

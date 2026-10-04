@@ -157,6 +157,16 @@ GIT_COMMITTER_EMAIL=hikari-materializer@localhost \
 GIT_COMMITTER_DATE=2026-09-16T00:00:00+07:00 \
 git -C "$out" commit -q -m $'iio: add Hikari AK8972 and APDS9702 sensors\n\nReuse the AK8975 register-compatible implementation for the truthful AK8972 DT identity and convert Sony Mobile\x27s GPL APDS9702 support to the IIO proximity ABI.\n\nSigned-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>'
 
+# Integration patches are based on the completed Hikari corrections above.
+# Apply before prepare-hikari-kernel-tree.sh installs the canonical DTS.
+if [[ -n ${POST_PATCH_SERIES:-} ]]; then
+  while IFS= read -r rel; do
+    [[ -z $rel || $rel == \#* ]] && continue
+    git -C "$out" am --keep-cr --committer-date-is-author-date \
+      "$repo_root/kernel/patches/$rel"
+  done < "$repo_root/$POST_PATCH_SERIES"
+fi
+
 "$repo_root/scripts/check-msm8660-mmcc-source.sh" "$out"
 python3 "$repo_root/scripts/check-hikari-display-source.py" "$out"
 "$repo_root/scripts/check-hikari-as3676-source.sh" "$out"

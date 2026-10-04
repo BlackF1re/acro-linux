@@ -592,6 +592,42 @@
 			syna,sensor-type = <1>;
 			syna,clip-x-high = <719>;
 			syna,clip-y-high = <1279>;
+
+			/* Sony touch-fuji_hikari.c: printed keys are F11 contacts,
+			 * not an F1A capacitive-key bank. Preserve their raw Y.
+			 */
+			touch-overlay {
+				segment-screen {
+					x-origin = <0>;
+					y-origin = <0>;
+					x-size = <720>;
+					y-size = <1280>;
+				};
+				segment-back {
+					label = "Back";
+					x-origin = <0>;
+					y-origin = <1315>;
+					x-size = <220>;
+					y-size = <13>;
+					linux,code = <KEY_F13>;
+				};
+				segment-home {
+					label = "Home";
+					x-origin = <260>;
+					y-origin = <1319>;
+					x-size = <200>;
+					y-size = <9>;
+					linux,code = <KEY_F14>;
+				};
+				segment-menu {
+					label = "Menu";
+					x-origin = <500>;
+					y-origin = <1315>;
+					x-size = <220>;
+					y-size = <13>;
+					linux,code = <KEY_F15>;
+				};
+			};
 		};
 	};
 };

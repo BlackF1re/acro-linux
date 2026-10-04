@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+override=/run/systemd/system/phosh.service.d/99-hikari-renderer.conf
+case "${1:-}" in
+ gles2)
+  mkdir -p "${override%/*}"
+  printf '%s\n' '[Service]' 'Environment=WLR_RENDERER=gles2' > "$override"
+  ;;
+ pixman)
+  mkdir -p "${override%/*}"
+  printf '%s\n' '[Service]' 'Environment=WLR_RENDERER=pixman' \
+   'UnsetEnvironment=LD_LIBRARY_PATH LIBGL_DRIVERS_PATH GBM_BACKENDS_PATH' > "$override"
+  ;;
+ *) echo 'Usage: hikari-phosh-renderer gles2|pixman' >&2; exit 2 ;;
+esac
+systemctl daemon-reload
+systemctl restart phosh.service
