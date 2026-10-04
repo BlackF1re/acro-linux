@@ -264,7 +264,8 @@ Imported code and firmware retain their own licenses.
 <details>
 <summary>Repository history note</summary>
 
-The complete history was re-signed on 2026-10-05 at the owner's request.
+The history was signed and grouped into logical development checkpoints on
+2026-10-05 at the owner's request.
 Commit IDs changed; preserve local work before reconciling an existing clone
 with `main`. See the [history audit](docs/HISTORY-SIGNING.md).
 
