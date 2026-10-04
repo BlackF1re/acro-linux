@@ -76,13 +76,14 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/linux-hikari
-          key: hikari-linux-system-v1-${{ hashFiles('kernel/source.lock', 'kernel/patches/**', 'kernel/dts/**', 'kernel/overrides/**', 'scripts/materialize-hikari-kernel.sh', 'scripts/prepare-hikari-kernel-tree.sh', 'scripts/apply-*.py') }}
+          key: hikari-linux-system-v2-${{ hashFiles('kernel/source.lock', 'kernel/patches/**', 'kernel/dts/**', 'kernel/overrides/**', 'scripts/materialize-hikari-kernel.sh', 'scripts/prepare-hikari-kernel-tree.sh', 'scripts/check-hikari-kernel-source.sh', 'scripts/apply-*.py') }}
       - name: Materialize pinned Linux source
         if: steps.linux-cache.outputs.cache-hit != 'true'
         run: ./scripts/materialize-hikari-kernel.sh "$RUNNER_TEMP/linux-hikari"
       - name: Verify source-backed Hikari support
         run: |
           set -euxo pipefail
+          ./scripts/check-hikari-kernel-source.sh "$RUNNER_TEMP/linux-hikari"
           ./scripts/check-msm8660-mmcc-source.sh "$RUNNER_TEMP/linux-hikari"
           python3 scripts/check-hikari-display-source.py "$RUNNER_TEMP/linux-hikari"
           ./scripts/check-hikari-as3676-source.sh "$RUNNER_TEMP/linux-hikari"

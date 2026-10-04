@@ -40,6 +40,7 @@ case "$build_dir" in "$hikari_build_root"/*) ;; *) echo "BUILD_DIR must be below
 # the same release string yet produce modules rejected by the running kernel.
 # Preserve the disk-saving single output tree, but force a clean transition
 # whenever its declared profile changes.
+mkdir -p "$build_dir"
 profile_stamp="$build_dir/.hikari-build-profile"
 if [[ ! -f "$profile_stamp" && -f "$build_dir/vmlinux" ]]; then
 	echo "Hikari kernel profile was not recorded; cleaning legacy shared O= tree"
