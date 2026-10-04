@@ -1,90 +1,126 @@
 # Xperia acro S · native Linux
 
 [![Kernel source checks](https://github.com/BlackF1re/acro-linux/actions/workflows/hikari-kernel-audit.yml/badge.svg)](https://github.com/BlackF1re/acro-linux/actions/workflows/hikari-kernel-audit.yml)
-[Build](docs/BUILD.md) · [Hardware](docs/HARDWARE.md) · [Recovery](docs/RECOVERY.md) · [Project status](docs/STATUS.md)
+[Build](docs/BUILD.md) · [Testing](docs/TESTING.md) · [Hardware](docs/HARDWARE.md) · [Recovery](docs/RECOVERY.md) · [Project status](docs/STATUS.md)
 
 A native Linux port for **Sony Xperia acro S LT26w / Hikari**: modern Debian
 armhf, the Linux 7.3 Hikari port, DRM/MSM, current Mesa/Freedreno and
 **hardware-accelerated Phosh on Adreno 220**. No Android framework or libhybris
-in the production graphics path.
+is used in the production graphics path.
 
 The goal is a useful **Linux phone and pocket computer** with ordinary package
 management, native applications, hardware graphics and a dependable recovery
-path. The existing screen, touch, radios and sensors should become normal Linux
-devices that applications can use through standard interfaces.
+path. The screen, touch, radios, sensors and other board functions are being
+brought up as normal Linux devices through current kernel interfaces.
 
-Hikari is a compact ARMv7 machine with tight memory and power budgets. Making
-it comfortable to use means paying attention to idle power, background services,
-rendering cost and input—not just reaching a desktop. Calls, cameras, audio and
-reliable sleep are still bring-up work.
-
-> [!IMPORTANT]
-> GPU rendering is working on the modern kernel. KGSL supplied the hardware
-> reference; its A220 lifecycle semantics are implemented in native DRM/MSM.
-> Linux 3.4/KGSL is a research oracle, **not** the production OS.
+The port already reaches an accelerated graphical handheld environment, but it
+is not yet a daily-driver phone. Reliable suspend/resume, audio, telephony,
+cameras and several remaining peripheral paths still need bring-up or physical
+acceptance.
 
 > [!WARNING]
-> Experimental port, not a fully qualified daily-driver phone. Do not flash or
-> replace the immutable BOOT. Test kernels live separately on microSD and are
-> loaded from BOOT through kexec. Do not kexec from the SMP SYSTEM or live-unbind MDP4.
+> Do not flash or replace the immutable BOOT during normal development. Test
+> kernels live separately on microSD and are loaded from BOOT through kexec.
+> Do not kexec from the SMP SYSTEM or live-unbind MDP4.
 
-### At a glance
+## At a glance
 
-| Device | Production stack | Source organisation |
-|---|---|---|
-| MSM8260 · dual Scorpion · Adreno 220 | Linux 7.3 + Debian armhf + Phosh GLES2 | **17 patches, one per subsystem** |
-| 1 GiB RAM · 16 GB eMMC · microSD | 720×1280 DSI display · native RMI4 touch | Pinned upstream base; exact source-tree checks |
+| Question | Current answer |
+|---|---|
+| What runs? | Linux 7.3 Hikari + Debian armhf + Phosh GLES2 |
+| What is already usable? | BOOT→SYSTEM recovery path, dual-core SMP, RAM, microSD rootfs, native display, multitouch, accelerated Adreno 220, USB device/networking, powered USB OTG, charging and several sensors |
+| What is only partial? | Wi-Fi, Bluetooth, RTC, thermal/power policy, several buttons and wake paths |
+| What is still missing? | Reliable suspend/resume, native audio, cellular data/SMS/calls, cameras, video codecs and HDMI |
+| How is it developed safely? | Immutable BOOT loads independent SYSTEM bundles from microSD; failed experiments return to the known recovery environment after a hardware reboot |
+| How is the kernel source kept reproducible? | A pinned upstream base plus **17 subsystem patches**, canonical DT/config records and exact prepared-tree checks |
 
 ```text
 Sony boot → immutable Linux BOOT → microSD/kexec → modern Linux SYSTEM
                                                 └─ DRM/MSM → Freedreno → Phosh
 ```
 
-## Ideas behind the port
+The table above describes the **usable system**, not merely drivers that build
+or probe. Detailed per-device evidence and acceptance limits are recorded below
+and in the project documentation.
 
-### A recovery environment that stays put
+## Engineering highlights
 
-The small BOOT kernel is the safety anchor. It reads the microSD card and
-loads a selected SYSTEM kernel through kexec. Experimental kernels can live
-in separate directories beside the working system. After a failed experiment,
-a hardware reboot returns to BOOT without replacing the boot partition.
+### Adreno 220 on current DRM/MSM
 
-This makes the phone a practical development machine: its operating system
-can evolve while the recovery route stays familiar and independently usable.
+The existing A2xx path could submit work to Adreno 220 without an obvious GPU
+fault while still producing corrupted interpolated values. Historical KGSL was
+used as a hardware-behaviour reference rather than as a runtime dependency.
+Comparing the working historical path with DRM/MSM identified missing A220
+context-shadow, MMU invalidation and submission-lifecycle semantics.
 
-### Old driver knowledge, modern Linux interfaces
+Those semantics are now implemented in native DRM/MSM while modern DRM virtual
+memory, fences and userspace state remain owned by the current stack. The
+result is real FD220 GLES2 rendering through current Mesa/Freedreno and a Phosh
+session using hardware composition instead of a software-rendering fallback.
 
-Adreno 220 was able to submit commands under modern Freedreno while silently
-corrupting interpolated values. Tests with the historical KGSL stack established
-a working hardware reference. Comparing the two paths led to transferring
-A220 context, MMU and submission lifecycle behaviour into modern DRM/MSM.
+### Display bring-up from a previously unsupported path
 
-The result keeps current Mesa, GBM/EGL and Phosh. Sony/Qualcomm sources remain
-valuable descriptions of the hardware; their register sequences and wiring
-facts can be expressed through current Linux drivers and frameworks.
+Hikari's 720×1280 panel did not have a complete modern-kernel display path. The
+port brings together MDP4, MSM8x60 DSI host support, a 45 nm DSI PHY path, the
+Renesas R63306/TMD MDV22 panel and the required clock, fabric and memory
+plumbing. It also fixes Hikari-specific command-DMA/vblank behaviour needed for
+stable physical scanout.
 
-### A port you can reconstruct
+The result is native KMS scanout with working backlight and a touch-driven
+Wayland session. Resume and some handoff paths are still separate acceptance
+problems and are not hidden by the fact that normal scanout works.
 
-The kernel changes are organised as **one patch per subsystem**, applied to a
-pinned upstream revision. Source-tree checks establish exactly what a build
-contains, and separate hardware records describe what actually ran on the phone.
-This should make upgrades, regression checks and experiments easier to follow.
+### CPU, clocks and shared platform infrastructure
 
-### One device, several ways to use it
+The port brings both Scorpion cores online and reconstructs MSM8x60 clock,
+reset, interconnect, PMIC and shared-L2 dependencies needed by the rest of the
+machine. Native CPU/L2 DVFS and per-core SAW voltage coordination are present in
+the maintained source, but the latest audited running image does not expose a
+cpufreq policy, so full dual-core DVFS remains a pending physical acceptance
+item rather than a claimed working feature.
 
-The longer-term aim is a touch-friendly handheld that can also run familiar
-Linux tools with a keyboard, mouse and external display. Debian provides the
-application ecosystem; USB OTG already supports real input devices. HDMI,
-audio and the remaining phone functions still need acceptance before that
-complete experience is available.
+This distinction is intentional: source support, a successful build and a
+physical test are tracked separately throughout the project.
 
-## Where the project is heading
+### Recovery-first development
 
-The next milestones are reliable sleep and wake, full CPU/power-management
-acceptance, robust connectivity, then native audio, telephony and cameras.
-Performance work should reduce idle consumption and keep the interface
-responsive within 1 GiB of RAM. Each milestone needs repeated tests on the
-physical Hikari, including recovery and everyday use.
+The original small BOOT environment stays fixed and acts as the safety anchor.
+It reads microSD-hosted SYSTEM bundles and starts a selected modern kernel using
+kexec. Experimental kernels can therefore live beside a known-good system
+without repeatedly rewriting the boot partition.
+
+That arrangement turns recovery into part of the architecture rather than an
+afterthought: a failed SYSTEM experiment can be abandoned with a hardware
+reboot, while deployment and rollback remain independently testable.
+
+### Reconstructible source instead of a private working tree
+
+Kernel changes are maintained as **one repository patch per subsystem** on top
+of a pinned upstream revision. The materializer checks the exact resulting
+source tree, and canonical board DT/configuration records are kept in the
+repository. Historical experiments and original patch exports remain under
+`research/`, but they are not silently applied to production builds.
+
+This repository layout is optimized for local reconstruction and audit. It is
+not the intended shape of future upstream submissions: upstream series will be
+split into smaller logical changes according to the receiving subsystem's
+review rules.
+
+## What the finished system is meant to be
+
+The target is not merely a phone that reaches a shell or displays a desktop. It
+is a small ARMv7 Linux computer that is comfortable as a handheld and can also
+use ordinary Linux applications, USB keyboard/mouse and eventually an external
+display. Debian supplies normal package management and application software;
+Wayland/Phosh provides the current adaptive interface.
+
+Reaching that target also means respecting the device's 1 GiB RAM and limited
+power budget. Idle consumption, background services, renderer cost, wakeups and
+input latency are release concerns, not post-release polish.
+
+The next major milestones are reliable sleep/wake and CPU power management,
+robust connectivity, then native audio, telephony and cameras. HDMI and media
+acceleration remain part of the full-computer target as well.
 
 ## Hardware readiness
 
@@ -102,6 +138,10 @@ hardware acceptance. **Not verified** means no accepted functional test.
 
 <details>
 <summary><strong>Core, boot & storage</strong></summary>
+
+The recovery architecture, SMP, RAM and microSD-rooted SYSTEM are physically
+working. CPU power management is not yet fully accepted, and native SYSTEM use
+of the internal eMMC remains deliberately unclaimed.
 
 | Capability | Hardware / path | Readiness | Evidence / remaining work |
 |---|---|---|---|
@@ -123,6 +163,10 @@ hardware acceptance. **Not verified** means no accepted functional test.
 
 <details>
 <summary><strong>Graphics, display & controls</strong></summary>
+
+The central handheld UI path is working end to end: native display scanout,
+backlight, multitouch and hardware-accelerated Phosh. Several physical buttons,
+haptics, video acceleration and HDMI still need independent acceptance.
 
 | Capability | Hardware / path | Readiness | Evidence / remaining work |
 |---|---|---|---|
@@ -149,6 +193,11 @@ hardware acceptance. **Not verified** means no accepted functional test.
 <details>
 <summary><strong>Connectivity & telephony</strong></summary>
 
+USB is the strongest connectivity path and works in both device/network and
+powered host roles. Wi-Fi and Bluetooth have demonstrated real operation but
+still have unresolved limits; the cellular stack and other radios have not yet
+reached native Linux acceptance.
+
 | Capability | Hardware / path | Readiness | Evidence / remaining work |
 |---|---|---|---|
 | Wi-Fi station | Broadcom BCM4330 / SDIO | 🟡 Partial | Association, reconnect and traffic passed; later SDIO backplane failure observed on 2026-10-04. |
@@ -172,6 +221,10 @@ hardware acceptance. **Not verified** means no accepted functional test.
 <details>
 <summary><strong>Cameras & audio</strong></summary>
 
+This is still an early bring-up area. Headset insertion is physically working
+and accessory ADC reads exist, but native playback, capture, call routing and
+camera capture are not yet claimed.
+
 | Capability | Hardware / path | Readiness | Evidence / remaining work |
 |---|---|---|---|
 | Rear camera | Sony KMO13BS0 module | ⬜ Not verified | Identified under Android; exact sensor die and native capture unresolved. |
@@ -190,6 +243,10 @@ hardware acceptance. **Not verified** means no accepted functional test.
 <details>
 <summary><strong>Sensors — individually</strong></summary>
 
+Motion/orientation sensors and proximity have passed direct physical tests.
+Ambient-light and thermal/battery channels can produce useful readings, but
+continuous modes, calibration and protection policy still need qualification.
+
 | Capability | Hardware / path | Readiness | Evidence / remaining work |
 |---|---|---|---|
 | Accelerometer | Bosch BMA250 | ✅ Working | Per-axis motion/orientation responses tested; full calibration pending. |
@@ -207,6 +264,11 @@ hardware acceptance. **Not verified** means no accepted functional test.
 
 <details>
 <summary><strong>Power & sleep</strong></summary>
+
+Real USB charging works and native battery/power measurements are available,
+but reliable system sleep is the largest remaining blocker to normal handheld
+use. No automatic suspend should be enabled until repeated suspend/resume and
+wake-source tests pass.
 
 | Capability | Hardware / path | Readiness | Evidence / remaining work |
 |---|---|---|---|
@@ -229,10 +291,10 @@ older acceptance records are in [HARDWARE.md](docs/HARDWARE.md),
 [hardware.yaml](status/hardware.yaml) and the [latest audit](docs/FUNCTIONAL-PATCH-AUDIT.md).
 Newer audit limitations take precedence over older aggregate status labels.
 
-## Build and explore
+## Build, test and deploy
 
-Start with [BUILD.md](docs/BUILD.md) for host dependencies, configuration,
-firmware requirements and packaging. Source reconstruction is separate from deployment:
+A clean source tree can be reconstructed from the pinned upstream revision and
+the maintained subsystem series:
 
 ```sh
 scripts/materialize-hikari-kernel.sh /path/to/new/linux-hikari
@@ -240,17 +302,62 @@ KERNEL_SRC=/path/to/new/linux-hikari scripts/build-hikari-debian-kernel.sh
 python3 -m unittest discover -s tests
 ```
 
-The materializer refuses to reset an existing tree. Build preparation never
-edits kernel source; changes must belong to the subsystem patches. Original
-patches/authorship and exact tree-equivalence records remain archived.
+The materializer refuses to reset an existing tree. Build preparation does not
+silently edit kernel source: maintained changes must be represented by the
+patch series, and the resulting tree is checked against the recorded identity.
+
+A complete SYSTEM also includes the Debian rootfs and initramfs. Packaging,
+transfer to the phone and BOOT/SYSTEM switching are documented in
+[BUILD.md](docs/BUILD.md). Physical acceptance procedures are in
+[TESTING.md](docs/TESTING.md), and recovery constraints are in
+[RECOVERY.md](docs/RECOVERY.md). Source reconstruction and deployment are kept
+separate deliberately so that building a kernel never implies permission to
+rewrite recovery-critical storage.
+
+## Repository map
 
 | Directory | Contents |
 |---|---|
-| `kernel/` | Upstream lock, 17 subsystem patches, DT and config |
-| `distro/`, `debian/`, `ui/` | Mesa integration, Debian packaging and session setup |
-| `scripts/`, `tools/`, `tests/` | Reproducible builds, diagnostics and checks |
-| `docs/`, `status/` | Hardware facts, readiness, power, recovery and acceptance |
-| `research/` | Evidence and archived experiments; not automatic production input |
+| `kernel/` | Pinned upstream base, 17 subsystem patches, canonical DT and kernel configs |
+| `distro/`, `debian/`, `ui/` | Mesa/runtime integration, Debian system configuration and graphical session setup |
+| `initramfs/` | BOOT/SYSTEM early-userspace components |
+| `firmware/` | Firmware metadata/integration material subject to its original licensing |
+| `scripts/`, `tools/`, `tests/` | Reproducible builds, packaging, diagnostics, transfer helpers and automated checks |
+| `docs/`, `status/` | Maintained hardware facts, readiness, power, recovery, source provenance and acceptance records |
+| `research/` | Raw evidence, historical experiments and superseded work; never implicit production input |
+
+## Documentation map
+
+Start with the document that matches what you are trying to do:
+
+| Topic | Document |
+|---|---|
+| Current runnable state and known gaps | [STATUS.md](docs/STATUS.md) |
+| Reconstructing, building and packaging SYSTEM/BOOT | [BUILD.md](docs/BUILD.md) |
+| Physical acceptance procedures | [TESTING.md](docs/TESTING.md) |
+| Hardware inventory and evidence | [HARDWARE.md](docs/HARDWARE.md) |
+| Safe recovery and destructive-operation gates | [RECOVERY.md](docs/RECOVERY.md) |
+| BOOT architecture | [BOOT.md](docs/BOOT.md) |
+| Partition evidence | [PARTITIONS.md](docs/PARTITIONS.md) |
+| Display-specific bring-up | [DISPLAY.md](docs/DISPLAY.md) |
+| Power and charging | [POWER.md](docs/POWER.md) · [CHARGING.md](docs/CHARGING.md) |
+| Debian/userspace integration | [DEBIAN.md](docs/DEBIAN.md) |
+| Firmware handling | [FIRMWARE.md](docs/FIRMWARE.md) |
+| Source provenance | [SOURCES.md](docs/SOURCES.md) |
+| Upstream status and submission preparation | [UPSTREAM.md](docs/UPSTREAM.md) |
+| Patch/source audit | [FUNCTIONAL-PATCH-AUDIT.md](docs/FUNCTIONAL-PATCH-AUDIT.md) · [PATCH-AUDIT.md](docs/PATCH-AUDIT.md) |
+
+## Contributing
+
+Hardware claims must be tied to the exact source/runtime identity and to a real
+physical test. A build, probe or passing CI job is useful evidence, but it is
+not a substitute for exercising the function on the phone. Failed and partial
+tests are useful results and should be retained rather than rounded up to
+"working".
+
+Kernel work in this repository stays organized by owning subsystem, with
+original authorship and licensing preserved. Read [CONTRIBUTING.md](CONTRIBUTING.md)
+and the relevant documentation before changing hardware support.
 
 ## Project information
 
@@ -265,8 +372,8 @@ Imported code and firmware retain their own licenses.
 <summary>Repository history note</summary>
 
 The history was signed and grouped into logical development checkpoints on
-2026-10-05 at the owner's request.
-Commit IDs changed; preserve local work before reconciling an existing clone
-with `main`. See the [history audit](docs/HISTORY-SIGNING.md).
+2026-10-05 at the owner's request. Commit IDs changed; preserve local work
+before reconciling an existing clone with `main`. See the
+[history audit](docs/HISTORY-SIGNING.md).
 
 </details>
