@@ -1,31 +1,55 @@
-# Hikari kernel patch stack
+# Hikari subsystem patch stack
 
-This directory makes the project independent of a developer-specific external
-kernel worktree.
+`../source.lock` pins the upstream base and expected complete prepared tree.
+`series` now contains **17 final patches, one per subsystem**, including all
+previous strict-transform and integration results. `post-series` is empty.
+The materializer applies only this series and checks the exact final tree.
 
-`../source.lock` pins the Linus base revision. `series` lists mail patches in
-application order. `scripts/materialize-hikari-kernel.sh` clones the pinned
-base and applies the series with `git am --3way`, preserving patch authorship,
-commit messages and Signed-off-by trailers.
+| Patch | Subsystem |
+|---|---|
+| 0001 | Clocks, resets and clock power domains |
+| 0002 | SCM protected register access |
+| 0003 | Interconnect / RPM fabrics |
+| 0004 | PMIC / MPP |
+| 0005 | CPU frequency and SAW voltage coordination |
+| 0006 | Battery and charging |
+| 0007 | Thermal / TSENS calibration |
+| 0008 | USB PHY |
+| 0009 | MMC |
+| 0010 | Watchdog |
+| 0011 | Touch and navigation input |
+| 0012 | IIO sensors |
+| 0013 | Backlight, LEDs and ALS |
+| 0014 | Display / MDP4 / DSI / PHY / panel |
+| 0015 | A220 GPU lifecycle and MMU |
+| 0016 | IOMMU binding |
+| 0017 | Canonical board DTS and shared SoC DT prerequisites |
 
-The current historical worktree can be imported once with
-`scripts/export-hikari-kernel-patches.sh`. The exporter refuses a dirty source
-tree and records a SHA-to-patch manifest so the imported history remains
-auditable.
+`subsystems.json` maps every final source file and original patch to its new
+subsystem. A mixed original patch may contribute to multiple new patches.
+Original mail exports/messages/authors/trailers and the 64-entry audit are
+preserved unchanged under `research/patches/pre-subsystem-series-20261005/`.
+Consolidated messages include Original-author trailers; consolidation is not
+an assertion of sole authorship or upstream acceptance.
 
-Rules:
+`functional-expectations.json` retains the individual component reviews.
+`functional-audit.tsv` is the current generated per-subsystem audit; it does
+not imply that every branch was physically exercised. Older dated inventories
+and `original-history.tsv` are historical records, not the current series.
 
-- third-party commits stay author-preserved and retain their original trailers;
-- project-owned fixes remain separate, small and bisectable;
-- generated kernels, DTBs, initramfs archives and firmware do not belong here;
-- a patch must not be silently edited after hardware evidence has been recorded;
-  supersede it with a later patch instead;
-- `series` is the canonical application order.
+The four old transform scripts remain diagnostic/provenance utilities. Neither
+the materializer nor board preparation applies them now. The old history
+exporter is for historical imports; do not use it to replace the final series.
 
-Until `series` contains the exported current worktree, the materializer will
-fail rather than silently construct an incomplete Hikari kernel.
+Update the relevant subsystem patch when changing its code. Keep independent
+subsystems separate. For DT updates, update both the board patch and canonical
+`kernel/dts/` copies. After a deliberate source change, update the locked tree
+only after source/build/device checks. Never bypass the equivalence guard just
+to accept an unexplained difference. Binaries/firmware remain outside git.
 
-`post-series` is applied after the materializer's baseline corrections and
-before installing the canonical DTS. It contains the 2026-10-04 hardware integration, split by subsystem from
-the signed kernel commit, followed by the logging-only cleanup. Keep this order:
-the integration depends on those corrections and must not precede them.
+
+Source preparation is read-only: all board/schema/source changes must be in
+these patches. The default build source is `src/linux-hikari-current`, a fresh
+materialization rather than the older dirty `src/linux` worktree. Historical
+direct edits are preserved separately in the research archive, never applied
+implicitly. Divergent canonical DTS or obsolete profiles cause an error.

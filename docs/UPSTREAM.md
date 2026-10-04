@@ -10,7 +10,7 @@ Hikari DT/panel/power support and project corrections. Charger bring-up
 iterations were consolidated into one functional patch; pure diagnostic
 logging patches are not part of the maintained series.
 
-Patch `0077` is a local MSM8660 TSENS implementation candidate. It reuses the
+The thermal subsystem patch `0007-hikari-thermal.patch` (formerly `0077`) is a local MSM8660 TSENS implementation candidate. It reuses the
 current Qualcomm TSENS, NVMEM and thermal frameworks and contains only the
 MSM8660-specific calibration/topology described by the Sony BSP. It is not an
 accepted upstream change. Its temperature/hwmon path is hardware-verified, but

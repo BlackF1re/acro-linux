@@ -4,13 +4,15 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-kernel_src=${KERNEL_SRC:-/home/paul/xperia/src/linux}
+kernel_src=${KERNEL_SRC:-/home/paul/xperia/src/linux-hikari-current}
 kernel_build=${KERNEL_BUILD:-/home/paul/xperia/build/linux-hikari-current}
 rootfs=${ROOTFS_DIR:-/home/paul/xperia/build/hikari-rootfs-current}
 initramfs=${INITRAMFS:-/home/paul/xperia/build/hikari-root-initramfs-current/hikari-root.cpio.gz}
 a220_firmware=${A220_FIRMWARE_DIR:-/home/paul/xperia/build/hikari-a220-firmware-current}
 dtb="$kernel_build/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb"
 boot_dir="$rootfs/boot/hikari-next"
+
+"$repo_root/scripts/check-hikari-kernel-source.sh" "$kernel_src"
 
 for input in "$kernel_build/arch/arm/boot/zImage" "$dtb" "$initramfs"; do
 	test -s "$input" || { echo "missing kernel input: $input" >&2; exit 1; }

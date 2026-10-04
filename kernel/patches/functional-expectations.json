@@ -1,0 +1,937 @@
+[
+  {
+    "source_file": "drivers/clk/qcom/gdsc.c",
+    "anchor": "LEGACY_FOOTSWITCH",
+    "execution_gate": "LEGACY_FOOTSWITCH flag in MMCC GDSCs; error rollback requires failed regulator/regmap operation.",
+    "kind": "RUNTIME",
+    "id": "0001",
+    "effect": "Complete clocks subsystem support; 19 individual source reviews retained.",
+    "live_functions": [
+      "msm8660_mmcc_scm_reg_read",
+      "msm8660_mmcc_scm_reg_write"
+    ],
+    "limit": "See each preserved component review. Consolidation is not new physical verification.",
+    "components": [
+      {
+        "id": "0001",
+        "effect": "Legacy rail enable/clamp/retention, reset ordering and rollback differ from modern GDSC.",
+        "source_file": "drivers/clk/qcom/gdsc.c",
+        "anchor": "LEGACY_FOOTSWITCH",
+        "execution_gate": "LEGACY_FOOTSWITCH flag in MMCC GDSCs; error rollback requires failed regulator/regmap operation.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0002",
+        "effect": "Register RPM_ALWAYS_ON domain policy; initial enable also recognizes this flag.",
+        "source_file": "drivers/clk/qcom/gdsc.c",
+        "anchor": "GENPD_FLAG_RPM_ALWAYS_ON",
+        "execution_gate": "gfx3d, mdp and rot flags use it. Runtime idle cannot collapse these domains; system suspend remains distinct.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0005",
+        "effect": "Clock/GDSC IDs used by provider arrays and canonical DTS.",
+        "source_file": "include/dt-bindings/clock/qcom,mmcc-msm8660.h",
+        "anchor": "MDP_LUT_CLK",
+        "execution_gate": "Header consumed by MMCC C and DTS compilation.",
+        "live_functions": [],
+        "kind": "ABI",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0006",
+        "effect": "Reset IDs index actual MMCC reset mappings.",
+        "source_file": "include/dt-bindings/reset/qcom,mmcc-msm8660.h",
+        "anchor": "GFX3D_RESET",
+        "execution_gate": "Header consumed by MMCC reset table; each reset acts only when requested.",
+        "live_functions": [],
+        "kind": "ABI",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0007",
+        "effect": "Register MMCC clocks/reset/power-domain providers and initial hardware configuration.",
+        "source_file": "drivers/clk/qcom/mmcc-msm8660.c",
+        "anchor": "mmcc_msm8660_probe",
+        "execution_gate": "qcom,mmcc-msm8660 binding; optional multimedia consumers need not be active.",
+        "live_functions": [
+          "msm8660_mmcc_scm_reg_read",
+          "msm8660_mmcc_scm_reg_write"
+        ],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0008",
+        "effect": "Defer provider until RPM/fabric supplier can unhalt ports; propagate error instead of accepting halted fabric.",
+        "source_file": "drivers/clk/qcom/mmcc-msm8660.c",
+        "anchor": "MMSS fabric unhalt failed",
+        "execution_gate": "Cold/deferred MMCC probe; boot log records successful unhalt, failed RPM branch not forced.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0010",
+        "effect": "Remove probe-time speculative PLL2 800MHz writes; consumers retain CCF control.",
+        "source_file": "drivers/clk/qcom/mmcc-msm8660.c",
+        "anchor": "Do not program MM_PLL1/PLL2",
+        "execution_gate": "MMCC probe; deletion is functional even though no added write remains.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0018",
+        "effect": "Correct DSI slave AHB halt bit to 20 and remove critical-clock treatment.",
+        "source_file": "drivers/clk/qcom/mmcc-msm8660.c",
+        "anchor": "static struct clk_branch dsi_s_ahb_clk",
+        "execution_gate": "Clock gate path; active retained AHB references are not a removal test.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0030",
+        "effect": "Clock-assisted eight-clock AXI/AHB/core reset, clamp release and retained MDP rail.",
+        "source_file": "drivers/clk/qcom/mmcc-msm8660.c",
+        "anchor": "mmcc_msm8660_init_mdp_footswitch",
+        "execution_gate": "Enabled MDP node during MMCC probe; boot log verifies completed GFS=0x11f sequence.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0032",
+        "effect": "Retain reset clocks with devm cleanup instead of reverting unsafe bootloader rates.",
+        "source_file": "drivers/clk/qcom/mmcc-msm8660.c",
+        "anchor": "devm_add_action_or_reset",
+        "execution_gate": "MMCC footswitch init; live MDP pixel/TV references persist intentionally.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0033",
+        "effect": "Use SCM-backed MMCC regmap, not ineffective protected MMIO; verify rail latch.",
+        "source_file": "drivers/clk/qcom/mmcc-msm8660.c",
+        "anchor": "msm8660_mmcc_scm_regmap_bus",
+        "execution_gate": "Protected MMSS aperture; read/write callbacks actually used.",
+        "live_functions": [
+          "msm8660_mmcc_scm_reg_read",
+          "msm8660_mmcc_scm_reg_write"
+        ],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0038",
+        "effect": "Correct TV_ENC/DAC/MDP_TV/HDMI_TV halt-bit map; keep real polling.",
+        "source_file": "drivers/clk/qcom/mmcc-msm8660.c",
+        "anchor": "static struct clk_branch mdp_tv_clk",
+        "execution_gate": "MDP_TV used by retained reset clocks; HDMI/TV outputs remain separate acceptance gates.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0044",
+        "effect": "Rounded frequency label changes qcom_find_freq ceiling selection without changing M/N.",
+        "source_file": "drivers/clk/qcom/mmcc-msm8660.c",
+        "anchor": "{  69673000, P_PLL8, 1, 567, 3125 }",
+        "execution_gate": "MDP_PIXEL request 69673000; current panel uses DSI_PIXEL, MDP_PIXEL steady rate is 27MHz.",
+        "live_functions": [],
+        "kind": "SELECTOR_TEST",
+        "limit": "Physical read-only selector test: patched 69673000 vs old 76800000. Panel necessity unknown; do not remove as no-op."
+      },
+      {
+        "id": "0048b",
+        "effect": "Distinct LUT CCF wrapper propagates enable/rate to real MDP core; avoids nonexistent LUT gate.",
+        "source_file": "drivers/clk/qcom/mmcc-msm8660.c",
+        "anchor": "static const struct clk_ops mdp_lut_clk_ops",
+        "execution_gate": "MDP4 requests LUT/core; physical read-only clk API shows enabled 200MHz LUT, empty ops is not no-op.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0049",
+        "effect": "Use bypass2 ops to select actual DSI PLL mux parent; remove empty frequency table.",
+        "source_file": "drivers/clk/qcom/mmcc-msm8660.c",
+        "anchor": ".ops = &clk_rcg_bypass2_ops",
+        "execution_gate": "DSI core set-rate path; current dsi1_src follows 209018880Hz fixed PLL output.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0050",
+        "effect": "Skip unreliable DSI core halt poll, preserving gate enable.",
+        "source_file": "drivers/clk/qcom/mmcc-msm8660.c",
+        "anchor": "static struct clk_branch dsi1_clk",
+        "execution_gate": "DSI core gate; skip changes enable failure behavior, not an extra register write.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0057b",
+        "effect": "Provide exact 209018880/3 DSI pixel divider frequency table.",
+        "source_file": "drivers/clk/qcom/mmcc-msm8660.c",
+        "anchor": "static const struct freq_tbl clk_tbl_dsi1_pixel",
+        "execution_gate": "DSI_PIXEL requested at rounded 69673000; physical clk_round_rate returns 69673000, hardware rate69672960.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0058",
+        "effect": "Skip unreliable DSI pixel halt poll while retaining actual gate operation.",
+        "source_file": "drivers/clk/qcom/mmcc-msm8660.c",
+        "anchor": "static struct clk_branch dsi1_pixel_clk",
+        "execution_gate": "DSI pixel branch; CCF reports enabled, removal may reject working enable with EBUSY.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "transform:mmcc",
+        "effect": "Fix VPE AXI register, ROT enable, IMEM/VCODEC halt and optional critical flags.",
+        "source_file": "drivers/clk/qcom/mmcc-msm8660.c",
+        "anchor": "static struct clk_branch vpe_axi_clk",
+        "execution_gate": "Relevant VPE/ROT/IMEM/VCODEC consumers; disabled video hardware does not make mappings invalid.",
+        "live_functions": [],
+        "kind": "TRANSFORM",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      }
+    ]
+  },
+  {
+    "source_file": "drivers/firmware/qcom/qcom_scm.c",
+    "anchor": "if (!legacy_minimal)",
+    "execution_gate": "qcom,scm-msm8660; successful legacy provider boot log; omitted commands are deliberate behavior.",
+    "kind": "RUNTIME",
+    "id": "0002",
+    "effect": "Complete scm subsystem support; 2 individual source reviews retained.",
+    "live_functions": [
+      "qcom_scm_io_readl",
+      "qcom_scm_io_writel"
+    ],
+    "limit": "See each preserved component review. Consolidation is not new physical verification.",
+    "components": [
+      {
+        "id": "0035",
+        "effect": "Skip unsupported modern TrustZone WAITQ/PAS probing for legacy MSM8660.",
+        "source_file": "drivers/firmware/qcom/qcom_scm.c",
+        "anchor": "if (!legacy_minimal)",
+        "execution_gate": "qcom,scm-msm8660; successful legacy provider boot log; omitted commands are deliberate behavior.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0036",
+        "effect": "Decode legacy SCM read value from r0 and fix AHB/AXI register map/init masks.",
+        "source_file": "drivers/firmware/qcom/qcom_scm.c",
+        "anchor": "*val = (u32)ret",
+        "execution_gate": "Legacy SCM convention; real MMCC reads/writes observed, not all startup masks independently bracketed.",
+        "live_functions": [
+          "qcom_scm_io_readl",
+          "qcom_scm_io_writel"
+        ],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      }
+    ]
+  },
+  {
+    "source_file": "Documentation/devicetree/bindings/interconnect/qcom,msm8660.yaml",
+    "anchor": "qcom,msm8660",
+    "execution_gate": "DT schema plus included endpoint header; no independent runtime call.",
+    "kind": "ABI",
+    "id": "0003",
+    "effect": "Complete interconnect subsystem support; 2 individual source reviews retained.",
+    "live_functions": [
+      "msm8660_icc_set"
+    ],
+    "limit": "See each preserved component review. Consolidation is not new physical verification.",
+    "components": [
+      {
+        "id": "0003",
+        "effect": "Declare four fabric bindings and named interconnect endpoint numeric ABI.",
+        "source_file": "Documentation/devicetree/bindings/interconnect/qcom,msm8660.yaml",
+        "anchor": "qcom,msm8660",
+        "execution_gate": "DT schema plus included endpoint header; no independent runtime call.",
+        "live_functions": [],
+        "kind": "ABI",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0004",
+        "effect": "Four RPM NoC providers aggregate bandwidth and program bus clocks/arbitration.",
+        "source_file": "drivers/interconnect/qcom/msm8660.c",
+        "anchor": "msm8660_icc_set",
+        "execution_gate": "Matching DT fabric + CONFIG_INTERCONNECT_QCOM_MSM8660; votes made by consumers.",
+        "live_functions": [
+          "msm8660_icc_set"
+        ],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      }
+    ]
+  },
+  {
+    "source_file": "drivers/mfd/qcom-pm8xxx.c",
+    "anchor": "PM8901_NR_IRQS",
+    "execution_gate": "qcom,pm8901 and PM8901 MPP nodes bind; individual input IRQ not artificially injected.",
+    "kind": "RUNTIME",
+    "id": "0004",
+    "effect": "Complete pmic subsystem support; 4 individual source reviews retained.",
+    "live_functions": [],
+    "limit": "See each preserved component review. Consolidation is not new physical verification.",
+    "components": [
+      {
+        "id": "0066",
+        "effect": "PM8901 IRQ controller size and 4-MPP match enable second PMIC support.",
+        "source_file": "drivers/mfd/qcom-pm8xxx.c",
+        "anchor": "PM8901_NR_IRQS",
+        "execution_gate": "qcom,pm8901 and PM8901 MPP nodes bind; individual input IRQ not artificially injected.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0069",
+        "effect": "Map PM8901 MPP child IRQ0..3 to parent48..51.",
+        "source_file": "drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c",
+        "anchor": "*parent_hwirq = child_hwirq + 48",
+        "execution_gate": "PM8901 GPIO-to-IRQ users (cradle/proximity wiring); physical source change needed.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0070",
+        "effect": "Output directions clear input mode and store requested output value before register encode.",
+        "source_file": "drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c",
+        "anchor": "pin->output_value = !!value",
+        "execution_gate": "MPP output/config APIs; source has real mode/value changes. Do not toggle power pins merely to collect hits.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0071",
+        "effect": "Use PM8901 MPP register base0x27 instead of PM8058 base0x50.",
+        "source_file": "drivers/pinctrl/qcom/pinctrl-ssbi-mpp.c",
+        "anchor": "reg_base = SSBI_REG_ADDR_PM8901_MPP_BASE",
+        "execution_gate": "Matched PM8901 probe/IO operations; register-base selection survives in final code.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      }
+    ]
+  },
+  {
+    "source_file": "drivers/regulator/qcom-msm8660-saw-regulator.c",
+    "anchor": "msm8660_saw_probe",
+    "execution_gate": "Target CONFIG_REGULATOR_QCOM_MSM8660_SAW + DT nodes; currently running image lacks validated SAW/DVFS adoption.",
+    "kind": "CONFIG_GATED",
+    "id": "0005",
+    "effect": "Complete cpu subsystem support; 2 individual source reviews retained.",
+    "live_functions": [],
+    "limit": "See each preserved component review. Consolidation is not new physical verification.",
+    "components": [
+      {
+        "id": "0082",
+        "effect": "SAW per-core voltage/control sequencing with boot/fuse constraints.",
+        "source_file": "drivers/regulator/qcom-msm8660-saw-regulator.c",
+        "anchor": "msm8660_saw_probe",
+        "execution_gate": "Target CONFIG_REGULATOR_QCOM_MSM8660_SAW + DT nodes; currently running image lacks validated SAW/DVFS adoption.",
+        "live_functions": [],
+        "kind": "CONFIG_GATED",
+        "limit": "Object compiled; not safe to drop because older live image lacks this newest source integration. Physical latest-image probe pending."
+      },
+      {
+        "id": "0083",
+        "effect": "Scorpion CPU/L2 PLL DVFS, ordered voltage/bandwidth votes and governor policies.",
+        "source_file": "drivers/cpufreq/qcom-msm8660-cpufreq.c",
+        "anchor": "cpufreq_register_driver",
+        "execution_gate": "Target CONFIG_ARM_QCOM_MSM8660_CPUFREQ + fuse/PLL/boot-state guards; current older live image has no cpufreq policies.",
+        "live_functions": [],
+        "kind": "CONFIG_GATED",
+        "limit": "Object compiled. Never infer no-op from missing policies in older booted image; physical latest-image adoption/frequency tests pending."
+      }
+    ]
+  },
+  {
+    "source_file": "drivers/power/supply/bq24160_charger.c",
+    "anchor": "bq24160_probe",
+    "execution_gate": "I2C 1-006b; separate USB/IN sources and charge watchdog.",
+    "kind": "RUNTIME",
+    "id": "0006",
+    "effect": "Complete charging subsystem support; 4 individual source reviews retained.",
+    "live_functions": [
+      "bq24160_get_property",
+      "bq24160_status_work",
+      "bq24160_sync_locked",
+      "bq27xxx_battery_get_property"
+    ],
+    "limit": "See each preserved component review. Consolidation is not new physical verification.",
+    "components": [
+      {
+        "id": "0013",
+        "effect": "BQ24160 power_supply, I2C register control and watchdog service.",
+        "source_file": "drivers/power/supply/bq24160_charger.c",
+        "anchor": "bq24160_probe",
+        "execution_gate": "I2C 1-006b; separate USB/IN sources and charge watchdog.",
+        "live_functions": [
+          "bq24160_get_property",
+          "bq24160_sync_locked"
+        ],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0013b",
+        "effect": "Constrain thermal/input/watchdog/OTG charger policy and expose source/limit controls.",
+        "source_file": "drivers/power/supply/bq24160_charger.c",
+        "anchor": "bq24160_otg_guard_enable",
+        "execution_gate": "Charger policy/safety gates; OTG/cradle/disconnect need external stimulus.",
+        "live_functions": [
+          "bq24160_sync_locked",
+          "bq24160_status_work"
+        ],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0067",
+        "effect": "Allow OTG guard regulator child in charger binding.",
+        "source_file": "Documentation/devicetree/bindings/power/supply/ti,bq24160.yaml",
+        "anchor": "usb-otg-guard",
+        "execution_gate": "Schema describes actual charger regulator child, not runtime writes.",
+        "live_functions": [],
+        "kind": "ABI",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0081",
+        "effect": "BQ27520 G1 gauge interpretation/host insertion plus USB/IN adaptive input policy.",
+        "source_file": "drivers/power/supply/bq24160_charger.c",
+        "anchor": "bq24160_adjust_input",
+        "execution_gate": "Bound gauge/charger; current sample/read/status policy executes. Source-switch/sag/thermal protections need controlled power source.",
+        "live_functions": [
+          "bq24160_sync_locked",
+          "bq24160_status_work",
+          "bq27xxx_battery_get_property"
+        ],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      }
+    ]
+  },
+  {
+    "source_file": "drivers/thermal/qcom/tsens-8960.c",
+    "anchor": "ops_8660",
+    "execution_gate": "Thermal node bound and temperatures read; calibration init retained, thermal shutdown not induced.",
+    "kind": "RUNTIME",
+    "id": "0007",
+    "effect": "Complete thermal subsystem support; 1 individual source reviews retained.",
+    "live_functions": [
+      "tsens_get_temp"
+    ],
+    "limit": "See each preserved component review. Consolidation is not new physical verification.",
+    "components": [
+      {
+        "id": "0077",
+        "effect": "Native MSM8660 TSENS reset/threshold/calibration and GCC syscon child.",
+        "source_file": "drivers/thermal/qcom/tsens-8960.c",
+        "anchor": "ops_8660",
+        "execution_gate": "Thermal node bound and temperatures read; calibration init retained, thermal shutdown not induced.",
+        "live_functions": [
+          "tsens_get_temp"
+        ],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      }
+    ]
+  },
+  {
+    "source_file": "drivers/phy/qualcomm/phy-qcom-usb-hs.c",
+    "anchor": "state = regulator_get_voltage(uphy->v3p3)",
+    "execution_gate": "USB PHY power-on; current transport works but rail toggle not forced.",
+    "kind": "RUNTIME",
+    "id": "0008",
+    "effect": "Complete usb subsystem support; 1 individual source reviews retained.",
+    "live_functions": [],
+    "limit": "See each preserved component review. Consolidation is not new physical verification.",
+    "components": [
+      {
+        "id": "0024",
+        "effect": "Skip forbidden redundant 3.3V rail set when PM8058 L6 already lies in 3.05-3.3V range.",
+        "source_file": "drivers/phy/qualcomm/phy-qcom-usb-hs.c",
+        "anchor": "state = regulator_get_voltage(uphy->v3p3)",
+        "execution_gate": "USB PHY power-on; current transport works but rail toggle not forced.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      }
+    ]
+  },
+  {
+    "source_file": "drivers/mmc/host/mmci.c",
+    "anchor": "static void mmci_fifo_read",
+    "execution_gate": "variant->qcom_fifo and PIO RX; SDIO PIO IRQ observed, helper inlined so no standalone symbol.",
+    "kind": "RUNTIME",
+    "id": "0009",
+    "effect": "Complete mmc subsystem support; 1 individual source reviews retained.",
+    "live_functions": [
+      "mmci_pio_irq"
+    ],
+    "limit": "See each preserved component review. Consolidation is not new physical verification.",
+    "components": [
+      {
+        "id": "0078",
+        "effect": "Read Qualcomm FIFO cyclic address window rather than repeated reads from one address.",
+        "source_file": "drivers/mmc/host/mmci.c",
+        "anchor": "static void mmci_fifo_read",
+        "execution_gate": "variant->qcom_fifo and PIO RX; SDIO PIO IRQ observed, helper inlined so no standalone symbol.",
+        "live_functions": [
+          "mmci_pio_irq"
+        ],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      }
+    ]
+  },
+  {
+    "source_file": "drivers/watchdog/qcom-wdt.c",
+    "anchor": "watchdog_stop_on_reboot",
+    "execution_gate": "Shutdown/kexec notifier; no deliberate reboot from SMP SYSTEM for audit.",
+    "kind": "RUNTIME",
+    "id": "0010",
+    "effect": "Complete watchdog subsystem support; 1 individual source reviews retained.",
+    "live_functions": [],
+    "limit": "See each preserved component review. Consolidation is not new physical verification.",
+    "components": [
+      {
+        "id": "0076",
+        "effect": "Register watchdog-stop reboot notifier so kexec/reboot is not reset by old watchdog.",
+        "source_file": "drivers/watchdog/qcom-wdt.c",
+        "anchor": "watchdog_stop_on_reboot",
+        "execution_gate": "Shutdown/kexec notifier; no deliberate reboot from SMP SYSTEM for audit.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      }
+    ]
+  },
+  {
+    "source_file": "drivers/input/rmi4/rmi_2d_sensor.c",
+    "anchor": "touch_overlay_process_contact",
+    "execution_gate": "Nonempty DT overlay + real F11/F12 contacts; inactive phone gives zero calls, synthetic input would not prove hardware.",
+    "kind": "RUNTIME",
+    "id": "0011",
+    "effect": "Complete input subsystem support; 1 individual source reviews retained.",
+    "live_functions": [
+      "rmi_2d_sensor_abs_report",
+      "rmi_2d_sensor_sync_frame"
+    ],
+    "limit": "See each preserved component review. Consolidation is not new physical verification.",
+    "components": [
+      {
+        "id": "0084",
+        "effect": "Map RMI contacts through navigation overlays, release inactive keys and sync frames.",
+        "source_file": "drivers/input/rmi4/rmi_2d_sensor.c",
+        "anchor": "touch_overlay_process_contact",
+        "execution_gate": "Nonempty DT overlay + real F11/F12 contacts; inactive phone gives zero calls, synthetic input would not prove hardware.",
+        "live_functions": [
+          "rmi_2d_sensor_abs_report",
+          "rmi_2d_sensor_sync_frame"
+        ],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      }
+    ]
+  },
+  {
+    "source_file": "drivers/iio/proximity/apds9702.c",
+    "anchor": "apds9702_read_raw",
+    "execution_gate": "CONFIG_APDS9702/AK8975 + matched DT/I2C GPIO; both devices actually exposed on the current phone.",
+    "kind": "TRANSFORM",
+    "id": "0012",
+    "effect": "Complete sensors subsystem support; 1 individual source reviews retained.",
+    "live_functions": [],
+    "limit": "See each preserved component review. Consolidation is not new physical verification.",
+    "components": [
+      {
+        "id": "transform:sensors",
+        "effect": "AK8972 match shares verified AK8975 definition; APDS9702 IIO GPIO/I2C driver.",
+        "source_file": "drivers/iio/proximity/apds9702.c",
+        "anchor": "apds9702_read_raw",
+        "execution_gate": "CONFIG_APDS9702/AK8975 + matched DT/I2C GPIO; both devices actually exposed on the current phone.",
+        "live_functions": [],
+        "kind": "TRANSFORM",
+        "limit": "Physical reads: APDS proximity0; AKM X=-8,Y=305,Z=458. Controlled distance/magnetic orientation and IRQ acceptance remain separate tests."
+      }
+    ]
+  },
+  {
+    "source_file": "drivers/video/backlight/as3676-backlight.c",
+    "anchor": "as3676_als_read_raw",
+    "execution_gate": "I2C IDs + DT ALS property; brightness callback exercised/restored; LED/ALS separate tests.",
+    "kind": "TRANSFORM",
+    "id": "0013",
+    "effect": "Complete backlight subsystem support; 1 individual source reviews retained.",
+    "live_functions": [
+      "as3676_backlight_update_status"
+    ],
+    "limit": "See each preserved component review. Consolidation is not new physical verification.",
+    "components": [
+      {
+        "id": "transform:as3676",
+        "effect": "Source-backed LCD DCDC/LED sinks and GPIO2 ALS IIO conversion.",
+        "source_file": "drivers/video/backlight/as3676-backlight.c",
+        "anchor": "as3676_als_read_raw",
+        "execution_gate": "I2C IDs + DT ALS property; brightness callback exercised/restored; LED/ALS separate tests.",
+        "live_functions": [
+          "as3676_backlight_update_status"
+        ],
+        "kind": "TRANSFORM",
+        "limit": "Brightness callback executed/restored; ALS raw0 read on device. No controlled lux/RGB calibration performed."
+      }
+    ]
+  },
+  {
+    "source_file": "drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c",
+    "anchor": "dsi_phy_45nm_msm8x60_cfgs",
+    "execution_gate": "Matched panel/PHY; later patches/transforms refine initialization rather than cancel driver support.",
+    "kind": "RUNTIME",
+    "id": "0014",
+    "effect": "Complete display subsystem support; 21 individual source reviews retained.",
+    "live_functions": [
+      "as3676_backlight_update_status",
+      "mdp4_crtc_commit_irq",
+      "mdp4_disable",
+      "mdp4_enable",
+      "msm_framebuffer_cleanup",
+      "msm_framebuffer_prepare",
+      "msm_gem_get_and_pin_phys",
+      "msm_gem_unpin_phys"
+    ],
+    "limit": "See each preserved component review. Consolidation is not new physical verification.",
+    "components": [
+      {
+        "id": "0009b",
+        "effect": "Introduce panel/45nm PHY/backlight drivers and Kconfig/DT interfaces.",
+        "source_file": "drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c",
+        "anchor": "dsi_phy_45nm_msm8x60_cfgs",
+        "execution_gate": "Matched panel/PHY; later patches/transforms refine initialization rather than cancel driver support.",
+        "live_functions": [
+          "as3676_backlight_update_status"
+        ],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0012",
+        "effect": "Correct PHY identity/dividers/source clock and HSE panel mode.",
+        "source_file": "drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c",
+        "anchor": "dsi_45nm_program_hikari_dividers",
+        "execution_gate": "45nm PHY enable + fixed-rate clocks; old YAML identities superseded intentionally.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0014",
+        "effect": "Correct PHY resource offset and panel/backlight power sequencing; add SFPB binding.",
+        "source_file": "drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c",
+        "anchor": "HIKARI_PHY_RESOURCE_OFFSET",
+        "execution_gate": "Native PHY resource starts at controller+0xf0; unadjusted offsets hit wrong registers.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0016",
+        "effect": "Select V2 host configuration from SoC compatible instead of zero VERSION read.",
+        "source_file": "drivers/gpu/drm/msm/dsi/dsi_host.c",
+        "anchor": "qcom,msm8660-dsi-ctrl",
+        "execution_gate": "DSI config selection during probe; boot log confirms V2 selection.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0019",
+        "effect": "Fix exact panel command payload lengths (C0/C8/gamma), preventing truncated transfers.",
+        "source_file": "drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c",
+        "anchor": "static const u8",
+        "execution_gate": "Panel prepare executes command table; no reprogramming panel during audit.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0021",
+        "effect": "Use correct DSI byte/escape gates and specialized MSM8x60 link clock ops.",
+        "source_file": "drivers/gpu/drm/msm/dsi/dsi_host.c",
+        "anchor": "dsi_link_clk_set_rate_msm8x60",
+        "execution_gate": "V2 host ops + live byte/escape/source/pixel clock rates; MDP table entry is separate.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0022",
+        "effect": "Optional vdd allows absent separate rail but preserves non-ENODEV/defer errors.",
+        "source_file": "drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c",
+        "anchor": "devm_regulator_get_optional",
+        "execution_gate": "MDP probe with GDSC instead of separate vdd-supply; failures must still fail probe.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0027b",
+        "effect": "One-time firmware DSI/PLL quiesce, held bus references, balanced teardown.",
+        "source_file": "drivers/gpu/drm/msm/dsi/dsi_host.c",
+        "anchor": "msm_dsi_host_quiesce_boot_state",
+        "execution_gate": "MSM8x60 config flag; boot log confirms quiesce. Suspend/teardown intentionally not forced.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0028",
+        "effect": "Permit MDP4 power-domains in schema.",
+        "source_file": "Documentation/devicetree/bindings/display/msm/mdp4.yaml",
+        "anchor": "power-domains",
+        "execution_gate": "DT schema; no runtime code.",
+        "live_functions": [],
+        "kind": "ABI",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0031b",
+        "effect": "Propagate MDP clock errors, balanced unwind, 200MHz MSM8260 limit and checked revision read.",
+        "source_file": "drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c",
+        "anchor": "200000000 : 266667000",
+        "execution_gate": "MDP enable/disable executed; injected clock failure and cold omission unsafe without recovery bracket.",
+        "live_functions": [
+          "mdp4_enable",
+          "mdp4_disable"
+        ],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0043",
+        "effect": "Separate DMA-done commit IRQ from PRIMARY_VSYNC video vblank.",
+        "source_file": "drivers/gpu/drm/msm/disp/mdp4/mdp4_crtc.c",
+        "anchor": "MDP4_IRQ_PRIMARY_VSYNC",
+        "execution_gate": "DSI video mode; commit IRQ observed, vblank mask reviewed separately.",
+        "live_functions": [
+          "mdp4_crtc_commit_irq"
+        ],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0045",
+        "effect": "Acquire/program/enable DSI core clock and unwind it with byte/escape/pixel clocks.",
+        "source_file": "drivers/gpu/drm/msm/dsi/dsi_cfg.c",
+        "anchor": ".clk_init_ver = dsi_clk_init_v2",
+        "execution_gate": "MSM8x60 host configuration; live dsi1_src is 209018880Hz.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0046",
+        "effect": "Commit PLL_CTRL_0 ENABLE after programming and clear it on disable.",
+        "source_file": "drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c",
+        "anchor": "hikari_pll[0] | BIT(0)",
+        "execution_gate": "45nm PHY enable/disable; visible panel and PHY boot log, disable not forced.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0051",
+        "effect": "Issue display-on in prepare with upstream-first panel ordering, not late enable callback.",
+        "source_file": "drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c",
+        "anchor": "prepare_prev_first = true",
+        "execution_gate": "Panel bridge prepare path; late enable is now intentionally empty after successful prepare.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0052",
+        "effect": "Allocate/free V2 DMA with controller device, not DRM aggregate device.",
+        "source_file": "drivers/gpu/drm/msm/dsi/dsi_host.c",
+        "anchor": "dma_alloc_coherent(dev, size",
+        "execution_gate": "dsi_tx_buf_alloc_v2 selected by MSM8x60 ops; frees match controller device.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0056b",
+        "effect": "Software DMA trigger + TE gating, ordered writes/barriers and guarded idle/error-free IRQ timeout.",
+        "source_file": "drivers/gpu/drm/msm/dsi/dsi_host.c",
+        "anchor": "cmd_dma_irq_timeout_nonfatal",
+        "execution_gate": "DSI panel commands; timeout guard not forced in audit, barriers retained verbatim.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0060",
+        "effect": "Use software MDP trigger and Sony clock-pre/post timing for Hikari video.",
+        "source_file": "drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c",
+        "anchor": "clk_post = 0x04",
+        "execution_gate": "PHY shared timing and host config on MSM8x60; timing fields remain in final code.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0061",
+        "effect": "Move analog controls before PHY table writes and avoid premature continuous-HS request.",
+        "source_file": "drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c",
+        "anchor": "Sony applies the analog pre-enable controls",
+        "execution_gate": "Ordered PHY/host start; equal final values at different times are not equivalent.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0062",
+        "effect": "Acquire MDP memory ICC path and hold 407808000/1019520000 Bps scanout vote.",
+        "source_file": "drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c",
+        "anchor": "Bps_to_icc(407808000)",
+        "execution_gate": "MDP probe + canonical interconnects; boot log records vote; no live vote reduction attempted.",
+        "live_functions": [],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "0065",
+        "effect": "CMA-backed physical scanout and matching pin/unpin fallback when KMS VM is absent.",
+        "source_file": "drivers/gpu/drm/msm/msm_gem.c",
+        "anchor": "dma_alloc_contiguous",
+        "execution_gate": "No MDP IOMMU on current Hikari; 98 physical pin/unpin and prepare/cleanup calls observed.",
+        "live_functions": [
+          "msm_gem_get_and_pin_phys",
+          "msm_gem_unpin_phys",
+          "msm_framebuffer_prepare",
+          "msm_framebuffer_cleanup"
+        ],
+        "kind": "RUNTIME",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      },
+      {
+        "id": "transform:display",
+        "effect": "Hikari BGR write (not zero), Sony panel rail/reset/power order and off delays.",
+        "source_file": "drivers/gpu/drm/msm/dsi/dsi_host.c",
+        "anchor": "DSI_VID_CFG1_RGB_SWAP(msm_host->rgb_swap)",
+        "execution_gate": "Attached sony,hikari panel; display works, channel values/source gate retained.",
+        "live_functions": [],
+        "kind": "TRANSFORM",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      }
+    ]
+  },
+  {
+    "source_file": "drivers/gpu/drm/msm/adreno/a2xx_gpu.c",
+    "anchor": "a220_legacy_submit_prepare",
+    "execution_gate": "A220 revision220 + init/submit/map/unmap; transition56 NEAR noSEVERE.",
+    "kind": "RUNTIME",
+    "id": "0015",
+    "effect": "Complete gpu subsystem support; 2 individual source reviews retained.",
+    "live_functions": [
+      "a2xx_gpummu_map",
+      "a2xx_gpummu_unmap",
+      "a2xx_submit"
+    ],
+    "limit": "See each preserved component review. Consolidation is not new physical verification.",
+    "components": [
+      {
+        "id": "0080",
+        "effect": "Preserve A220 shadow banks, CP-ordered PTE invalidate, waits/context/GPR rearm.",
+        "source_file": "drivers/gpu/drm/msm/adreno/a2xx_gpu.c",
+        "anchor": "a220_legacy_submit_prepare",
+        "execution_gate": "A220 revision220 + init/submit/map/unmap; transition56 NEAR noSEVERE.",
+        "live_functions": [
+          "a2xx_submit",
+          "a2xx_gpummu_map",
+          "a2xx_gpummu_unmap"
+        ],
+        "kind": "RUNTIME",
+        "limit": "Combined lifecycle physically works. Individual wait/register necessity requires omission brackets; preserve entire verified block."
+      },
+      {
+        "id": "0086",
+        "effect": "Reduce info logs to dynamic debug; comments reflect production lifecycle.",
+        "source_file": "drivers/gpu/drm/msm/adreno/a2xx_gpu.c",
+        "anchor": "KGSL-derived lifecycle compatibility",
+        "execution_gate": "Logging configuration only; previous token/code-equivalence and build checks.",
+        "live_functions": [],
+        "kind": "LOGGING",
+        "limit": "No hardware sequencing changed; dynamic-debug output is conditional, errors remain."
+      }
+    ]
+  },
+  {
+    "source_file": "Documentation/devicetree/bindings/iommu/qcom,apq8064-iommu.yaml",
+    "anchor": "qcom,msm8660-iommu",
+    "execution_gate": "Schema for optional IOMMU path; current scanout intentionally uses physical/CMA.",
+    "kind": "ABI",
+    "id": "0016",
+    "effect": "Complete iommu subsystem support; 1 individual source reviews retained.",
+    "live_functions": [],
+    "limit": "See each preserved component review. Consolidation is not new physical verification.",
+    "components": [
+      {
+        "id": "0039",
+        "effect": "Document MSM8660 IOMMU compatible with APQ8064 fallback.",
+        "source_file": "Documentation/devicetree/bindings/iommu/qcom,apq8064-iommu.yaml",
+        "anchor": "qcom,msm8660-iommu",
+        "execution_gate": "Schema for optional IOMMU path; current scanout intentionally uses physical/CMA.",
+        "live_functions": [],
+        "kind": "ABI",
+        "limit": "No isolated omission A/B; function/binding evidence does not prove every hunk necessary."
+      }
+    ]
+  },
+  {
+    "source_file": "arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts",
+    "anchor": "sony,hikari",
+    "execution_gate": "CONFIG_ARCH_QCOM + Hikari DTB; canonical board files must match kernel/dts.",
+    "kind": "ABI",
+    "id": "0017",
+    "effect": "Complete board subsystem support; 1 individual source reviews retained.",
+    "live_functions": [],
+    "limit": "See each preserved component review. Consolidation is not new physical verification.",
+    "components": [
+      {
+        "id": "canonical-dts",
+        "effect": "Canonical Hikari board wiring, memory, regulators and device graph, shared MSM8660 DTS prerequisites.",
+        "source_file": "arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts",
+        "anchor": "sony,hikari",
+        "execution_gate": "CONFIG_ARCH_QCOM + Hikari DTB; canonical board files must match kernel/dts.",
+        "live_functions": [],
+        "kind": "ABI",
+        "limit": "Board wiring retained byte-for-byte; no new hardware acceptance or isolated omission test."
+      }
+    ]
+  }
+]

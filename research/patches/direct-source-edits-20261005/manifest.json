@@ -1,0 +1,12 @@
+{
+  "source": "/home/paul/xperia/src/linux",
+  "base_commit": "33452d3bca12bae8ee3bd82ab5675278f7a25837",
+  "dirty_snapshot_tree": "7b7704e63e3e3b71eb53485a68907bef73c58803",
+  "current_production_source_tree": "e3d73fd2f7bffefd6e42b0ec789d4e0af81fde45",
+  "source_files": 46,
+  "subsystem_deltas": 11,
+  "real_index_and_worktree_unchanged": true,
+  "replay_exact_tree_match": true,
+  "classification": "HISTORICAL_NOT_ACTIVE",
+  "authors_of_uncommitted_changes": "UNKNOWN; preserved snapshot, not attributed to snapshot exporter"
+}

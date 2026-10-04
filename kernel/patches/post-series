@@ -1,7 +1,1 @@
-# Subsystem split of signed integration f7a6e62ff206edff9cee8c04226e85f1102a9a85
-0080-drm-msm-preserve-KGSL-derived-A220-lifecycle.patch
-0081-power-supply-integrate-Hikari-battery-and-adaptive-charging.patch
-0082-regulator-add-MSM8660-per-core-SAW-voltage-control.patch
-0083-cpufreq-add-MSM8660-Scorpion-DVFS.patch
-0084-input-map-Hikari-navigation-strip-through-touch-overlays.patch
-0086-chore-quiet-Hikari-startup-diagnostics.patch
+# Empty: all integration and transform results are included in subsystem patches.

@@ -7,12 +7,6 @@ import json
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-TRANSFORMS = {
-    'transform:mmcc': 'scripts/apply-msm8660-mmcc-corrections.py',
-    'transform:display': 'scripts/apply-hikari-display-finalization.py',
-    'transform:as3676': 'scripts/apply-hikari-as3676-leds.py',
-    'transform:sensors': 'scripts/apply-hikari-sensors.py',
-}
 
 
 def sha(path):
@@ -33,8 +27,7 @@ def main():
     files = {name.split('-')[0]: patches / name for name in names}
     if len(files) != len(names):
         raise SystemExit('duplicate patch ID')
-    files.update({key: REPO / value for key, value in TRANSFORMS.items()})
-    reviews = json.loads((patches / 'functional-expectations-20261004.json').read_text())
+    reviews = json.loads((patches / 'functional-expectations.json').read_text())
     ids = [entry['id'] for entry in reviews]
     if len(ids) != len(set(ids)) or set(ids) != set(files):
         raise SystemExit(f'coverage mismatch: missing={set(files)-set(ids)}, stale={set(ids)-set(files)}')
@@ -49,6 +42,10 @@ def main():
         if review['anchor'] not in content:
             raise SystemExit(f"missing source anchor: {review['id']}")
         line = content[:content.index(review['anchor'])].count('\n') + 1
+        for component in review.get('components', []):
+            component_source = args.source / component['source_file']
+            if component['anchor'] not in component_source.read_text():
+                raise SystemExit(f"missing component anchor: {component['id']}")
         calls = []
         for function in review['live_functions']:
             results = observed.get(function, [])
@@ -70,7 +67,7 @@ def main():
         writer = csv.DictWriter(out, fieldnames=rows[0].keys(), delimiter='\t', lineterminator='\n')
         writer.writeheader()
         writer.writerows(rows)
-    print(f'Coverage verified: {len(names)} mail patches + {len(TRANSFORMS)} transforms; {len(rows)} source anchors.')
+    print(f'Coverage verified: {len(names)} subsystem patches; all component anchors verified.')
 
 
 if __name__ == '__main__':

@@ -1,3 +1,8 @@
+> Packaging update, 2026-10-05: the active series now has 17 final subsystem
+> patches, including all former transforms. The numbered split below is
+> historical. See [kernel/patches/README.md](../kernel/patches/README.md) and
+> [FUNCTIONAL-PATCH-AUDIT.md](FUNCTIONAL-PATCH-AUDIT.md).
+
 # Hikari source and patch audit — 2026-10-04
 
 ## Protected baseline

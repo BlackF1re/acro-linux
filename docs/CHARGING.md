@@ -4,7 +4,7 @@ The Hikari port uses BQ24160 charging and the BQ27520 G1 gauge. The native
 policy preserves hardware charge completion, services the watchdog without
 restarting the charge cycle, coordinates OTG and applies temperature/gauge
 safety checks. Gauge insertion initialization and USB/cradle adaptive input
-limits are carried by patch 0081 and canonical DTS.
+limits are carried by the charging subsystem patch `0006-hikari-charging.patch` and canonical DTS.
 
 USB adaptive probing was physically observed at 500/800/900/1500 mA, with
 VIN-DPM limiting an earlier source to 900 mA. This is source-dependent;

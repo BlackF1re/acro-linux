@@ -1,0 +1,234 @@
+From cef829a5f0ca1adf905aa565b4ca7f3f7a45f97e Mon Sep 17 00:00:00 2001
+From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 00:05:29 +0700
+Subject: [PATCH] thermal: consolidate final Hikari subsystem support
+
+Repackage the prepared source without changing any byte of hardware
+implementation. Includes final corrections and logging cleanup.
+
+Prepared-source-tree: e3d73fd2f7bffefd6e42b0ec789d4e0af81fde45
+Original-series: research/patches/pre-subsystem-series-20261005
+Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+---
+ .../bindings/clock/qcom,gcc-msm8660.yaml      |  8 +-
+ .../bindings/nvmem/qcom,qfprom.yaml           |  1 +
+ .../bindings/thermal/qcom-tsens.yaml          |  1 +
+ drivers/thermal/qcom/tsens-8960.c             | 99 +++++++++++++++++++
+ drivers/thermal/qcom/tsens.c                  |  3 +
+ drivers/thermal/qcom/tsens.h                  |  2 +-
+ 6 files changed, 110 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/clock/qcom,gcc-msm8660.yaml b/Documentation/devicetree/bindings/clock/qcom,gcc-msm8660.yaml
+index 70c9da1f35c20d2f9f19fb453d46ba23d97be4a9..8e792ae590ebe634c4f37f59ffcafa9d1217726d 100644
+--- a/Documentation/devicetree/bindings/clock/qcom,gcc-msm8660.yaml
++++ b/Documentation/devicetree/bindings/clock/qcom,gcc-msm8660.yaml
+@@ -23,8 +23,10 @@ allOf:
+ 
+ properties:
+   compatible:
+-    enum:
+-      - qcom,gcc-msm8660
++    items:
++      - const: qcom,gcc-msm8660
++      - const: syscon
++      - const: simple-mfd
+ 
+   clocks:
+     maxItems: 2
+@@ -45,7 +47,7 @@ examples:
+   # Example for GCC for MSM8974:
+   - |
+     clock-controller@900000 {
+-      compatible = "qcom,gcc-msm8660";
++      compatible = "qcom,gcc-msm8660", "syscon", "simple-mfd";
+       reg = <0x900000 0x4000>;
+       #clock-cells = <1>;
+       #reset-cells = <1>;
+diff --git a/Documentation/devicetree/bindings/nvmem/qcom,qfprom.yaml b/Documentation/devicetree/bindings/nvmem/qcom,qfprom.yaml
+index bc0a0898b9e47b884b5dda7ac0d4c42ef1f78188..8de4f47791942cc63e22bda5f100ec3b8e9e5718 100644
+--- a/Documentation/devicetree/bindings/nvmem/qcom,qfprom.yaml
++++ b/Documentation/devicetree/bindings/nvmem/qcom,qfprom.yaml
+@@ -33,6 +33,7 @@ properties:
+           - qcom,kaanapali-qfprom
+           - qcom,milos-qfprom
+           - qcom,msm8226-qfprom
++          - qcom,msm8660-qfprom
+           - qcom,msm8916-qfprom
+           - qcom,msm8917-qfprom
+           - qcom,msm8937-qfprom
+diff --git a/Documentation/devicetree/bindings/thermal/qcom-tsens.yaml b/Documentation/devicetree/bindings/thermal/qcom-tsens.yaml
+index 5a8f7673e7303960ff0d7aa1f3e241a5fc918ee5..5fc76a44982593b52b7c56c4ceb5e06aa045ac59 100644
+--- a/Documentation/devicetree/bindings/thermal/qcom-tsens.yaml
++++ b/Documentation/devicetree/bindings/thermal/qcom-tsens.yaml
+@@ -23,6 +23,7 @@ properties:
+         items:
+           - enum:
+               - qcom,ipq8064-tsens
++              - qcom,msm8660-tsens
+               - qcom,msm8960-tsens
+ 
+       - description: v0.1 of TSENS
+diff --git a/drivers/thermal/qcom/tsens-8960.c b/drivers/thermal/qcom/tsens-8960.c
+index 4585904fb38002bb25c385be4cedc9e860745480..9a270997947920343caf8f3bbed42c20890b1228 100644
+--- a/drivers/thermal/qcom/tsens-8960.c
++++ b/drivers/thermal/qcom/tsens-8960.c
+@@ -28,6 +28,10 @@
+ #define SLP_CLK_ENA		BIT(26)
+ #define SLP_CLK_ENA_8660	BIT(24)
+ #define SENSOR0_SHIFT		3
++#define MIN_STATUS_MASK_8660	BIT(8)
++#define LOW_STATUS_CLEAR_8660	BIT(9)
++#define UP_STATUS_CLEAR_8660	BIT(10)
++#define MAX_STATUS_MASK_8660	BIT(11)
+ 
+ #define THRESHOLD_ADDR		0x3624
+ 
+@@ -52,6 +56,72 @@ static u32 tsens_msm8960_slope[] = {
+ 			782, 849, 782
+ 			};
+ 
++static int __init init_8660(struct tsens_priv *priv)
++{
++	unsigned int reg, status;
++	int ret;
++
++	ret = init_common(priv);
++	if (ret)
++		return ret;
++
++	ret = regmap_read(priv->tm_map, CNTL_ADDR, &reg);
++	if (ret)
++		return ret;
++
++	ret = regmap_write(priv->tm_map, CNTL_ADDR, reg | SW_RST);
++	if (ret)
++		return ret;
++
++	reg |= EN | BIT(SENSOR0_SHIFT) | MEASURE_PERIOD | SLP_CLK_ENA_8660 |
++	       MIN_STATUS_MASK_8660 | LOW_STATUS_CLEAR_8660 |
++	       UP_STATUS_CLEAR_8660 | MAX_STATUS_MASK_8660;
++	reg &= ~CONFIG_MASK_8660;
++	reg |= CONFIG_8660 << CONFIG_SHIFT_8660;
++
++	ret = regmap_write(priv->tm_map, CNTL_ADDR, reg);
++	if (ret)
++		return ret;
++
++	/* Match the safe power-on thresholds used by the MSM8660 BSP. */
++	ret = regmap_write(priv->tm_map, THRESHOLD_ADDR, 0xff38df50);
++	if (ret)
++		return ret;
++
++	/* The first conversion takes one measurement period (up to 1 second). */
++	return regmap_read_poll_timeout(priv->tm_map, INT_STATUS_ADDR, status,
++					status & BIT(7), 1000, 1100000);
++}
++
++/* MSM8660 QFPROM stores the 30 degree calibration code twice. */
++static int calibrate_8660(struct tsens_priv *priv)
++{
++	char *calib, *calib_backup;
++	u32 p1;
++
++	calib = qfprom_read(priv->dev, "calib");
++	if (IS_ERR(calib))
++		return PTR_ERR(calib);
++
++	calib_backup = qfprom_read(priv->dev, "calib_backup");
++	if (IS_ERR(calib_backup)) {
++		kfree(calib);
++		return PTR_ERR(calib_backup);
++	}
++
++	p1 = (u8)calib_backup[0] ? (u8)calib_backup[0] : (u8)calib[0];
++	kfree(calib_backup);
++	kfree(calib);
++	if (!p1)
++		return -ENODEV;
++
++	/* Sony specifies 0.702 degrees C per ADC code. */
++	priv->sensor[0].slope = 1425;
++	compute_intercept_slope(priv, &p1, NULL, ONE_PT_CALIB);
++
++	return 0;
++}
++
+ static int suspend_8960(struct tsens_priv *priv)
+ {
+ 	int ret;
+@@ -266,6 +336,16 @@ static const struct tsens_ops ops_8960 = {
+ 	.resume		= resume_8960,
+ };
+ 
++static const struct tsens_ops ops_8660 = {
++	.init		= init_8660,
++	.calibrate	= calibrate_8660,
++	.get_temp	= get_temp_common,
++	.enable		= enable_8960,
++	.disable	= disable_8960,
++	.suspend	= suspend_8960,
++	.resume		= resume_8960,
++};
++
+ static struct tsens_features tsens_8960_feat = {
+ 	.ver_major	= VER_0,
+ 	.crit_int	= 0,
+@@ -277,9 +357,28 @@ static struct tsens_features tsens_8960_feat = {
+ 	.trip_max_temp	= 120000,
+ };
+ 
++static struct tsens_features tsens_8660_feat = {
++	.ver_major	= VER_0,
++	.crit_int	= 0,
++	.combo_int	= 0,
++	.adc		= 1,
++	.srot_split	= 0,
++	/* Five exist in the block; Sony documents only sensor 0 as useful. */
++	.max_sensors	= 5,
++	.trip_min_temp	= -40000,
++	.trip_max_temp	= 120000,
++};
++
+ struct tsens_plat_data data_8960 = {
+ 	.num_sensors	= 11,
+ 	.ops		= &ops_8960,
+ 	.feat		= &tsens_8960_feat,
+ 	.fields		= tsens_8960_regfields,
+ };
++
++struct tsens_plat_data data_8660 = {
++	.num_sensors	= 1,
++	.ops		= &ops_8660,
++	.feat		= &tsens_8660_feat,
++	.fields		= tsens_8960_regfields,
++};
+diff --git a/drivers/thermal/qcom/tsens.c b/drivers/thermal/qcom/tsens.c
+index b5ec70201e2f391c027cd18a0cb7047e1c83728f..4c9719d7983f4fe61f5babd6aead1cd4fadf32c5 100644
+--- a/drivers/thermal/qcom/tsens.c
++++ b/drivers/thermal/qcom/tsens.c
+@@ -1194,6 +1194,9 @@ static const struct of_device_id tsens_table[] = {
+ 	}, {
+ 		.compatible = "qcom,msm8956-tsens",
+ 		.data = &data_8956,
++	}, {
++		.compatible = "qcom,msm8660-tsens",
++		.data = &data_8660,
+ 	}, {
+ 		.compatible = "qcom,msm8960-tsens",
+ 		.data = &data_8960,
+diff --git a/drivers/thermal/qcom/tsens.h b/drivers/thermal/qcom/tsens.h
+index e8376accdff3d2257f0cb85bbb32d4fc017d3b10..ca8a453267b3ad390e41a61b8c841991b016feb1 100644
+--- a/drivers/thermal/qcom/tsens.h
++++ b/drivers/thermal/qcom/tsens.h
+@@ -663,7 +663,7 @@ static inline int tsens_suspend_common(struct tsens_priv *priv)
+ #endif
+ 
+ /* TSENS target */
+-extern struct tsens_plat_data data_8960;
++extern struct tsens_plat_data data_8660, data_8960;
+ 
+ /* TSENS v0.1 targets */
+ extern struct tsens_plat_data data_8226, data_8909, data_8916, data_8939, data_8974, data_9607;
+-- 
+2.53.0
+

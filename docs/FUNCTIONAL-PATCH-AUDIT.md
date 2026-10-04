@@ -1,3 +1,18 @@
+# Current packaging — 2026-10-05
+
+The maintained series is now **17 patches, one per subsystem**, with no active
+strict transforms or post-series. The 60-patch/4-transform audit below is a
+historical review preserved unchanged in the archive. Current component
+reviews and generated coverage are in
+[functional-expectations.json](../kernel/patches/functional-expectations.json)
+and [functional-audit.tsv](../kernel/patches/functional-audit.tsv).
+All 64 earlier component reviews are retained, plus a canonical-board review.
+Both independently materialized source trees are identical:
+`e3d73fd2f7bffefd6e42b0ec789d4e0af81fde45`.
+Consolidation does not supply missing physical necessity tests.
+
+---
+
 # Functional patch audit — 2026-10-04
 
 This supersedes the interpretation of the earlier omission audit: textual
@@ -36,7 +51,7 @@ kernel image was installed. BOOT and the known-working SYSTEM are unchanged.
 
 ## Whole-stack inventory
 
-[functional-audit-20261004.tsv](../kernel/patches/functional-audit-20261004.tsv)
+[functional-audit-20261004.tsv](../research/patches/pre-subsystem-series-20261005/functional-audit-20261004.tsv)
 lists **all 60 remaining active mail patches**, their affected files,
 execution gates and retention assessment. Four additional strict transforms
 are run by the materializer: MMCC corrections, display finalization, AS3676
@@ -116,7 +131,7 @@ strict transforms = 64 entries**. Coverage is checked mechanically, including
 unique IDs and an anchor in the fully prepared source. No generic subsystem
 label substitutes for explaining the actual change.
 
-The [review inputs](../kernel/patches/functional-expectations-20261004.json)
+The [review inputs](../research/patches/pre-subsystem-series-20261005/functional-expectations-20261004.json)
 are maintained separately from observed evidence. Reproduce the inventory:
 
 ```sh

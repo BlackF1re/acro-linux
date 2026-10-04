@@ -8,11 +8,15 @@ PATCH_SERIES=kernel/patches/series
 
 # The base above is the Linus revision recorded by the project for the
 # current 7.3-rc1 Hikari bring-up line. Project and third-party commits above
-# this revision are represented by author-preserving mail patches in
-# kernel/patches/. The canonical Hikari DTS is sourced from kernel/dts/ after
-# patch application. This avoids depending on the historical
+# this revision are represented by consolidated subsystem mail patches in
+# kernel/patches/. Canonical Hikari DTS is included in the board patch and
+# checked against kernel/dts/ without build-time edits. This avoids depending on the historical
 # /home/paul/xperia/src/linux worktree for future builds.
 
-POST_PATCH_SERIES=kernel/patches/post-series
+POST_PATCH_SERIES=
+# Former integration/strict transforms are incorporated in PATCH_SERIES.
 # Signed source integration commit exported by post-series:
 HIKARI_INTEGRATION_COMMIT=f7a6e62ff206edff9cee8c04226e85f1102a9a85
+
+# Exact final source tree after subsystem patches and canonical DTS preparation.
+HIKARI_PREPARED_TREE=e3d73fd2f7bffefd6e42b0ec789d4e0af81fde45

@@ -1,0 +1,588 @@
+From 76264b969a62767da9dfc89089acf849045ede00 Mon Sep 17 00:00:00 2001
+From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 00:05:31 +0700
+Subject: [PATCH] backlight: consolidate final Hikari subsystem support
+
+Repackage the prepared source without changing any byte of hardware
+implementation. Includes final corrections and logging cleanup.
+
+Prepared-source-tree: e3d73fd2f7bffefd6e42b0ec789d4e0af81fde45
+Original-author: BlackF1re <plevickij57@gmail.com>
+Original-series: research/patches/pre-subsystem-series-20261005
+Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+---
+ .../bindings/leds/ams,as3676-backlight.yaml   |  30 ++
+ drivers/video/backlight/Kconfig               |   7 +
+ drivers/video/backlight/Makefile              |   1 +
+ drivers/video/backlight/as3676-backlight.c    | 492 ++++++++++++++++++
+ 4 files changed, 530 insertions(+)
+ create mode 100644 Documentation/devicetree/bindings/leds/ams,as3676-backlight.yaml
+ create mode 100644 drivers/video/backlight/as3676-backlight.c
+
+diff --git a/Documentation/devicetree/bindings/leds/ams,as3676-backlight.yaml b/Documentation/devicetree/bindings/leds/ams,as3676-backlight.yaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..5c0fb3c6d8f83761fccc72deab042eef94bd6d41
+--- /dev/null
++++ b/Documentation/devicetree/bindings/leds/ams,as3676-backlight.yaml
+@@ -0,0 +1,30 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/leds/ams,as3676-backlight.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: AMS AS3676 Sony Hikari backlight, LEDs and ambient-light input
++
++maintainers:
++  - Xperia acro S Linux Project <noreply@example.invalid>
++
++properties:
++  compatible:
++    const: ams,as3676-backlight
++
++  reg:
++    maxItems: 1
++
++  ams,als-connected:
++    type: boolean
++    description:
++      The board routes an ambient-light photodiode to the AS3676 GPIO2 ADC
++      input. The ADC value is exposed through the standard IIO light ABI.
++
++required:
++  - compatible
++  - reg
++
++additionalProperties: false
++...
+diff --git a/drivers/video/backlight/Kconfig b/drivers/video/backlight/Kconfig
+index dbf4ca23a9b6d8575a86e39618b312b4df43ea19..872d9170b24ed684e628a3e64596cb64e7594ba9 100644
+--- a/drivers/video/backlight/Kconfig
++++ b/drivers/video/backlight/Kconfig
+@@ -5,6 +5,13 @@
+ 
+ menu "Backlight & LCD device support"
+ 
++config BACKLIGHT_AS3676
++	tristate "AMS AS3676 Hikari backlight, LEDs and ALS"
++	depends on I2C && LEDS_CLASS && IIO
++	help
++	  Support the Sony Fuji/Hikari LCD backlight wired to AS3676 current
++	  sinks 01, 02 and 06. Other AS3676 outputs are deliberately untouched.
++
+ #
+ # LCD
+ #
+diff --git a/drivers/video/backlight/Makefile b/drivers/video/backlight/Makefile
+index 34469711c6cd957dae63c7072ade4830879aba1a..1c7b21e11b83a11a92f1bcd8991155e39c600d02 100644
+--- a/drivers/video/backlight/Makefile
++++ b/drivers/video/backlight/Makefile
+@@ -25,6 +25,7 @@ obj-$(CONFIG_BACKLIGHT_ADP8870)		+= adp8870_bl.o
+ obj-$(CONFIG_BACKLIGHT_APPLE)		+= apple_bl.o
+ obj-$(CONFIG_BACKLIGHT_APPLE_DWI)	+= apple_dwi_bl.o
+ obj-$(CONFIG_BACKLIGHT_AS3711)		+= as3711_bl.o
++obj-$(CONFIG_BACKLIGHT_AS3676)		+= as3676-backlight.o
+ obj-$(CONFIG_BACKLIGHT_AW99706)		+= aw99706.o
+ obj-$(CONFIG_BACKLIGHT_BD6107)		+= bd6107.o
+ obj-$(CONFIG_BACKLIGHT_CGBC)		+= cgbc_bl.o
+diff --git a/drivers/video/backlight/as3676-backlight.c b/drivers/video/backlight/as3676-backlight.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..cabdcf3bca9654375f7a8f1f8052b164ac100b62
+--- /dev/null
++++ b/drivers/video/backlight/as3676-backlight.c
+@@ -0,0 +1,492 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * AS3676 backlight and LED support for Sony Fuji/Hikari.
++ *
++ * The physical Hikari mapping is fixed by Sony's leds-fuji_hikari.c:
++ *   LCD backlight: current sinks 1, 2 and 6
++ *   button backlight: RGB1, RGB2 and RGB3
++ *   notification red/green/blue: current sinks 41/42/43
++ *
++ * The Hikari ambient-light photodiode is wired to the AS3676 GPIO2/ALS ADC
++ * input.  Expose that signal through IIO instead of carrying Sony's private
++ * Android-era ALS sysfs ABI.
++ */
++
++#include <linux/backlight.h>
++#include <linux/bitops.h>
++#include <linux/delay.h>
++#include <linux/i2c.h>
++#include <linux/iio/iio.h>
++#include <linux/kernel.h>
++#include <linux/leds.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/property.h>
++#include <linux/regmap.h>
++
++#define AS3676_CONTROL		0x00
++#define AS3676_CURR12_CTRL	0x01
++#define AS3676_CURR_RGB_CTRL	0x02
++#define AS3676_CURR4_CTRL	0x04
++#define AS3676_LDO_VOLTAGE	0x07
++#define AS3676_CURR1		0x09
++#define AS3676_CURR2		0x0a
++#define AS3676_RGB1		0x0b
++#define AS3676_RGB2		0x0c
++#define AS3676_RGB3		0x0d
++#define AS3676_CURR41		0x13
++#define AS3676_CURR42		0x14
++#define AS3676_CURR43		0x15
++#define AS3676_GPIO_CONTROL	0x1e
++#define AS3676_DCDC1		0x21
++#define AS3676_DCDC2		0x22
++#define AS3676_MODE_SWITCH	0x24
++#define AS3676_ADC_CONTROL	0x26
++#define AS3676_ADC_MSB		0x27
++#define AS3676_ADC_LSB		0x28
++#define AS3676_CURR6		0x2f
++#define AS3676_AMBIENT_CONTROL	0x90
++#define AS3676_AMBIENT_FILTER	0x91
++#define AS3676_AMBIENT_OFFSET	0x92
++#define AS3676_ID1		0x3e
++#define AS3676_ID2		0x3f
++
++#define AS3676_ID1_VALUE	0xae
++#define AS3676_ID2_MASK		0xf0
++#define AS3676_ID2_VALUE	0x50
++
++#define AS3676_ADC_BUSY		BIT(7)
++#define AS3676_ADC_STANDBY	BIT(7)
++#define AS3676_ALS_SOURCE_GPIO2	0
++#define AS3676_ADC_RETRIES	10
++
++/* Values from Sony's Hikari AS3676 platform data and probe sequence. */
++#define HIKARI_AS3676_LDO_2500MV	14
++#define HIKARI_AS3676_GPIO_CONTROL	0xc4
++#define HIKARI_AS3676_MODE_SWITCH	0x70
++#define HIKARI_AS3676_ALS_GAIN_1	0x05
++#define HIKARI_AS3676_ALS_FILTER	0x42
++#define HIKARI_AS3676_ALS_WAIT_US	100000
++
++/*
++ * Exact Sony Ericsson Hikari/Fuji AS3676 step-up startup sequence from
++ * leds-as3676_semc.c.  Writing current-sink values without this sequence can
++ * make sysfs brightness look correct while the LCD LED boost converter is
++ * still off.
++ */
++#define HIKARI_AS3676_DCDC1		0x62
++#define HIKARI_AS3676_DCDC2_PRECHARGE	0x0c
++#define HIKARI_AS3676_CONTROL_ON	0x0d
++#define HIKARI_AS3676_DCDC2_ON		0x8c
++#define HIKARI_AS3676_STARTUP_US	12000
++
++/* One register step is 150 uA; Hikari declares 20 mA maximum for all LEDs. */
++#define HIKARI_LED_MAX_UA	20000
++#define AS3676_FULL_SCALE_UA	38250
++
++struct as3676;
++
++struct as3676_led {
++	struct led_classdev cdev;
++	struct as3676 *as;
++	u8 current_reg;
++	u8 mode_shift;
++	bool button_group;
++};
++
++struct as3676 {
++	struct regmap *regmap;
++	struct backlight_device *bl;
++	struct mutex lock;
++	struct as3676_led button;
++	struct as3676_led red;
++	struct as3676_led green;
++	struct as3676_led blue;
++};
++
++static int as3676_als_standby(struct as3676 *as)
++{
++	unsigned int val;
++	int ret;
++
++	ret = regmap_write(as->regmap, AS3676_AMBIENT_CONTROL, 0);
++	if (ret)
++		return ret;
++
++	/* Sony found that this write/read sequence avoids excess standby draw. */
++	ret = regmap_write(as->regmap, AS3676_ADC_CONTROL,
++			   AS3676_ADC_STANDBY);
++	if (ret)
++		return ret;
++
++	return regmap_read(as->regmap, AS3676_ADC_CONTROL, &val);
++}
++
++static int as3676_als_enable(struct as3676 *as)
++{
++	int ret;
++
++	ret = regmap_write(as->regmap, AS3676_AMBIENT_CONTROL,
++			   HIKARI_AS3676_ALS_GAIN_1);
++	if (ret)
++		return ret;
++
++	return regmap_write(as->regmap, AS3676_ADC_CONTROL,
++			    AS3676_ALS_SOURCE_GPIO2);
++}
++
++static int as3676_als_read_raw(struct iio_dev *indio_dev,
++			       const struct iio_chan_spec *chan,
++			       int *val, int *val2, long mask)
++{
++	struct as3676 *as = iio_device_get_drvdata(indio_dev);
++	unsigned int msb, lsb;
++	int i, ret;
++
++	if (mask != IIO_CHAN_INFO_RAW)
++		return -EINVAL;
++
++	mutex_lock(&as->lock);
++
++	ret = as3676_als_enable(as);
++	if (ret)
++		goto out_unlock;
++
++	/* Sony's Hikari platform data requires 100 ms after enabling the ALS. */
++	usleep_range(HIKARI_AS3676_ALS_WAIT_US,
++		     HIKARI_AS3676_ALS_WAIT_US + 5000);
++
++	for (i = 0; i < AS3676_ADC_RETRIES; i++) {
++		ret = regmap_read(as->regmap, AS3676_ADC_MSB, &msb);
++		if (ret)
++			goto out_standby;
++		if (!(msb & AS3676_ADC_BUSY))
++			break;
++		udelay(10);
++	}
++	if (i == AS3676_ADC_RETRIES) {
++		ret = -ETIMEDOUT;
++		goto out_standby;
++	}
++
++	ret = regmap_read(as->regmap, AS3676_ADC_LSB, &lsb);
++	if (!ret)
++		*val = ((msb & 0x7f) << 3) | (lsb & 0x07);
++out_standby:
++	{
++		int standby_ret = as3676_als_standby(as);
++
++		if (!ret)
++			ret = standby_ret;
++	}
++out_unlock:
++	mutex_unlock(&as->lock);
++
++	return ret ? ret : IIO_VAL_INT;
++}
++
++static const struct iio_info as3676_als_info = {
++	.read_raw = as3676_als_read_raw,
++};
++
++static const struct iio_chan_spec as3676_als_channels[] = {
++	{
++		.type = IIO_LIGHT,
++		.info_mask_separate = BIT(IIO_CHAN_INFO_RAW),
++	},
++};
++
++static int as3676_register_als(struct device *dev, struct as3676 *as)
++{
++	struct iio_dev *indio_dev;
++	int ret;
++
++	if (!device_property_read_bool(dev, "ams,als-connected"))
++		return 0;
++
++	/* Exact board setup used by Sony for the GPIO2 photodiode input. */
++	ret = regmap_write(as->regmap, AS3676_LDO_VOLTAGE,
++			   HIKARI_AS3676_LDO_2500MV);
++	if (ret)
++		return ret;
++	ret = regmap_write(as->regmap, AS3676_GPIO_CONTROL,
++			   HIKARI_AS3676_GPIO_CONTROL);
++	if (ret)
++		return ret;
++	ret = regmap_write(as->regmap, AS3676_MODE_SWITCH,
++			   HIKARI_AS3676_MODE_SWITCH);
++	if (ret)
++		return ret;
++	ret = regmap_write(as->regmap, AS3676_AMBIENT_FILTER,
++			   HIKARI_AS3676_ALS_FILTER);
++	if (ret)
++		return ret;
++	ret = regmap_write(as->regmap, AS3676_AMBIENT_OFFSET, 0);
++	if (ret)
++		return ret;
++	ret = as3676_als_standby(as);
++	if (ret)
++		return ret;
++
++	indio_dev = devm_iio_device_alloc(dev, 0);
++	if (!indio_dev)
++		return -ENOMEM;
++
++	iio_device_set_drvdata(indio_dev, as);
++	indio_dev->name = "as3676-als";
++	indio_dev->info = &as3676_als_info;
++	indio_dev->modes = INDIO_DIRECT_MODE;
++	indio_dev->channels = as3676_als_channels;
++	indio_dev->num_channels = ARRAY_SIZE(as3676_als_channels);
++
++	return devm_iio_device_register(dev, indio_dev);
++}
++
++static int as3676_hikari_start_dcdc(struct device *dev, struct as3676 *as)
++{
++	unsigned int control, dcdc1, dcdc2;
++	int ret;
++
++	/*
++	 * This ordering and 12 ms dwell are hardware initialization, not a
++	 * brightness policy.  Keep them byte-for-byte equivalent to Sony's Hikari
++	 * driver so the step-up converter is actually running before sinks 1/2/6
++	 * are asked for current.
++	 */
++	ret = regmap_write(as->regmap, AS3676_DCDC1, HIKARI_AS3676_DCDC1);
++	if (ret)
++		return ret;
++	ret = regmap_write(as->regmap, AS3676_DCDC2,
++			   HIKARI_AS3676_DCDC2_PRECHARGE);
++	if (ret)
++		return ret;
++	ret = regmap_write(as->regmap, AS3676_CONTROL,
++			   HIKARI_AS3676_CONTROL_ON);
++	if (ret)
++		return ret;
++
++	usleep_range(HIKARI_AS3676_STARTUP_US,
++		     HIKARI_AS3676_STARTUP_US + 500);
++
++	ret = regmap_write(as->regmap, AS3676_DCDC2, HIKARI_AS3676_DCDC2_ON);
++	if (ret)
++		return ret;
++
++	/* Read back the three control registers for physical bring-up evidence. */
++	ret = regmap_read(as->regmap, AS3676_CONTROL, &control);
++	if (ret)
++		return ret;
++	ret = regmap_read(as->regmap, AS3676_DCDC1, &dcdc1);
++	if (ret)
++		return ret;
++	ret = regmap_read(as->regmap, AS3676_DCDC2, &dcdc2);
++	if (ret)
++		return ret;
++
++	if (control != HIKARI_AS3676_CONTROL_ON ||
++	    dcdc1 != HIKARI_AS3676_DCDC1 ||
++	    dcdc2 != HIKARI_AS3676_DCDC2_ON)
++		dev_warn(dev,
++			 "Hikari DCDC readback differs from Sony startup values\n");
++
++	return 0;
++}
++
++static int as3676_backlight_update_status(struct backlight_device *bl)
++{
++	struct as3676 *as = bl_get_data(bl);
++	u8 brightness = backlight_get_brightness(bl);
++	int ret;
++
++	mutex_lock(&as->lock);
++
++	ret = regmap_write(as->regmap, AS3676_CURR1, brightness);
++	if (ret)
++		goto out;
++	ret = regmap_write(as->regmap, AS3676_CURR2, brightness);
++	if (ret)
++		goto out;
++	ret = regmap_write(as->regmap, AS3676_CURR6, brightness);
++	if (ret)
++		goto out;
++
++	/* Current 1 and 2 use fields [1:0] and [3:2], normal-current mode = 1. */
++	ret = regmap_update_bits(as->regmap, AS3676_CURR12_CTRL, 0x0f,
++				 brightness ? 0x05 : 0x00);
++	if (ret)
++		goto out;
++
++	/* Current 6 uses bits [7:6] of curr_rgb_control. */
++	ret = regmap_update_bits(as->regmap, AS3676_CURR_RGB_CTRL, 0xc0,
++				 brightness ? 0x40 : 0x00);
++
++out:
++	mutex_unlock(&as->lock);
++	return ret;
++}
++
++static const struct backlight_ops as3676_backlight_ops = {
++	.options = BL_CORE_SUSPENDRESUME,
++	.update_status = as3676_backlight_update_status,
++};
++
++static u8 as3676_led_current(enum led_brightness brightness)
++{
++	return DIV_ROUND_CLOSEST((unsigned int)brightness * HIKARI_LED_MAX_UA,
++				 AS3676_FULL_SCALE_UA);
++}
++
++static int as3676_led_set(struct led_classdev *cdev,
++			   enum led_brightness brightness)
++{
++	struct as3676_led *led = container_of(cdev, struct as3676_led, cdev);
++	struct as3676 *as = led->as;
++	u8 current_code = as3676_led_current(brightness);
++	int ret;
++
++	mutex_lock(&as->lock);
++
++	if (led->button_group) {
++		ret = regmap_write(as->regmap, AS3676_RGB1, current_code);
++		if (ret)
++			goto out;
++		ret = regmap_write(as->regmap, AS3676_RGB2, current_code);
++		if (ret)
++			goto out;
++		ret = regmap_write(as->regmap, AS3676_RGB3, current_code);
++		if (ret)
++			goto out;
++
++		/* RGB1/2/3 mode fields are [1:0], [3:2], [5:4]. */
++		ret = regmap_update_bits(as->regmap, AS3676_CURR_RGB_CTRL, 0x3f,
++					 brightness ? 0x15 : 0x00);
++	} else {
++		ret = regmap_write(as->regmap, led->current_reg, current_code);
++		if (ret)
++			goto out;
++		ret = regmap_update_bits(as->regmap, AS3676_CURR4_CTRL,
++					 0x03 << led->mode_shift,
++					 brightness ? BIT(led->mode_shift) : 0);
++	}
++
++out:
++	mutex_unlock(&as->lock);
++	return ret;
++}
++
++static int as3676_register_led(struct device *dev, struct as3676 *as,
++				struct as3676_led *led, const char *name,
++				u8 current_reg, u8 mode_shift,
++				bool button_group)
++{
++	led->as = as;
++	led->current_reg = current_reg;
++	led->mode_shift = mode_shift;
++	led->button_group = button_group;
++	led->cdev.name = name;
++	led->cdev.max_brightness = LED_FULL;
++	led->cdev.brightness_set_blocking = as3676_led_set;
++
++	return devm_led_classdev_register(dev, &led->cdev);
++}
++
++static const struct regmap_config as3676_regmap_config = {
++	.reg_bits = 8,
++	.val_bits = 8,
++	.max_register = 0xbf,
++};
++
++static int as3676_probe(struct i2c_client *client)
++{
++	struct backlight_properties props = {
++		.type = BACKLIGHT_RAW,
++		.max_brightness = 127,
++		.brightness = 32,
++		/*
++		 * Prepare Sony's DCDC at probe, but keep sinks 1/2/6 dark until the
++		 * DRM panel core calls backlight_enable() after a successful panel
++		 * enable. This makes a lit LCD a meaningful KMS milestone.
++		 */
++		.power = BACKLIGHT_POWER_OFF,
++	};
++	struct as3676 *as;
++	unsigned int id1, id2;
++	int ret;
++
++	as = devm_kzalloc(&client->dev, sizeof(*as), GFP_KERNEL);
++	if (!as)
++		return -ENOMEM;
++
++	i2c_set_clientdata(client, as);
++	mutex_init(&as->lock);
++	as->regmap = devm_regmap_init_i2c(client, &as3676_regmap_config);
++	if (IS_ERR(as->regmap))
++		return PTR_ERR(as->regmap);
++
++	ret = regmap_read(as->regmap, AS3676_ID1, &id1);
++	if (ret)
++		return ret;
++	ret = regmap_read(as->regmap, AS3676_ID2, &id2);
++	if (ret)
++		return ret;
++	if (id1 != AS3676_ID1_VALUE || (id2 & AS3676_ID2_MASK) != AS3676_ID2_VALUE)
++		return dev_err_probe(&client->dev, -ENODEV,
++				     "unexpected AS3676 IDs %#x %#x\n", id1, id2);
++
++	ret = as3676_hikari_start_dcdc(&client->dev, as);
++	if (ret)
++		return dev_err_probe(&client->dev, ret,
++				     "failed to start Hikari LCD DCDC\n");
++
++	as->bl = devm_backlight_device_register(&client->dev, "as3676-backlight",
++					     &client->dev, as,
++					     &as3676_backlight_ops, &props);
++	if (IS_ERR(as->bl))
++		return PTR_ERR(as->bl);
++
++	ret = as3676_register_led(&client->dev, as, &as->button,
++				  "button-backlight", 0, 0, true);
++	if (ret)
++		return ret;
++	ret = as3676_register_led(&client->dev, as, &as->red,
++				  "red", AS3676_CURR41, 0, false);
++	if (ret)
++		return ret;
++	ret = as3676_register_led(&client->dev, as, &as->green,
++				  "green", AS3676_CURR42, 2, false);
++	if (ret)
++		return ret;
++	ret = as3676_register_led(&client->dev, as, &as->blue,
++				  "blue", AS3676_CURR43, 4, false);
++	if (ret)
++		return ret;
++
++	ret = as3676_register_als(&client->dev, as);
++	if (ret)
++		return dev_err_probe(&client->dev, ret,
++				     "failed to register ambient-light input\n");
++
++	dev_info(&client->dev,
++		 "AS3676 detected (IDs %#x %#x): LCD DCDC, LEDs and ALS ready; backlight waits for DRM panel enable\n",
++		 id1, id2);
++
++	return backlight_update_status(as->bl);
++}
++
++static const struct of_device_id as3676_of_match[] = {
++	{ .compatible = "ams,as3676-backlight" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, as3676_of_match);
++
++static struct i2c_driver as3676_driver = {
++	.driver = {
++		.name = "as3676-hikari",
++		.of_match_table = as3676_of_match,
++	},
++	.probe = as3676_probe,
++};
++module_i2c_driver(as3676_driver);
++
++MODULE_DESCRIPTION("AS3676 backlight and LED support for Sony Hikari");
++MODULE_LICENSE("GPL");
+-- 
+2.53.0
+

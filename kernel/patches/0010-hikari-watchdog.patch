@@ -1,0 +1,31 @@
+From bdded578efbfe03414ca7ee8664c57563f51365c Mon Sep 17 00:00:00 2001
+From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 00:05:30 +0700
+Subject: [PATCH] watchdog: consolidate final Hikari subsystem support
+
+Repackage the prepared source without changing any byte of hardware
+implementation. Includes final corrections and logging cleanup.
+
+Prepared-source-tree: e3d73fd2f7bffefd6e42b0ec789d4e0af81fde45
+Original-author: Hikari Linux Project <hikari-linux@localhost>
+Original-series: research/patches/pre-subsystem-series-20261005
+Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+---
+ drivers/watchdog/qcom-wdt.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/watchdog/qcom-wdt.c b/drivers/watchdog/qcom-wdt.c
+index 4eb1bf9790125b9c3c3715ac313438d1d0378969..f2da61db39bd4d1b34af917442f0978400bd6df5 100644
+--- a/drivers/watchdog/qcom-wdt.c
++++ b/drivers/watchdog/qcom-wdt.c
+@@ -350,6 +350,7 @@ static int qcom_wdt_probe(struct platform_device *pdev)
+ 		set_bit(WDOG_HW_RUNNING, &wdt->wdd.status);
+ 	}
+ 
++	watchdog_stop_on_reboot(&wdt->wdd);
+ 	ret = devm_watchdog_register_device(dev, &wdt->wdd);
+ 	if (ret)
+ 		return ret;
+-- 
+2.53.0
+

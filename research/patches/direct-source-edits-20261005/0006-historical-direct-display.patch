@@ -1,0 +1,525 @@
+diff --git a/Documentation/devicetree/bindings/display/msm/mdp4.yaml b/Documentation/devicetree/bindings/display/msm/mdp4.yaml
+index fbfce1ff1e1f5dda13ce3ab915d5f23ab969a7f6..7c6e3c4019b63f1acdabdf3ff1fdbccc2ed0ea0e 100644
+--- a/Documentation/devicetree/bindings/display/msm/mdp4.yaml
++++ b/Documentation/devicetree/bindings/display/msm/mdp4.yaml
+@@ -48,6 +48,16 @@ properties:
+   iommus:
+     maxItems: 4
+ 
++  interconnects:
++    minItems: 1
++    maxItems: 2
++
++  interconnect-names:
++    minItems: 1
++    items:
++      - const: mdp0-mem
++      - const: mdp1-mem
++
+   ports:
+     $ref: /schemas/graph.yaml#/properties/ports
+     properties:
+diff --git a/drivers/gpu/drm/msm/disp/mdp4/mdp4_dsi_encoder.c b/drivers/gpu/drm/msm/disp/mdp4/mdp4_dsi_encoder.c
+index d17de995ef016848eeb52bcfca4fedec77327b1f..74dafe7106be014f07b7e07995699163567e5b7a 100644
+--- a/drivers/gpu/drm/msm/disp/mdp4/mdp4_dsi_encoder.c
++++ b/drivers/gpu/drm/msm/disp/mdp4/mdp4_dsi_encoder.c
+@@ -122,21 +122,7 @@ static void mdp4_dsi_encoder_enable(struct drm_encoder *encoder)
+ 
+ 	mdp4_crtc_set_intf(encoder->crtc, INTF_DSI_VIDEO, 0);
+ 
+-	/*
+-	 * MSM8x60 downstream starts the DSI timing generator only after the
+-	 * mixer state has been committed.  Explicitly take it through the
+-	 * disabled state here so a boot-loader/recovery hand-off cannot leave
+-	 * the enable bit latched against stale timing state.
+-	 */
+-	mdp4_write(mdp4_kms, REG_MDP4_DSI_ENABLE, 0);
+-	wmb();
+-	mdp4_read(mdp4_kms, REG_MDP4_DSI_ENABLE);
+ 	mdp4_write(mdp4_kms, REG_MDP4_DSI_ENABLE, 1);
+-	wmb();
+-	DRM_INFO("Hikari MDP4 DSI start: intf=%08x enable=%08x status=%08x\n",
+-		 mdp4_read(mdp4_kms, REG_MDP4_DISP_INTF_SEL),
+-		 mdp4_read(mdp4_kms, REG_MDP4_DSI_ENABLE),
+-		 mdp4_read(mdp4_kms, REG_MDP4_DISP_STATUS));
+ 
+ 	mdp4_dsi_encoder->enabled = true;
+ }
+diff --git a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
+index c08288a37b1b23ea51adc10e0fded4659eeb9c68..cec3a27fdc1d85090b689792df01491c141b89df 100644
+--- a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
++++ b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
+@@ -5,6 +5,7 @@
+  */
+ 
+ #include <linux/delay.h>
++#include <linux/interconnect.h>
+ 
+ #include <drm/drm_bridge.h>
+ #include <drm/drm_bridge_connector.h>
+@@ -123,8 +124,12 @@ static void mdp4_destroy(struct msm_kms *kms)
+ 	struct mdp4_kms *mdp4_kms = to_mdp4_kms(to_mdp_kms(kms));
+ 	struct device *dev = mdp4_kms->dev->dev;
+ 
+-	if (mdp4_kms->blank_cursor_iova)
+-		msm_gem_unpin_iova(mdp4_kms->blank_cursor_bo, kms->vm);
++	if (mdp4_kms->blank_cursor_iova) {
++		if (kms->vm)
++			msm_gem_unpin_iova(mdp4_kms->blank_cursor_bo, kms->vm);
++		else
++			msm_gem_unpin_phys(mdp4_kms->blank_cursor_bo);
++	}
+ 	drm_gem_object_put(mdp4_kms->blank_cursor_bo);
+ 
+ 	if (kms->vm) {
+@@ -493,7 +498,11 @@ static int mdp4_kms_init(struct drm_device *dev)
+ 	vm = msm_kms_init_vm(mdp4_kms->dev, NULL);
+ 	if (IS_ERR(vm)) {
+ 		ret = PTR_ERR(vm);
+-		return ret;
++		if (ret != -ENODEV)
++			return ret;
++		DRM_DEV_INFO(dev->dev,
++			     "using contiguous physical scanout without an IOMMU\n");
++		vm = NULL;
+ 	}
+ 
+ 	kms->vm = vm;
+@@ -512,8 +521,13 @@ static int mdp4_kms_init(struct drm_device *dev)
+ 		return ret;
+ 	}
+ 
+-	ret = msm_gem_get_and_pin_iova(mdp4_kms->blank_cursor_bo, kms->vm,
+-			&mdp4_kms->blank_cursor_iova);
++	if (kms->vm)
++		ret = msm_gem_get_and_pin_iova(mdp4_kms->blank_cursor_bo,
++					       kms->vm,
++					       &mdp4_kms->blank_cursor_iova);
++	else
++		ret = msm_gem_get_and_pin_phys(mdp4_kms->blank_cursor_bo,
++					       &mdp4_kms->blank_cursor_iova);
+ 	if (ret) {
+ 		DRM_DEV_ERROR(dev->dev, "could not pin blank-cursor bo: %d\n", ret);
+ 		return ret;
+@@ -532,11 +546,39 @@ static const struct dev_pm_ops mdp4_pm_ops = {
+ 	.complete = msm_kms_pm_complete,
+ };
+ 
++static int mdp4_setup_interconnect(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct icc_path *path;
++	int ret;
++
++	path = devm_of_icc_get(dev, "mdp0-mem");
++	if (IS_ERR(path))
++		return dev_err_probe(dev, PTR_ERR(path),
++				     "failed to get MDP memory path\n");
++	if (!path)
++		return 0;
++
++	/* Sony's default MSM8x60 EBI framebuffer vote. */
++	ret = icc_set_bw(path, Bps_to_icc(407808000),
++			 Bps_to_icc(1019520000));
++	if (ret)
++		return dev_err_probe(dev, ret,
++				     "failed to vote MDP memory bandwidth\n");
++
++	dev_info(dev, "MDP memory vote: 407808000/1019520000 Bps\n");
++	return 0;
++}
++
+ static int mdp4_probe(struct platform_device *pdev)
+ {
+ 	struct device *dev = &pdev->dev;
+ 	struct mdp4_kms *mdp4_kms;
+-	int irq;
++	int irq, ret;
++
++	ret = mdp4_setup_interconnect(pdev);
++	if (ret)
++		return ret;
+ 
+ 	mdp4_kms = devm_kzalloc(dev, sizeof(*mdp4_kms), GFP_KERNEL);
+ 	if (!mdp4_kms)
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_cfg.c b/drivers/gpu/drm/msm/dsi/dsi_cfg.c
+index 03b3c9a5d06d2ccb9edcbf963a8923de7835a326..064e3bfbbe57638e714a69b3f556542cfe063ef8 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_cfg.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_cfg.c
+@@ -22,6 +22,7 @@ static const struct regulator_bulk_data msm8x60_dsi_regulators[] = {
+ static const struct msm_dsi_config msm8x60_dsi_cfg = {
+ 	.io_offset = 0,
+ 	.quiesce_msm8x60_boot_state = true,
++	.cmd_dma_irq_timeout_nonfatal = true,
+ 	.regulator_data = msm8x60_dsi_regulators,
+ 	.num_regulators = ARRAY_SIZE(msm8x60_dsi_regulators),
+ 	.bus_clk_names = dsi_v2_bus_clk_names,
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_cfg.h b/drivers/gpu/drm/msm/dsi/dsi_cfg.h
+index be3e8733f3dcde8b09f1e52f12f3fb55e6867a2f..3fb4bf7b15d2612d7c6d9342a7ea8fb64410489c 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_cfg.h
++++ b/drivers/gpu/drm/msm/dsi/dsi_cfg.h
+@@ -44,6 +44,7 @@
+ struct msm_dsi_config {
+ 	u32 io_offset;
+ 	bool quiesce_msm8x60_boot_state;
++	bool cmd_dma_irq_timeout_nonfatal;
+ 	const struct regulator_bulk_data *regulator_data;
+ 	int num_regulators;
+ 	const char * const *bus_clk_names;
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
+index e1bcf9bd8f47b3800898a301ea52c7fe17d30a70..32b1ff27d0ca74606a2e4c36d5084c7f42fd0091 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -1003,7 +1003,10 @@ static void dsi_ctrl_enable(struct msm_dsi_host *msm_host,
+ 	 */
+ 	if (!cfg_hnd->cfg->quiesce_msm8x60_boot_state)
+ 		data |= DSI_TRIG_CTRL_TE;
+-	data |= DSI_TRIG_CTRL_MDP_TRIGGER(TRIGGER_NONE);
++	if (cfg_hnd->cfg->quiesce_msm8x60_boot_state)
++		data |= DSI_TRIG_CTRL_MDP_TRIGGER(TRIGGER_SW);
++	else
++		data |= DSI_TRIG_CTRL_MDP_TRIGGER(TRIGGER_NONE);
+ 	data |= DSI_TRIG_CTRL_DMA_TRIGGER(TRIGGER_SW);
+ 	data |= DSI_TRIG_CTRL_STREAM(msm_host->channel);
+ 	if ((cfg_hnd->major == MSM_DSI_VER_MAJOR_6G) &&
+@@ -1041,7 +1044,8 @@ static void dsi_ctrl_enable(struct msm_dsi_host *msm_host,
+ 	dsi_write(msm_host, REG_DSI_LANE_SWAP_CTRL,
+ 		  DSI_LANE_SWAP_CTRL_DLN_SWAP_SEL(msm_host->dlane_swap));
+ 
+-	if (!(flags & MIPI_DSI_CLOCK_NON_CONTINUOUS)) {
++	if (!(flags & MIPI_DSI_CLOCK_NON_CONTINUOUS) &&
++	    !cfg_hnd->cfg->quiesce_msm8x60_boot_state) {
+ 		lane_ctrl = dsi_read(msm_host, REG_DSI_LANE_CTRL);
+ 
+ 		if (msm_dsi_phy_set_continuous_clock(phy, true))
+@@ -1587,29 +1591,43 @@ static int dsi_cmd_dma_tx(struct msm_dsi_host *msm_host, int len)
+ 		if (ret == 0) {
+ 			u32 trigger = dsi_read(msm_host, REG_DSI_TRIG_DMA);
+ 			u32 intr = dsi_read(msm_host, REG_DSI_INTR_CTRL);
++			u32 status = dsi_read(msm_host, REG_DSI_STATUS0);
++			u32 fifo = dsi_read(msm_host, REG_DSI_FIFO_STATUS);
++			u32 ack = dsi_read(msm_host, REG_DSI_ACK_ERR_STATUS);
++			u32 timeout = dsi_read(msm_host, REG_DSI_TIMEOUT_STATUS);
++			u32 dln0 = dsi_read(msm_host, REG_DSI_DLN0_PHY_ERR);
++			u32 clk = dsi_read(msm_host, REG_DSI_CLK_STATUS);
++			bool idle, error_free;
++
++			idle = !(status & (DSI_STATUS0_CMD_MODE_ENGINE_BUSY |
++					  DSI_STATUS0_CMD_MODE_DMA_BUSY |
++					  DSI_STATUS0_DSI_BUSY));
++			error_free = !(status & DSI_STATUS0_INTERLEAVE_OP_CONTENTION) &&
++				     !(fifo & 0x44444489) && !ack &&
++				     !(timeout & 0x111) && !(dln0 & 0x11111);
+ 
+ 			/*
+-			 * MSM8x60 can lose the command-DMA completion interrupt while
+-			 * still completing the transfer.  The hardware clears TRIG_DMA
+-			 * after consuming the buffer, so do not abort panel preparation
+-			 * solely because IRQ 82 was not observed.
++			 * Sony's MSM8x60 host logs a missing completion interrupt but
++			 * continues with the command length.  A working Hikari likewise
++			 * leaves TRIG_DMA asserted, so that register cannot distinguish a
++			 * completed transfer.  Preserve the downstream behaviour only for
++			 * this configuration and only when the engine is idle and reports
++			 * no protocol, FIFO, timeout or lane-0 PHY error.
+ 			 */
+-			if (!(trigger & 1)) {
+-				dev_warn(&msm_host->pdev->dev,
+-					 "command DMA completed without IRQ: base=%#llx len=%d intr=%#x\n",
+-					 dma_base, len, intr);
++			if (cfg_hnd->cfg->cmd_dma_irq_timeout_nonfatal && idle &&
++			    error_free) {
++				dev_warn_once(&msm_host->pdev->dev,
++					      "command DMA completion IRQ missing; continuing on idle MSM8x60 engine (base=%#llx len=%d trigger=%#x intr=%#x fifo=%#x clk=%#x)\n",
++					      dma_base, len, trigger, intr, fifo, clk);
+ 				ret = len;
+ 			} else {
+ 				dev_err(&msm_host->pdev->dev,
+-					"command DMA timeout: base=%#llx len=%d ctrl=%#x trig_ctrl=%#x trigger=%#x intr=%#x status=%#x fifo=%#x ack=%#x clk=%#x\n",
++					"command DMA timeout: base=%#llx len=%d ctrl=%#x trig_ctrl=%#x trigger=%#x intr=%#x status=%#x fifo=%#x ack=%#x timeout=%#x dln0=%#x clk=%#x\n",
+ 					dma_base, len,
+ 					dsi_read(msm_host, REG_DSI_CTRL),
+ 					dsi_read(msm_host, REG_DSI_TRIG_CTRL),
+-					trigger, intr,
+-					dsi_read(msm_host, REG_DSI_STATUS0),
+-					dsi_read(msm_host, REG_DSI_FIFO_STATUS),
+-					dsi_read(msm_host, REG_DSI_ACK_ERR_STATUS),
+-					dsi_read(msm_host, REG_DSI_CLK_STATUS));
++					trigger, intr, status, fifo, ack, timeout, dln0,
++					clk);
+ 				ret = -ETIMEDOUT;
+ 			}
+ 		}
+@@ -2347,21 +2365,10 @@ int msm_dsi_host_xfer_prepare(struct mipi_dsi_host *host,
+ 		dsi_set_tx_power_mode(0, msm_host);
+ 
+ 	msm_host->dma_cmd_ctrl_restore = dsi_read(msm_host, REG_DSI_CTRL);
+-	if (cfg_hnd->cfg->quiesce_msm8x60_boot_state) {
+-		/*
+-		 * The MSM8x60 command engine does not consume TRIG_DMA while the
+-		 * video engine is enabled.  Sony's MSM8x60 driver explicitly clears
+-		 * both mode bits before selecting command mode for every panel
+-		 * transfer.  Preserve lanes/clock, but make the modes exclusive.
+-		 */
+-		dsi_write(msm_host, REG_DSI_CTRL,
+-			(msm_host->dma_cmd_ctrl_restore & ~DSI_CTRL_VID_MODE_EN) |
+-			DSI_CTRL_CMD_MODE_EN | DSI_CTRL_ENABLE);
+-	} else {
+-		dsi_write(msm_host, REG_DSI_CTRL,
+-			msm_host->dma_cmd_ctrl_restore |
+-			DSI_CTRL_CMD_MODE_EN | DSI_CTRL_ENABLE);
+-	}
++	dsi_write(msm_host, REG_DSI_CTRL,
++		msm_host->dma_cmd_ctrl_restore |
++		DSI_CTRL_CMD_MODE_EN |
++		DSI_CTRL_ENABLE);
+ 	/* MSM8x60 requires command mode to reach hardware before DMA setup. */
+ 	wmb();
+ 	(void)dsi_read(msm_host, REG_DSI_CTRL);
+diff --git a/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c b/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
+index 507ace2c6211ab5b611c0288a1a330fad2536b01..0f9e366a6903bdf55e8017217a1342dd70591eed 100644
+--- a/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
++++ b/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
+@@ -107,6 +107,17 @@ static int dsi_45nm_enable(struct msm_dsi_phy *phy,
+ 	if (!hikari_rate_is_supported(clk_req->bitclk_rate))
+ 		return -EINVAL;
+ 
++	/* Exact MDV22 host clock-lane timing from Sony's Hikari panel data. */
++	phy->timing.shared_timings.clk_post = 0x04;
++	phy->timing.shared_timings.clk_pre = 0x1b;
++	phy->timing.shared_timings.clk_pre_inc_by_2 = false;
++	phy->timing.shared_timings.byte_intf_clk_div_2 = false;
++
++	/* Sony applies the analog pre-enable controls before PHY programming. */
++	writel(0x050, base + PHY_REG(0x214));
++	writel(0x00f, base + PHY_REG(0x258));
++	writel(0, base + PHY_REG(0x25c));
++
+ 	/* Same reset/calibration sequencing as the exact MSM8x60 BSP. */
+ 	writel(1, base + PHY_REG(0x128));
+ 	wmb();
+@@ -132,9 +143,6 @@ static int dsi_45nm_enable(struct msm_dsi_phy *phy,
+ 	/* Legacy hardware requires PLL_CTRL_0 to be committed last. */
+ 	write_table(base, PHY_REG(0x204), &hikari_pll[1], ARRAY_SIZE(hikari_pll) - 1);
+ 	dsi_45nm_program_hikari_dividers(base);
+-	writel(0x050, base + PHY_REG(0x214));
+-	writel(0x00f, base + PHY_REG(0x258));
+-	writel(0, base + PHY_REG(0x25c));
+ 	/*
+ 	 * Sony enables the 45 nm PLL separately from programming its table.
+ 	 * Fixed-rate CCF providers describe the two outputs but cannot turn the
+diff --git a/drivers/gpu/drm/msm/msm_fb.c b/drivers/gpu/drm/msm/msm_fb.c
+index 60c108d35d2a1c5ad55489a9925214979541ea80..469347fde254b81b4c071260f6670875aa8bb2b6 100644
+--- a/drivers/gpu/drm/msm/msm_fb.c
++++ b/drivers/gpu/drm/msm/msm_fb.c
+@@ -86,7 +86,12 @@ int msm_framebuffer_prepare(struct drm_framebuffer *fb, bool needs_dirtyfb)
+ 
+ 	for (i = 0; i < n; i++) {
+ 		msm_gem_vma_get(fb->obj[i]);
+-		ret = msm_gem_get_and_pin_iova(fb->obj[i], vm, &msm_fb->iova[i]);
++		if (vm)
++			ret = msm_gem_get_and_pin_iova(fb->obj[i], vm,
++						       &msm_fb->iova[i]);
++		else
++			ret = msm_gem_get_and_pin_phys(fb->obj[i],
++						       &msm_fb->iova[i]);
+ 		drm_dbg_state(fb->dev, "FB[%u]: iova[%d]: %08llx (%d)\n",
+ 			      fb->base.id, i, msm_fb->iova[i], ret);
+ 		if (ret)
+@@ -112,7 +117,10 @@ void msm_framebuffer_cleanup(struct drm_framebuffer *fb, bool needed_dirtyfb)
+ 	memset(msm_fb->iova, 0, sizeof(msm_fb->iova));
+ 
+ 	for (i = 0; i < n; i++) {
+-		msm_gem_unpin_iova(fb->obj[i], vm);
++		if (vm)
++			msm_gem_unpin_iova(fb->obj[i], vm);
++		else
++			msm_gem_unpin_phys(fb->obj[i]);
+ 		msm_gem_vma_put(fb->obj[i]);
+ 	}
+ }
+diff --git a/drivers/gpu/drm/msm/msm_fbdev.c b/drivers/gpu/drm/msm/msm_fbdev.c
+index 89ca9da3e1f272a134518daf46ac3adeca50422f..186e7ca226c693e218c8f9fa7618db0e885449b6 100644
+--- a/drivers/gpu/drm/msm/msm_fbdev.c
++++ b/drivers/gpu/drm/msm/msm_fbdev.c
+@@ -142,7 +142,10 @@ int msm_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
+ 	 * in panic (ie. lock-safe, etc) we could avoid pinning the
+ 	 * buffer now:
+ 	 */
+-	ret = msm_gem_get_and_pin_iova(bo, priv->kms->vm, &paddr);
++	if (priv->kms->vm)
++		ret = msm_gem_get_and_pin_iova(bo, priv->kms->vm, &paddr);
++	else
++		ret = msm_gem_get_and_pin_phys(bo, &paddr);
+ 	if (ret) {
+ 		drm_err(dev, "failed to get buffer obj iova: %d\n", ret);
+ 		goto err_drm_client_buffer_delete;
+@@ -166,6 +169,7 @@ int msm_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
+ 	fbi->screen_size = bo->size;
+ 	fbi->fix.smem_start = paddr;
+ 	fbi->fix.smem_len = bo->size;
++	drm_info(dev, "fbdev scanout address %08llx\n", paddr);
+ 
+ 	DBG("par=%p, %dx%d", fbi->par, fbi->var.xres, fbi->var.yres);
+ 	DBG("allocated %dx%d fb", buffer->fb->width, buffer->fb->height);
+@@ -179,7 +183,10 @@ int msm_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
+ 	return 0;
+ 
+ err_msm_gem_unpin:
+-	msm_gem_unpin_iova(bo, priv->kms->vm);
++	if (priv->kms->vm)
++		msm_gem_unpin_iova(bo, priv->kms->vm);
++	else
++		msm_gem_unpin_phys(bo);
+ 	msm_gem_vma_put(bo);
+ err_drm_client_buffer_delete:
+ 	drm_client_buffer_delete(buffer);
+diff --git a/drivers/gpu/drm/msm/msm_gem.c b/drivers/gpu/drm/msm/msm_gem.c
+index c4cff3d53d81bc951472c5fe6346d19a5e39e6d8..b4c0c206617237bd090ea46903b12d7854cb2256 100644
+--- a/drivers/gpu/drm/msm/msm_gem.c
++++ b/drivers/gpu/drm/msm/msm_gem.c
+@@ -8,6 +8,7 @@
+ #include <linux/vmalloc.h>
+ #include <linux/spinlock.h>
+ #include <linux/shmem_fs.h>
++#include <linux/dma-map-ops.h>
+ #include <linux/dma-buf.h>
+ #include <linux/pagemap.h>
+ 
+@@ -102,7 +103,7 @@ void msm_gem_vma_put(struct drm_gem_object *obj)
+ 	if (atomic_dec_return(&to_msm_bo(obj)->vma_ref))
+ 		return;
+ 
+-	if (!priv->kms)
++	if (!priv->kms || !priv->kms->vm)
+ 		return;
+ 
+ #ifdef CONFIG_DRM_MSM_KMS
+@@ -196,7 +197,28 @@ static struct page **get_pages(struct drm_gem_object *obj)
+ 		struct page **p;
+ 		size_t npages = obj->size >> PAGE_SHIFT;
+ 
+-		p = drm_gem_get_pages(obj);
++		if ((msm_obj->flags & MSM_BO_SCANOUT) &&
++		    !device_iommu_mapped(dev->dev)) {
++			struct page *base;
++			size_t i;
++
++			base = dma_alloc_contiguous(dev->dev, obj->size,
++						    GFP_KERNEL | __GFP_NOWARN);
++			if (!base)
++				return ERR_PTR(-ENOMEM);
++
++			p = kvmalloc_array(npages, sizeof(*p), GFP_KERNEL);
++			if (!p) {
++				dma_free_contiguous(dev->dev, base, obj->size);
++				return ERR_PTR(-ENOMEM);
++			}
++
++			for (i = 0; i < npages; i++)
++				p[i] = base + i;
++			msm_obj->contiguous_pages = base;
++		} else {
++			p = drm_gem_get_pages(obj);
++		}
+ 
+ 		if (IS_ERR(p)) {
+ 			DRM_DEV_ERROR(dev->dev, "could not get pages: %ld\n",
+@@ -214,6 +236,13 @@ static struct page **get_pages(struct drm_gem_object *obj)
+ 
+ 			DRM_DEV_ERROR(dev->dev, "failed to allocate sgt\n");
+ 			msm_obj->sgt = NULL;
++			if (msm_obj->contiguous_pages) {
++				dma_free_contiguous(dev->dev,
++						    msm_obj->contiguous_pages,
++						    obj->size);
++				msm_obj->contiguous_pages = NULL;
++				kvfree(p);
++			}
+ 			return ptr;
+ 		}
+ 
+@@ -256,7 +285,14 @@ static void put_pages(struct drm_gem_object *obj)
+ 
+ 		update_device_mem(obj->dev->dev_private, -obj->size);
+ 
+-		drm_gem_put_pages(obj, msm_obj->pages, true, false);
++		if (msm_obj->contiguous_pages) {
++			dma_free_contiguous(obj->dev->dev,
++					    msm_obj->contiguous_pages, obj->size);
++			msm_obj->contiguous_pages = NULL;
++			kvfree(msm_obj->pages);
++		} else {
++			drm_gem_put_pages(obj, msm_obj->pages, true, false);
++		}
+ 
+ 		msm_obj->pages = NULL;
+ 		update_lru(obj);
+@@ -320,6 +356,34 @@ void msm_gem_unpin_pages_locked(struct drm_gem_object *obj)
+ 	msm_gem_unpin_locked(obj);
+ }
+ 
++int msm_gem_get_and_pin_phys(struct drm_gem_object *obj, uint64_t *phys)
++{
++	struct msm_gem_object *msm_obj = to_msm_bo(obj);
++	struct page **pages;
++	int ret = 0;
++
++	msm_gem_lock(obj);
++	pages = msm_gem_get_pages_locked(obj, MSM_MADV_WILLNEED);
++	if (IS_ERR(pages)) {
++		ret = PTR_ERR(pages);
++	} else if (!msm_obj->contiguous_pages) {
++		ret = -EINVAL;
++	} else {
++		*phys = page_to_phys(msm_obj->contiguous_pages);
++		pin_obj_locked(obj);
++	}
++	msm_gem_unlock(obj);
++
++	return ret;
++}
++
++void msm_gem_unpin_phys(struct drm_gem_object *obj)
++{
++	msm_gem_lock(obj);
++	msm_gem_unpin_locked(obj);
++	msm_gem_unlock(obj);
++}
++
+ static pgprot_t msm_gem_pgprot(struct msm_gem_object *msm_obj, pgprot_t prot)
+ {
+ 	if (msm_obj->flags & MSM_BO_WC)
+diff --git a/drivers/gpu/drm/msm/msm_gem.h b/drivers/gpu/drm/msm/msm_gem.h
+index dff60cbc9d95a80d08da4ea5b7d54855eb72acfb..1953d078d167ea9882f3e0f635a4c7fc43bc7fa2 100644
+--- a/drivers/gpu/drm/msm/msm_gem.h
++++ b/drivers/gpu/drm/msm/msm_gem.h
+@@ -216,6 +216,7 @@ struct msm_gem_object {
+ 	struct list_head node;
+ 
+ 	struct page **pages;
++	struct page *contiguous_pages;
+ 	struct sg_table *sgt;
+ 	void *vaddr;
+ 
+@@ -282,6 +283,8 @@ void msm_gem_pin_obj_locked(struct drm_gem_object *obj);
+ struct page **msm_gem_get_pages_locked(struct drm_gem_object *obj, unsigned madv);
+ struct page **msm_gem_pin_pages_locked(struct drm_gem_object *obj);
+ void msm_gem_unpin_pages_locked(struct drm_gem_object *obj);
++int msm_gem_get_and_pin_phys(struct drm_gem_object *obj, uint64_t *phys);
++void msm_gem_unpin_phys(struct drm_gem_object *obj);
+ int msm_gem_dumb_create(struct drm_file *file, struct drm_device *dev,
+ 		struct drm_mode_create_dumb *args);
+ void *msm_gem_get_vaddr_locked(struct drm_gem_object *obj);
+diff --git a/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c b/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
+index 0935a49bf0399c4bfe49a3eea92ddc4799b1bb99..c6e4b90ccb8fb97fadf2a4bb1b390c4e8c9a86f7 100644
+--- a/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
++++ b/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
+@@ -52,7 +52,6 @@ static int mdv22_prepare(struct drm_panel *panel)
+ 	ret=mipi_dsi_dcs_exit_sleep_mode(m->dsi); if(ret) goto power_off; msleep(100);
+ 	ret=mdv22_send(m->dsi,mdv22_post_sleep,ARRAY_SIZE(mdv22_post_sleep)); if(ret) goto power_off; msleep(20);
+ 	ret=mipi_dsi_dcs_set_display_on(m->dsi); if(ret) goto power_off;
+-	dev_info(panel->dev, "MDV22 command sequence complete before video scanout\n");
+ 	return 0;
+ power_off:
+ 	gpiod_set_value_cansleep(m->reset,0);

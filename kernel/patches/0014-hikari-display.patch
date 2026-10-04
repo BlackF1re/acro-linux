@@ -1,0 +1,1725 @@
+From d2dcabb74fdc6ebcce4576782344c8a2c5388fbe Mon Sep 17 00:00:00 2001
+From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 00:05:31 +0700
+Subject: [PATCH] display: consolidate final Hikari subsystem support
+
+Repackage the prepared source without changing any byte of hardware
+implementation. Includes final corrections and logging cleanup.
+
+Prepared-source-tree: e3d73fd2f7bffefd6e42b0ec789d4e0af81fde45
+Original-author: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+Original-author: BlackF1re <plevickij57@gmail.com>
+Original-author: Hikari Patch Materializer <hikari-materializer@localhost>
+Original-author: Paul Levickij <plevickij57@gmail.com>
+Original-author: Xperia Hikari Linux Project <hikari-linux@localhost>
+Original-series: research/patches/pre-subsystem-series-20261005
+Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+---
+ .../display/msm/dsi-controller-main.yaml      |   1 +
+ .../devicetree/bindings/display/msm/mdp4.yaml |  13 ++
+ .../panel/sony,hikari-r63306-tmd-mdv22.yaml   |  38 +++
+ .../bindings/mfd/qcom,msm8660-mmss-sfpb.yaml  |  37 +++
+ .../phy/qcom,msm8660-dsi-phy-45nm.yaml        |  36 +++
+ drivers/gpu/drm/msm/Kconfig                   |   7 +
+ drivers/gpu/drm/msm/Makefile                  |   1 +
+ drivers/gpu/drm/msm/disp/mdp4/mdp4_crtc.c     |  25 +-
+ drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c      | 142 +++++++++---
+ drivers/gpu/drm/msm/dsi/dsi.c                 |   9 +-
+ drivers/gpu/drm/msm/dsi/dsi.h                 |   9 +-
+ drivers/gpu/drm/msm/dsi/dsi_cfg.c             |  29 ++-
+ drivers/gpu/drm/msm/dsi/dsi_cfg.h             |   3 +-
+ drivers/gpu/drm/msm/dsi/dsi_host.c            | 216 ++++++++++++++++--
+ drivers/gpu/drm/msm/dsi/phy/dsi_phy.c         |  10 +
+ drivers/gpu/drm/msm/dsi/phy/dsi_phy.h         |   2 +
+ drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c    | 207 +++++++++++++++++
+ drivers/gpu/drm/msm/msm_fb.c                  |  12 +-
+ drivers/gpu/drm/msm/msm_fbdev.c               |  11 +-
+ drivers/gpu/drm/msm/msm_gem.c                 |  70 +++++-
+ drivers/gpu/drm/msm/msm_gem.h                 |   3 +
+ drivers/gpu/drm/panel/Kconfig                 |   7 +
+ drivers/gpu/drm/panel/Makefile                |   1 +
+ .../panel/panel-renesas-r63306-tmd-mdv22.c    | 130 +++++++++++
+ 24 files changed, 946 insertions(+), 73 deletions(-)
+ create mode 100644 Documentation/devicetree/bindings/display/panel/sony,hikari-r63306-tmd-mdv22.yaml
+ create mode 100644 Documentation/devicetree/bindings/mfd/qcom,msm8660-mmss-sfpb.yaml
+ create mode 100644 Documentation/devicetree/bindings/phy/qcom,msm8660-dsi-phy-45nm.yaml
+ create mode 100644 drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
+ create mode 100644 drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
+
+diff --git a/Documentation/devicetree/bindings/display/msm/dsi-controller-main.yaml b/Documentation/devicetree/bindings/display/msm/dsi-controller-main.yaml
+index e4fd1cbbd4e09e5e272a49c1672f611dd5b6078b..c630aa76a9787779aaeef0c16959e9fc7bf9b4db 100644
+--- a/Documentation/devicetree/bindings/display/msm/dsi-controller-main.yaml
++++ b/Documentation/devicetree/bindings/display/msm/dsi-controller-main.yaml
+@@ -18,6 +18,7 @@ properties:
+               - qcom,kaanapali-dsi-ctrl
+               - qcom,milos-dsi-ctrl
+               - qcom,msm8226-dsi-ctrl
++              - qcom,msm8660-dsi-ctrl
+               - qcom,msm8916-dsi-ctrl
+               - qcom,msm8953-dsi-ctrl
+               - qcom,msm8974-dsi-ctrl
+diff --git a/Documentation/devicetree/bindings/display/msm/mdp4.yaml b/Documentation/devicetree/bindings/display/msm/mdp4.yaml
+index 03ee09faa335f332259b64a42eefa3ec199b8e03..7c6e3c4019b63f1acdabdf3ff1fdbccc2ed0ea0e 100644
+--- a/Documentation/devicetree/bindings/display/msm/mdp4.yaml
++++ b/Documentation/devicetree/bindings/display/msm/mdp4.yaml
+@@ -42,9 +42,22 @@ properties:
+   interrupts:
+     maxItems: 1
+ 
++  power-domains:
++    maxItems: 1
++
+   iommus:
+     maxItems: 4
+ 
++  interconnects:
++    minItems: 1
++    maxItems: 2
++
++  interconnect-names:
++    minItems: 1
++    items:
++      - const: mdp0-mem
++      - const: mdp1-mem
++
+   ports:
+     $ref: /schemas/graph.yaml#/properties/ports
+     properties:
+diff --git a/Documentation/devicetree/bindings/display/panel/sony,hikari-r63306-tmd-mdv22.yaml b/Documentation/devicetree/bindings/display/panel/sony,hikari-r63306-tmd-mdv22.yaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..e7ba9a496b0378c41488d84595a72610fa3ca4b4
+--- /dev/null
++++ b/Documentation/devicetree/bindings/display/panel/sony,hikari-r63306-tmd-mdv22.yaml
+@@ -0,0 +1,38 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/display/panel/sony,hikari-r63306-tmd-mdv22.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: Renesas R63306 TMD MDV22 DSI panel used by Sony Hikari
++
++maintainers:
++  - Xperia acro S Linux Project <noreply@example.invalid>
++
++allOf:
++  - $ref: panel-common.yaml#
++
++properties:
++  compatible:
++    const: sony,hikari-r63306-tmd-mdv22
++  reg:
++    maxItems: 1
++  vci-supply: true
++  vddio-supply: true
++  power-gpios:
++    maxItems: 1
++  reset-gpios:
++    maxItems: 1
++  port:
++    $ref: /schemas/graph.yaml#/properties/port
++
++required:
++  - compatible
++  - reg
++  - vci-supply
++  - vddio-supply
++  - power-gpios
++  - reset-gpios
++  - port
++
++unevaluatedProperties: false
+diff --git a/Documentation/devicetree/bindings/mfd/qcom,msm8660-mmss-sfpb.yaml b/Documentation/devicetree/bindings/mfd/qcom,msm8660-mmss-sfpb.yaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..2320f928f538dd5358e199473a6c74be7724a4dc
+--- /dev/null
++++ b/Documentation/devicetree/bindings/mfd/qcom,msm8660-mmss-sfpb.yaml
+@@ -0,0 +1,37 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/mfd/qcom,msm8660-mmss-sfpb.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: Qualcomm MSM8660 Multimedia Subsystem System Fabric Peripheral Bus
++
++maintainers:
++  - BlackF1re <plevickij57@gmail.com>
++
++description:
++  The MMSS SFPB exposes multimedia subsystem fabric configuration registers
++  used by the MSM8x60 display controller and DSI host.
++
++properties:
++  compatible:
++    items:
++      - const: qcom,msm8660-mmss-sfpb
++      - const: syscon
++
++  reg:
++    maxItems: 1
++
++required:
++  - compatible
++  - reg
++
++additionalProperties: false
++
++examples:
++  - |
++    syscon@5700000 {
++        compatible = "qcom,msm8660-mmss-sfpb", "syscon";
++        reg = <0x05700000 0x8000>;
++    };
++...
+diff --git a/Documentation/devicetree/bindings/phy/qcom,msm8660-dsi-phy-45nm.yaml b/Documentation/devicetree/bindings/phy/qcom,msm8660-dsi-phy-45nm.yaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..96c8f861cd6681413ccc18965ba92633ad0ae1c1
+--- /dev/null
++++ b/Documentation/devicetree/bindings/phy/qcom,msm8660-dsi-phy-45nm.yaml
+@@ -0,0 +1,36 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/phy/qcom,msm8660-dsi-phy-45nm.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: Qualcomm MSM8x60 45nm DSI PHY
++
++maintainers:
++  - Xperia acro S Linux Project <noreply@example.invalid>
++
++properties:
++  compatible:
++    const: qcom,msm8660-dsi-phy-45nm
++  reg:
++    minItems: 2
++    maxItems: 2
++  reg-names:
++    items:
++      - const: dsi_phy
++      - const: dsi_pll
++  vdda-supply: true
++  '#clock-cells':
++    const: 1
++  '#phy-cells':
++    const: 0
++
++required:
++  - compatible
++  - reg
++  - reg-names
++  - vdda-supply
++  - '#clock-cells'
++  - '#phy-cells'
++
++additionalProperties: false
+diff --git a/drivers/gpu/drm/msm/Kconfig b/drivers/gpu/drm/msm/Kconfig
+index ed1c4775d1e928eef5eb0e403b30ba59d0b33226..a4932a7fe3777aaed0ffe76e74afdf60abf3559a 100644
+--- a/drivers/gpu/drm/msm/Kconfig
++++ b/drivers/gpu/drm/msm/Kconfig
+@@ -147,6 +147,13 @@ config DRM_MSM_DSI_28NM_PHY
+ 	help
+ 	  Choose this option if the 28nm DSI PHY is used on the platform.
+ 
++config DRM_MSM_DSI_45NM_PHY
++	bool "Enable MSM8x60 45nm DSI PHY driver in MSM DRM"
++	depends on DRM_MSM_DSI
++	help
++	  Support the MSM8x60-era 45nm DSI PHY.  The initial implementation
++	  contains the source-verified Sony Hikari MDV22 timing/PLL profile.
++
+ config DRM_MSM_DSI_20NM_PHY
+ 	bool "Enable DSI 20nm PHY driver in MSM DRM"
+ 	depends on DRM_MSM_DSI
+diff --git a/drivers/gpu/drm/msm/Makefile b/drivers/gpu/drm/msm/Makefile
+index d0c3a4c6703be29fe3101fdfc4319310e4825f87..4a673668aceb55b0f190ee4b7e8ca49fd19dd570 100644
+--- a/drivers/gpu/drm/msm/Makefile
++++ b/drivers/gpu/drm/msm/Makefile
+@@ -156,6 +156,7 @@ msm-display-$(CONFIG_DRM_MSM_DSI) += dsi/dsi.o \
+ 			dsi/phy/dsi_phy.o
+ 
+ msm-display-$(CONFIG_DRM_MSM_DSI_28NM_PHY) += dsi/phy/dsi_phy_28nm.o
++msm-display-$(CONFIG_DRM_MSM_DSI_45NM_PHY) += dsi/phy/dsi_phy_45nm.o
+ msm-display-$(CONFIG_DRM_MSM_DSI_20NM_PHY) += dsi/phy/dsi_phy_20nm.o
+ msm-display-$(CONFIG_DRM_MSM_DSI_28NM_8960_PHY) += dsi/phy/dsi_phy_28nm_8960.o
+ msm-display-$(CONFIG_DRM_MSM_DSI_14NM_PHY) += dsi/phy/dsi_phy_14nm.o
+diff --git a/drivers/gpu/drm/msm/disp/mdp4/mdp4_crtc.c b/drivers/gpu/drm/msm/disp/mdp4/mdp4_crtc.c
+index 57dfce58450b3298c8070fc5b43eb2c0966a832a..96a8edeb082331ac2fab5aebdfbd13a1965d076b 100644
+--- a/drivers/gpu/drm/msm/disp/mdp4/mdp4_crtc.c
++++ b/drivers/gpu/drm/msm/disp/mdp4/mdp4_crtc.c
+@@ -54,7 +54,14 @@ struct mdp4_crtc {
+ 	/* for unref'ing cursor bo's after scanout completes: */
+ 	struct drm_flip_work unref_cursor_work;
+ 
+-	struct mdp_irq vblank;
++	/*
++	 * A DMA done interrupt completes register updates, while video-mode
++	 * interfaces have a distinct scanout vblank interrupt.  These happened
++	 * to share one mdp_irq in the original driver, which made DRM wait for
++	 * DMA_P_DONE instead of PRIMARY_VSYNC on MSM8x60 DSI video panels.
++	 */
++	struct mdp_irq commit;
++	u32 vblank_irqmask;
+ 	struct mdp_irq err;
+ };
+ #define to_mdp4_crtc(x) container_of(x, struct mdp4_crtc, base)
+@@ -70,7 +77,7 @@ static void request_pending(struct drm_crtc *crtc, uint32_t pending)
+ 	struct mdp4_crtc *mdp4_crtc = to_mdp4_crtc(crtc);
+ 
+ 	atomic_or(pending, &mdp4_crtc->pending);
+-	mdp_irq_register(&get_kms(crtc)->base, &mdp4_crtc->vblank);
++	mdp_irq_register(&get_kms(crtc)->base, &mdp4_crtc->commit);
+ }
+ 
+ static void crtc_flush(struct drm_crtc *crtc)
+@@ -493,14 +500,14 @@ static const struct drm_crtc_helper_funcs mdp4_crtc_helper_funcs = {
+ 	.atomic_disable = mdp4_crtc_atomic_disable,
+ };
+ 
+-static void mdp4_crtc_vblank_irq(struct mdp_irq *irq, uint32_t irqstatus)
++static void mdp4_crtc_commit_irq(struct mdp_irq *irq, uint32_t irqstatus)
+ {
+-	struct mdp4_crtc *mdp4_crtc = container_of(irq, struct mdp4_crtc, vblank);
++	struct mdp4_crtc *mdp4_crtc = container_of(irq, struct mdp4_crtc, commit);
+ 	struct drm_crtc *crtc = &mdp4_crtc->base;
+ 	struct msm_drm_private *priv = crtc->dev->dev_private;
+ 	unsigned pending;
+ 
+-	mdp_irq_unregister(&get_kms(crtc)->base, &mdp4_crtc->vblank);
++	mdp_irq_unregister(&get_kms(crtc)->base, &mdp4_crtc->commit);
+ 
+ 	pending = atomic_xchg(&mdp4_crtc->pending, 0);
+ 
+@@ -549,7 +556,7 @@ static void mdp4_crtc_wait_for_flush_done(struct drm_crtc *crtc)
+ uint32_t mdp4_crtc_vblank(struct drm_crtc *crtc)
+ {
+ 	struct mdp4_crtc *mdp4_crtc = to_mdp4_crtc(crtc);
+-	return mdp4_crtc->vblank.irqmask;
++	return mdp4_crtc->vblank_irqmask;
+ }
+ 
+ /* set dma config, ie. the format the encoder wants. */
+@@ -588,6 +595,7 @@ void mdp4_crtc_set_intf(struct drm_crtc *crtc, enum mdp4_intf intf, int mixer)
+ 	if (intf == INTF_DSI_VIDEO) {
+ 		intf_sel &= ~MDP4_DISP_INTF_SEL_DSI_CMD;
+ 		intf_sel |= MDP4_DISP_INTF_SEL_DSI_VIDEO;
++		mdp4_crtc->vblank_irqmask = MDP4_IRQ_PRIMARY_VSYNC;
+ 	} else if (intf == INTF_DSI_CMD) {
+ 		intf_sel &= ~MDP4_DISP_INTF_SEL_DSI_VIDEO;
+ 		intf_sel |= MDP4_DISP_INTF_SEL_DSI_CMD;
+@@ -642,8 +650,9 @@ struct drm_crtc *mdp4_crtc_init(struct drm_device *dev,
+ 	mdp4_crtc->ovlp = ovlp_id;
+ 	mdp4_crtc->dma = dma_id;
+ 
+-	mdp4_crtc->vblank.irqmask = dma2irq(mdp4_crtc->dma);
+-	mdp4_crtc->vblank.irq = mdp4_crtc_vblank_irq;
++	mdp4_crtc->commit.irqmask = dma2irq(mdp4_crtc->dma);
++	mdp4_crtc->commit.irq = mdp4_crtc_commit_irq;
++	mdp4_crtc->vblank_irqmask = dma2irq(mdp4_crtc->dma);
+ 
+ 	mdp4_crtc->err.irqmask = dma2err(mdp4_crtc->dma);
+ 	mdp4_crtc->err.irq = mdp4_crtc_err_irq;
+diff --git a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
+index 9b1d1982e683f357e917e94957f005ff97038867..c73a6f0120bc39b6cad1b0e5cb1845da70cc7342 100644
+--- a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
++++ b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
+@@ -5,6 +5,7 @@
+  */
+ 
+ #include <linux/delay.h>
++#include <linux/interconnect.h>
+ 
+ #include <drm/drm_bridge.h>
+ #include <drm/drm_bridge_connector.h>
+@@ -123,8 +124,12 @@ static void mdp4_destroy(struct msm_kms *kms)
+ 	struct mdp4_kms *mdp4_kms = to_mdp4_kms(to_mdp_kms(kms));
+ 	struct device *dev = mdp4_kms->dev->dev;
+ 
+-	if (mdp4_kms->blank_cursor_iova)
+-		msm_gem_unpin_iova(mdp4_kms->blank_cursor_bo, kms->vm);
++	if (mdp4_kms->blank_cursor_iova) {
++		if (kms->vm)
++			msm_gem_unpin_iova(mdp4_kms->blank_cursor_bo, kms->vm);
++		else
++			msm_gem_unpin_phys(mdp4_kms->blank_cursor_bo);
++	}
+ 	drm_gem_object_put(mdp4_kms->blank_cursor_bo);
+ 
+ 	if (kms->vm) {
+@@ -164,24 +169,45 @@ int mdp4_disable(struct mdp4_kms *mdp4_kms)
+ {
+ 	DBG("");
+ 
+-	clk_disable_unprepare(mdp4_kms->clk);
+-	clk_disable_unprepare(mdp4_kms->pclk);
+-	clk_disable_unprepare(mdp4_kms->lut_clk);
+ 	clk_disable_unprepare(mdp4_kms->axi_clk);
++	clk_disable_unprepare(mdp4_kms->lut_clk);
++	clk_disable_unprepare(mdp4_kms->pclk);
++	clk_disable_unprepare(mdp4_kms->clk);
+ 
+ 	return 0;
+ }
+ 
+ int mdp4_enable(struct mdp4_kms *mdp4_kms)
+ {
++	int ret;
++
+ 	DBG("");
+ 
+-	clk_prepare_enable(mdp4_kms->clk);
+-	clk_prepare_enable(mdp4_kms->pclk);
+-	clk_prepare_enable(mdp4_kms->lut_clk);
+-	clk_prepare_enable(mdp4_kms->axi_clk);
++	ret = clk_prepare_enable(mdp4_kms->clk);
++	if (ret)
++		return ret;
++
++	ret = clk_prepare_enable(mdp4_kms->pclk);
++	if (ret)
++		goto err_disable_core;
++
++	ret = clk_prepare_enable(mdp4_kms->lut_clk);
++	if (ret)
++		goto err_disable_iface;
++
++	ret = clk_prepare_enable(mdp4_kms->axi_clk);
++	if (ret)
++		goto err_disable_lut;
+ 
+ 	return 0;
++
++err_disable_lut:
++	clk_disable_unprepare(mdp4_kms->lut_clk);
++err_disable_iface:
++	clk_disable_unprepare(mdp4_kms->pclk);
++err_disable_core:
++	clk_disable_unprepare(mdp4_kms->clk);
++	return ret;
+ }
+ 
+ 
+@@ -366,13 +392,17 @@ static int modeset_init(struct mdp4_kms *mdp4_kms)
+ 	return ret;
+ }
+ 
+-static void read_mdp_hw_revision(struct mdp4_kms *mdp4_kms,
+-				 u32 *major, u32 *minor)
++static int read_mdp_hw_revision(struct mdp4_kms *mdp4_kms,
++				u32 *major, u32 *minor)
+ {
+ 	struct drm_device *dev = mdp4_kms->dev;
+ 	u32 version;
++	int ret;
+ 
+-	mdp4_enable(mdp4_kms);
++	ret = mdp4_enable(mdp4_kms);
++	if (ret)
++		return dev_err_probe(dev->dev, ret,
++				     "failed to enable MDP clocks for revision read\n");
+ 	version = mdp4_read(mdp4_kms, REG_MDP4_VERSION);
+ 	mdp4_disable(mdp4_kms);
+ 
+@@ -380,6 +410,8 @@ static void read_mdp_hw_revision(struct mdp4_kms *mdp4_kms,
+ 	*minor = FIELD(version, MDP4_VERSION_MINOR);
+ 
+ 	DRM_DEV_INFO(dev->dev, "MDP4 version v%d.%d", *major, *minor);
++
++	return 0;
+ }
+ 
+ static int mdp4_kms_init(struct drm_device *dev)
+@@ -392,8 +424,9 @@ static int mdp4_kms_init(struct drm_device *dev)
+ 	u32 major, minor;
+ 	unsigned long max_clk;
+ 
+-	/* TODO: Chips that aren't apq8064 have a 200 Mhz max_clk */
+-	max_clk = 266667000;
++	/* MSM8x60 MDP4 is limited to 200 MHz; APQ8064 supports 266.667 MHz. */
++	max_clk = of_machine_is_compatible("qcom,msm8260") ?
++		  200000000 : 266667000;
+ 
+ 	ret = mdp_kms_init(&mdp4_kms->base, &kms_funcs);
+ 	if (ret) {
+@@ -413,9 +446,14 @@ static int mdp4_kms_init(struct drm_device *dev)
+ 		}
+ 	}
+ 
+-	clk_set_rate(mdp4_kms->clk, max_clk);
++	ret = clk_set_rate(mdp4_kms->clk, max_clk);
++	if (ret)
++		return dev_err_probe(dev->dev, ret,
++				     "failed to set MDP core clock rate\n");
+ 
+-	read_mdp_hw_revision(mdp4_kms, &major, &minor);
++	ret = read_mdp_hw_revision(mdp4_kms, &major, &minor);
++	if (ret)
++		return ret;
+ 
+ 	if (major != 4) {
+ 		DRM_DEV_ERROR(dev->dev, "unexpected MDP version: v%d.%d\n",
+@@ -432,7 +470,10 @@ static int mdp4_kms_init(struct drm_device *dev)
+ 			ret = -ENODEV;
+ 			return ret;
+ 		}
+-		clk_set_rate(mdp4_kms->lut_clk, max_clk);
++		ret = clk_set_rate(mdp4_kms->lut_clk, max_clk);
++		if (ret)
++			return dev_err_probe(dev->dev, ret,
++					     "failed to set MDP LUT clock rate\n");
+ 	}
+ 
+ 	pm_runtime_enable(dev->dev);
+@@ -442,7 +483,10 @@ static int mdp4_kms_init(struct drm_device *dev)
+ 	 * have left things on, in which case we'll start getting faults if
+ 	 * we don't disable):
+ 	 */
+-	mdp4_enable(mdp4_kms);
++	ret = mdp4_enable(mdp4_kms);
++	if (ret)
++		return dev_err_probe(dev->dev, ret,
++				     "failed to enable MDP clocks for quiesce\n");
+ 	mdp4_write(mdp4_kms, REG_MDP4_DTV_ENABLE, 0);
+ 	mdp4_write(mdp4_kms, REG_MDP4_LCDC_ENABLE, 0);
+ 	mdp4_write(mdp4_kms, REG_MDP4_DSI_ENABLE, 0);
+@@ -452,7 +496,11 @@ static int mdp4_kms_init(struct drm_device *dev)
+ 	vm = msm_kms_init_vm(mdp4_kms->dev, NULL);
+ 	if (IS_ERR(vm)) {
+ 		ret = PTR_ERR(vm);
+-		return ret;
++		if (ret != -ENODEV)
++			return ret;
++		DRM_DEV_INFO(dev->dev,
++			     "using contiguous physical scanout without an IOMMU\n");
++		vm = NULL;
+ 	}
+ 
+ 	kms->vm = vm;
+@@ -471,8 +519,13 @@ static int mdp4_kms_init(struct drm_device *dev)
+ 		return ret;
+ 	}
+ 
+-	ret = msm_gem_get_and_pin_iova(mdp4_kms->blank_cursor_bo, kms->vm,
+-			&mdp4_kms->blank_cursor_iova);
++	if (kms->vm)
++		ret = msm_gem_get_and_pin_iova(mdp4_kms->blank_cursor_bo,
++					       kms->vm,
++					       &mdp4_kms->blank_cursor_iova);
++	else
++		ret = msm_gem_get_and_pin_phys(mdp4_kms->blank_cursor_bo,
++					       &mdp4_kms->blank_cursor_iova);
+ 	if (ret) {
+ 		DRM_DEV_ERROR(dev->dev, "could not pin blank-cursor bo: %d\n", ret);
+ 		return ret;
+@@ -491,11 +544,39 @@ static const struct dev_pm_ops mdp4_pm_ops = {
+ 	.complete = msm_kms_pm_complete,
+ };
+ 
++static int mdp4_setup_interconnect(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct icc_path *path;
++	int ret;
++
++	path = devm_of_icc_get(dev, "mdp0-mem");
++	if (IS_ERR(path))
++		return dev_err_probe(dev, PTR_ERR(path),
++				     "failed to get MDP memory path\n");
++	if (!path)
++		return 0;
++
++	/* Sony's default MSM8x60 EBI framebuffer vote. */
++	ret = icc_set_bw(path, Bps_to_icc(407808000),
++			 Bps_to_icc(1019520000));
++	if (ret)
++		return dev_err_probe(dev, ret,
++				     "failed to vote MDP memory bandwidth\n");
++
++	dev_info(dev, "MDP memory vote: 407808000/1019520000 Bps\n");
++	return 0;
++}
++
+ static int mdp4_probe(struct platform_device *pdev)
+ {
+ 	struct device *dev = &pdev->dev;
+ 	struct mdp4_kms *mdp4_kms;
+-	int irq;
++	int irq, ret;
++
++	ret = mdp4_setup_interconnect(pdev);
++	if (ret)
++		return ret;
+ 
+ 	mdp4_kms = devm_kzalloc(dev, sizeof(*mdp4_kms), GFP_KERNEL);
+ 	if (!mdp4_kms)
+@@ -511,13 +592,18 @@ static int mdp4_probe(struct platform_device *pdev)
+ 
+ 	mdp4_kms->base.base.irq = irq;
+ 
+-	/* NOTE: driver for this regulator still missing upstream.. use
+-	 * _get_exclusive() and ignore the error if it does not exist
+-	 * (and hope that the bootloader left it on for us)
++	/*
++	 * Some MDP4 implementations have a separate voltage rail.  MSM8x60
++	 * instead powers MDP through its MMCC GDSC, so absence is legitimate.
+ 	 */
+-	mdp4_kms->vdd = devm_regulator_get_exclusive(&pdev->dev, "vdd");
+-	if (IS_ERR(mdp4_kms->vdd))
+-		mdp4_kms->vdd = NULL;
++	mdp4_kms->vdd = devm_regulator_get_optional(&pdev->dev, "vdd");
++	if (IS_ERR(mdp4_kms->vdd)) {
++		if (PTR_ERR(mdp4_kms->vdd) == -ENODEV)
++			mdp4_kms->vdd = NULL;
++		else
++			return dev_err_probe(dev, PTR_ERR(mdp4_kms->vdd),
++					     "failed to get vdd regulator\n");
++	}
+ 
+ 	mdp4_kms->clk = devm_clk_get(&pdev->dev, "core_clk");
+ 	if (IS_ERR(mdp4_kms->clk))
+diff --git a/drivers/gpu/drm/msm/dsi/dsi.c b/drivers/gpu/drm/msm/dsi/dsi.c
+index 3c9f01ed62713313b2cfe8147415bc8733247cb7..71a194855ee0e9111267ffea431fc251ad583143 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi.c
++++ b/drivers/gpu/drm/msm/dsi/dsi.c
+@@ -103,6 +103,14 @@ static struct msm_dsi *dsi_init(struct platform_device *pdev)
+ 	if (ret)
+ 		goto destroy_dsi;
+ 
++	/* Discard firmware display state before normal runtime PM begins. */
++	ret = msm_dsi_host_quiesce_boot_state(msm_dsi->host,
++					      msm_dsi->phy);
++	if (ret) {
++		dev_err(&pdev->dev, "failed to quiesce boot state: %d\n", ret);
++		goto destroy_dsi;
++	}
++
+ 	/* Register to dsi manager */
+ 	ret = msm_dsi_manager_register(msm_dsi);
+ 	if (ret)
+@@ -267,4 +275,3 @@ void msm_dsi_snapshot(struct msm_disp_state *disp_state, struct msm_dsi *msm_dsi
+ 	msm_dsi_host_snapshot(disp_state, msm_dsi->host);
+ 	msm_dsi_phy_snapshot(disp_state, msm_dsi->phy);
+ }
+-
+diff --git a/drivers/gpu/drm/msm/dsi/dsi.h b/drivers/gpu/drm/msm/dsi/dsi.h
+index 93c028a122f3a59b1632da76472e0a3e781c6ae8..9b3433d3f899e7abd5b72ac59bbdb732ee470ff6 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi.h
++++ b/drivers/gpu/drm/msm/dsi/dsi.h
+@@ -58,6 +58,7 @@ void msm_dsi_manager_tpg_enable(void);
+ 
+ /* dsi host */
+ struct msm_dsi_host;
++struct msm_dsi_phy;
+ int msm_dsi_host_xfer_prepare(struct mipi_dsi_host *host,
+ 					const struct mipi_dsi_msg *msg);
+ void msm_dsi_host_xfer_restore(struct mipi_dsi_host *host,
+@@ -95,15 +96,20 @@ void msm_dsi_host_destroy(struct mipi_dsi_host *host);
+ int msm_dsi_host_modeset_init(struct mipi_dsi_host *host,
+ 					struct drm_device *dev);
+ int msm_dsi_host_init(struct msm_dsi *msm_dsi);
++int msm_dsi_host_quiesce_boot_state(struct mipi_dsi_host *host,
++				    struct msm_dsi_phy *phy);
+ int msm_dsi_runtime_suspend(struct device *dev);
+ int msm_dsi_runtime_resume(struct device *dev);
+ int dsi_link_clk_set_rate_6g(struct msm_dsi_host *msm_host);
+ int dsi_link_clk_set_rate_6g_v2_9(struct msm_dsi_host *msm_host);
+ int dsi_link_clk_set_rate_v2(struct msm_dsi_host *msm_host);
++int dsi_link_clk_set_rate_msm8x60(struct msm_dsi_host *msm_host);
+ int dsi_link_clk_enable_6g(struct msm_dsi_host *msm_host);
+ int dsi_link_clk_enable_v2(struct msm_dsi_host *msm_host);
++int dsi_link_clk_enable_msm8x60(struct msm_dsi_host *msm_host);
+ void dsi_link_clk_disable_6g(struct msm_dsi_host *msm_host);
+ void dsi_link_clk_disable_v2(struct msm_dsi_host *msm_host);
++void dsi_link_clk_disable_msm8x60(struct msm_dsi_host *msm_host);
+ unsigned long dsi_byte_clk_get_rate(struct mipi_dsi_host *host, bool is_bonded_dsi,
+ 				    const struct drm_display_mode *mode);
+ int dsi_tx_buf_alloc_6g(struct msm_dsi_host *msm_host, int size);
+@@ -125,7 +131,6 @@ struct drm_dsc_config *msm_dsi_host_get_dsc_config(struct mipi_dsi_host *host);
+ bool msm_dsi_host_is_wide_bus_enabled(struct mipi_dsi_host *host);
+ 
+ /* dsi phy */
+-struct msm_dsi_phy;
+ struct msm_dsi_phy_shared_timings {
+ 	u32 clk_post;
+ 	u32 clk_pre;
+@@ -144,6 +149,7 @@ int msm_dsi_phy_enable(struct msm_dsi_phy *phy,
+ 			struct msm_dsi_phy_clk_request *clk_req,
+ 			struct msm_dsi_phy_shared_timings *shared_timings);
+ void msm_dsi_phy_disable(struct msm_dsi_phy *phy);
++void msm_dsi_phy_quiesce_boot_state(struct msm_dsi_phy *phy);
+ void msm_dsi_phy_set_usecase(struct msm_dsi_phy *phy,
+ 			     enum msm_dsi_phy_usecase uc);
+ void msm_dsi_phy_pll_save_state(struct msm_dsi_phy *phy);
+@@ -152,4 +158,3 @@ void msm_dsi_phy_snapshot(struct msm_disp_state *disp_state, struct msm_dsi_phy
+ bool msm_dsi_phy_set_continuous_clock(struct msm_dsi_phy *phy, bool enable);
+ 
+ #endif /* __DSI_CONNECTOR_H__ */
+-
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_cfg.c b/drivers/gpu/drm/msm/dsi/dsi_cfg.c
+index da3fe68244952fe626b4d941c8cf23ff5633ecce..064e3bfbbe57638e714a69b3f556542cfe063ef8 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_cfg.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_cfg.c
+@@ -9,16 +9,22 @@ static const char * const dsi_v2_bus_clk_names[] = {
+ 	"core_mmss", "iface", "bus",
+ };
+ 
+-static const struct regulator_bulk_data apq8064_dsi_regulators[] = {
++static const struct regulator_bulk_data msm8x60_dsi_regulators[] = {
+ 	{ .supply = "vdda", .init_load_uA = 100000 },	/* 1.2 V */
+-	{ .supply = "avdd", .init_load_uA = 10000 },	/* 3.0 V */
+-	{ .supply = "vddio", .init_load_uA = 100000 },	/* 1.8 V */
+ };
+ 
+-static const struct msm_dsi_config apq8064_dsi_cfg = {
++/*
++ * MSM8x60 and APQ8064 report the same V2 host revision.  Hikari's
++ * downstream board code proves only the MSM8x60 analogue DSI supply (PM8058
++ * L0 at 1.2 V); panel VCI/VDDIO are owned by the panel.  Do not make this
++ * early MSM8x60 path depend on APQ8064's unrelated host supply names.
++ */
++static const struct msm_dsi_config msm8x60_dsi_cfg = {
+ 	.io_offset = 0,
+-	.regulator_data = apq8064_dsi_regulators,
+-	.num_regulators = ARRAY_SIZE(apq8064_dsi_regulators),
++	.quiesce_msm8x60_boot_state = true,
++	.cmd_dma_irq_timeout_nonfatal = true,
++	.regulator_data = msm8x60_dsi_regulators,
++	.num_regulators = ARRAY_SIZE(msm8x60_dsi_regulators),
+ 	.bus_clk_names = dsi_v2_bus_clk_names,
+ 	.num_bus_clks = ARRAY_SIZE(dsi_v2_bus_clk_names),
+ 	.io_start = {
+@@ -248,14 +254,13 @@ static const struct msm_dsi_config sa8775p_dsi_cfg = {
+ 	},
+ };
+ 
+-static const struct msm_dsi_host_cfg_ops msm_dsi_v2_host_ops = {
+-	.link_clk_set_rate = dsi_link_clk_set_rate_v2,
+-	.link_clk_enable = dsi_link_clk_enable_v2,
+-	.link_clk_disable = dsi_link_clk_disable_v2,
++static const struct msm_dsi_host_cfg_ops msm8x60_dsi_v2_host_ops = {
++	.link_clk_set_rate = dsi_link_clk_set_rate_msm8x60,
++	.link_clk_enable = dsi_link_clk_enable_msm8x60,
++	.link_clk_disable = dsi_link_clk_disable_msm8x60,
+ 	.clk_init_ver = dsi_clk_init_v2,
+ 	.tx_buf_alloc = dsi_tx_buf_alloc_v2,
+ 	.tx_buf_get = dsi_tx_buf_get_v2,
+-	.tx_buf_put = NULL,
+ 	.dma_base_get = dsi_dma_base_get_v2,
+ 	.calc_clk_rate = dsi_calc_clk_rate_v2,
+ };
+@@ -298,7 +303,7 @@ static const struct msm_dsi_host_cfg_ops msm_dsi_6g_v2_9_host_ops = {
+ 
+ static const struct msm_dsi_cfg_handler dsi_cfg_handlers[] = {
+ 	{MSM_DSI_VER_MAJOR_V2, MSM_DSI_V2_VER_MINOR_8064,
+-		&apq8064_dsi_cfg, &msm_dsi_v2_host_ops},
++		&msm8x60_dsi_cfg, &msm8x60_dsi_v2_host_ops},
+ 	{MSM_DSI_VER_MAJOR_6G, MSM_DSI_6G_VER_MINOR_V1_0,
+ 		&msm8974_apq8084_dsi_cfg, &msm_dsi_6g_host_ops},
+ 	{MSM_DSI_VER_MAJOR_6G, MSM_DSI_6G_VER_MINOR_V1_0_2,
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_cfg.h b/drivers/gpu/drm/msm/dsi/dsi_cfg.h
+index ccf06679608e0387471cbbcc0e061da5ce9e6159..3fb4bf7b15d2612d7c6d9342a7ea8fb64410489c 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_cfg.h
++++ b/drivers/gpu/drm/msm/dsi/dsi_cfg.h
+@@ -43,6 +43,8 @@
+ 
+ struct msm_dsi_config {
+ 	u32 io_offset;
++	bool quiesce_msm8x60_boot_state;
++	bool cmd_dma_irq_timeout_nonfatal;
+ 	const struct regulator_bulk_data *regulator_data;
+ 	int num_regulators;
+ 	const char * const *bus_clk_names;
+@@ -72,4 +74,3 @@ struct msm_dsi_cfg_handler {
+ const struct msm_dsi_cfg_handler *msm_dsi_cfg_get(u32 major, u32 minor);
+ 
+ #endif /* __MSM_DSI_CFG_H__ */
+-
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
+index 7e4e3718b536c92dc555de213042857379499447..6c655ef6d63c3e3a2e9798bbed6dcecb82369eef 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -113,6 +113,7 @@ struct msm_dsi_host {
+ 
+ 	int num_bus_clks;
+ 	struct clk_bulk_data bus_clks[DSI_BUS_CLK_MAX];
++	bool keep_bus_clks_on;
+ 
+ 	struct clk *byte_clk;
+ 	struct clk *esc_clk;
+@@ -173,6 +174,7 @@ struct msm_dsi_host {
+ 	unsigned int lanes;
+ 	enum mipi_dsi_pixel_format format;
+ 	unsigned long mode_flags;
++	enum dsi_rgb_swap rgb_swap;
+ 
+ 	/* lane data parsed via DT */
+ 	int dlane_swap;
+@@ -208,6 +210,18 @@ dsi_get_config(struct msm_dsi_host *msm_host)
+ 	int ret;
+ 	u32 major = 0, minor = 0;
+ 
++	/*
++	 * MSM8x60 predates the DSI_VERSION identification scheme used by the
++	 * generic V2 path.  Both the downstream register map and Hikari hardware
++	 * show zero at REG_DSI_VERSION, so select its source-verified V2 variant
++	 * from the SoC-specific compatible instead of rejecting the controller.
++	 */
++	if (of_device_is_compatible(dev->of_node, "qcom,msm8660-dsi-ctrl")) {
++		dev_dbg(dev, "using MSM8x60 DSI V2 configuration\n");
++		return msm_dsi_cfg_get(MSM_DSI_VER_MAJOR_V2,
++				       MSM_DSI_V2_VER_MINOR_8064);
++	}
++
+ 	ahb_clk = msm_clk_get(msm_host->pdev, "iface");
+ 	if (IS_ERR(ahb_clk)) {
+ 		dev_err_probe(dev, PTR_ERR(ahb_clk), "%s: cannot get interface clock\n",
+@@ -352,6 +366,41 @@ static int dsi_clk_init(struct msm_dsi_host *msm_host)
+ 	return ret;
+ }
+ 
++int msm_dsi_host_quiesce_boot_state(struct mipi_dsi_host *host,
++				    struct msm_dsi_phy *phy)
++{
++	struct msm_dsi_host *msm_host = to_msm_dsi_host(host);
++	int ret;
++
++	if (!msm_host->cfg_hnd->cfg->quiesce_msm8x60_boot_state)
++		return 0;
++
++	/*
++	 * S1Boot leaves the MSM8x60 DSI AHB branches enabled without a clock
++	 * framework reference. Take a real reference before accessing the
++	 * controller, then retain it for this early bring-up path. Hardware
++	 * shows that the three halt status bits do not assert during teardown;
++	 * retaining the narrow bus clocks avoids warnings and, more importantly,
++	 * keeps an ordinary runtime suspend from resetting an active panel.
++	 */
++	ret = clk_bulk_prepare_enable(msm_host->num_bus_clks,
++				      msm_host->bus_clks);
++	if (ret)
++		return ret;
++
++	dsi_write(msm_host, REG_DSI_CLK_CTRL, 0);
++	dsi_write(msm_host, REG_DSI_CTRL, 0);
++	msm_dsi_phy_quiesce_boot_state(phy);
++	/* Flush all posted writes while the slave AHB clock is accessible. */
++	dsi_read(msm_host, REG_DSI_CTRL);
++
++	msm_host->keep_bus_clks_on = true;
++	dev_info(&msm_host->pdev->dev,
++		 "quiesced MSM8x60 firmware state; retaining DSI AHB clocks\n");
++
++	return 0;
++}
++
+ int msm_dsi_runtime_suspend(struct device *dev)
+ {
+ 	struct platform_device *pdev = to_platform_device(dev);
+@@ -362,6 +411,9 @@ int msm_dsi_runtime_suspend(struct device *dev)
+ 	if (!msm_host->cfg_hnd)
+ 		return 0;
+ 
++	if (msm_host->keep_bus_clks_on)
++		return 0;
++
+ 	clk_bulk_disable_unprepare(msm_host->num_bus_clks, msm_host->bus_clks);
+ 
+ 	return 0;
+@@ -377,6 +429,9 @@ int msm_dsi_runtime_resume(struct device *dev)
+ 	if (!msm_host->cfg_hnd)
+ 		return 0;
+ 
++	if (msm_host->keep_bus_clks_on)
++		return 0;
++
+ 	return clk_bulk_prepare_enable(msm_host->num_bus_clks, msm_host->bus_clks);
+ }
+ 
+@@ -508,6 +563,33 @@ int dsi_link_clk_set_rate_v2(struct msm_dsi_host *msm_host)
+ 	return 0;
+ }
+ 
++/*
++ * Sony's MSM8x60 downstream DSI path programs and enables the DSI core
++ * clock in addition to the byte, escape and pixel clocks.  In the common
++ * clock model this is the DSI_CLK branch fed by dsi1_src.
++ */
++int dsi_link_clk_set_rate_msm8x60(struct msm_dsi_host *msm_host)
++{
++	int ret;
++
++	ret = clk_set_rate(msm_host->byte_clk, msm_host->byte_clk_rate);
++	if (ret)
++		return dev_err_probe(&msm_host->pdev->dev, ret,
++				     "failed to set DSI byte clock rate\n");
++
++	ret = clk_set_rate(msm_host->src_clk, msm_host->src_clk_rate);
++	if (ret)
++		return dev_err_probe(&msm_host->pdev->dev, ret,
++				     "failed to set DSI source clock rate\n");
++
++	ret = clk_set_rate(msm_host->pixel_clk, msm_host->pixel_clk_rate);
++	if (ret)
++		return dev_err_probe(&msm_host->pdev->dev, ret,
++				     "failed to set DSI pixel clock rate\n");
++
++	return 0;
++}
++
+ int dsi_link_clk_enable_v2(struct msm_dsi_host *msm_host)
+ {
+ 	int ret;
+@@ -548,6 +630,37 @@ int dsi_link_clk_enable_v2(struct msm_dsi_host *msm_host)
+ 	return ret;
+ }
+ 
++int dsi_link_clk_enable_msm8x60(struct msm_dsi_host *msm_host)
++{
++	int ret;
++
++	ret = clk_prepare_enable(msm_host->byte_clk);
++	if (ret)
++		return ret;
++
++	ret = clk_prepare_enable(msm_host->esc_clk);
++	if (ret)
++		goto disable_byte;
++
++	ret = clk_prepare_enable(msm_host->src_clk);
++	if (ret)
++		goto disable_esc;
++
++	ret = clk_prepare_enable(msm_host->pixel_clk);
++	if (ret)
++		goto disable_src;
++
++	return 0;
++
++disable_src:
++	clk_disable_unprepare(msm_host->src_clk);
++disable_esc:
++	clk_disable_unprepare(msm_host->esc_clk);
++disable_byte:
++	clk_disable_unprepare(msm_host->byte_clk);
++	return ret;
++}
++
+ void dsi_link_clk_disable_6g(struct msm_dsi_host *msm_host)
+ {
+ 	clk_disable_unprepare(msm_host->esc_clk);
+@@ -564,6 +677,14 @@ void dsi_link_clk_disable_v2(struct msm_dsi_host *msm_host)
+ 	clk_disable_unprepare(msm_host->byte_clk);
+ }
+ 
++void dsi_link_clk_disable_msm8x60(struct msm_dsi_host *msm_host)
++{
++	clk_disable_unprepare(msm_host->pixel_clk);
++	clk_disable_unprepare(msm_host->src_clk);
++	clk_disable_unprepare(msm_host->esc_clk);
++	clk_disable_unprepare(msm_host->byte_clk);
++}
++
+ /**
+  * dsi_adjust_pclk_for_compression() - Adjust the pclk rate for compression case
+  * @mode: The selected mode for the DSI output
+@@ -842,12 +963,10 @@ static void dsi_ctrl_enable(struct msm_dsi_host *msm_host,
+ 			data |= DSI_VID_CFG0_DATABUS_WIDEN;
+ 		dsi_write(msm_host, REG_DSI_VID_CFG0, data);
+ 
+-		/* Do not swap RGB colors */
+-		data = DSI_VID_CFG1_RGB_SWAP(SWAP_RGB);
+-		dsi_write(msm_host, REG_DSI_VID_CFG1, 0);
++		data = DSI_VID_CFG1_RGB_SWAP(msm_host->rgb_swap);
++		dsi_write(msm_host, REG_DSI_VID_CFG1, data);
+ 	} else {
+-		/* Do not swap RGB colors */
+-		data = DSI_CMD_CFG0_RGB_SWAP(SWAP_RGB);
++		data = DSI_CMD_CFG0_RGB_SWAP(msm_host->rgb_swap);
+ 		data |= DSI_CMD_CFG0_DST_FORMAT(dsi_get_cmd_fmt(mipi_fmt));
+ 		dsi_write(msm_host, REG_DSI_CMD_CFG0, data);
+ 
+@@ -876,9 +995,18 @@ static void dsi_ctrl_enable(struct msm_dsi_host *msm_host,
+ 			DSI_CMD_DMA_CTRL_LOW_POWER);
+ 
+ 	data = 0;
+-	/* Always assume dedicated TE pin */
+-	data |= DSI_TRIG_CTRL_TE;
+-	data |= DSI_TRIG_CTRL_MDP_TRIGGER(TRIGGER_NONE);
++	/*
++	 * Hikari's MSM8x60 downstream panel data leaves te_sel clear and uses
++	 * software triggers for both MDP and command DMA.  Selecting the
++	 * dedicated TE input here can prevent the V2 command engine from
++	 * consuming even the first panel command.
++	 */
++	if (!cfg_hnd->cfg->quiesce_msm8x60_boot_state)
++		data |= DSI_TRIG_CTRL_TE;
++	if (cfg_hnd->cfg->quiesce_msm8x60_boot_state)
++		data |= DSI_TRIG_CTRL_MDP_TRIGGER(TRIGGER_SW);
++	else
++		data |= DSI_TRIG_CTRL_MDP_TRIGGER(TRIGGER_NONE);
+ 	data |= DSI_TRIG_CTRL_DMA_TRIGGER(TRIGGER_SW);
+ 	data |= DSI_TRIG_CTRL_STREAM(msm_host->channel);
+ 	if ((cfg_hnd->major == MSM_DSI_VER_MAJOR_6G) &&
+@@ -916,7 +1044,8 @@ static void dsi_ctrl_enable(struct msm_dsi_host *msm_host,
+ 	dsi_write(msm_host, REG_DSI_LANE_SWAP_CTRL,
+ 		  DSI_LANE_SWAP_CTRL_DLN_SWAP_SEL(msm_host->dlane_swap));
+ 
+-	if (!(flags & MIPI_DSI_CLOCK_NON_CONTINUOUS)) {
++	if (!(flags & MIPI_DSI_CLOCK_NON_CONTINUOUS) &&
++	    !cfg_hnd->cfg->quiesce_msm8x60_boot_state) {
+ 		lane_ctrl = dsi_read(msm_host, REG_DSI_LANE_CTRL);
+ 
+ 		if (msm_dsi_phy_set_continuous_clock(phy, true))
+@@ -1262,9 +1391,9 @@ int dsi_tx_buf_alloc_6g(struct msm_dsi_host *msm_host, int size)
+ 
+ int dsi_tx_buf_alloc_v2(struct msm_dsi_host *msm_host, int size)
+ {
+-	struct drm_device *dev = msm_host->dev;
++	struct device *dev = &msm_host->pdev->dev;
+ 
+-	msm_host->tx_buf = dma_alloc_coherent(dev->dev, size,
++	msm_host->tx_buf = dma_alloc_coherent(dev, size,
+ 					&msm_host->tx_buf_paddr, GFP_KERNEL);
+ 	if (!msm_host->tx_buf)
+ 		return -ENOMEM;
+@@ -1296,7 +1425,8 @@ void msm_dsi_tx_buf_free(struct mipi_dsi_host *host)
+ 	}
+ 
+ 	if (msm_host->tx_buf)
+-		dma_free_coherent(dev->dev, msm_host->tx_size, msm_host->tx_buf,
++		dma_free_coherent(&msm_host->pdev->dev, msm_host->tx_size,
++			msm_host->tx_buf,
+ 			msm_host->tx_buf_paddr);
+ }
+ 
+@@ -1458,8 +1588,49 @@ static int dsi_cmd_dma_tx(struct msm_dsi_host *msm_host, int len)
+ 		ret = wait_for_completion_timeout(&msm_host->dma_comp,
+ 					msecs_to_jiffies(200));
+ 		DBG("ret=%d", ret);
+-		if (ret == 0)
+-			ret = -ETIMEDOUT;
++		if (ret == 0) {
++			u32 trigger = dsi_read(msm_host, REG_DSI_TRIG_DMA);
++			u32 intr = dsi_read(msm_host, REG_DSI_INTR_CTRL);
++			u32 status = dsi_read(msm_host, REG_DSI_STATUS0);
++			u32 fifo = dsi_read(msm_host, REG_DSI_FIFO_STATUS);
++			u32 ack = dsi_read(msm_host, REG_DSI_ACK_ERR_STATUS);
++			u32 timeout = dsi_read(msm_host, REG_DSI_TIMEOUT_STATUS);
++			u32 dln0 = dsi_read(msm_host, REG_DSI_DLN0_PHY_ERR);
++			u32 clk = dsi_read(msm_host, REG_DSI_CLK_STATUS);
++			bool idle, error_free;
++
++			idle = !(status & (DSI_STATUS0_CMD_MODE_ENGINE_BUSY |
++					  DSI_STATUS0_CMD_MODE_DMA_BUSY |
++					  DSI_STATUS0_DSI_BUSY));
++			error_free = !(status & DSI_STATUS0_INTERLEAVE_OP_CONTENTION) &&
++				     !(fifo & 0x44444489) && !ack &&
++				     !(timeout & 0x111) && !(dln0 & 0x11111);
++
++			/*
++			 * Sony's MSM8x60 host logs a missing completion interrupt but
++			 * continues with the command length.  A working Hikari likewise
++			 * leaves TRIG_DMA asserted, so that register cannot distinguish a
++			 * completed transfer.  Preserve the downstream behaviour only for
++			 * this configuration and only when the engine is idle and reports
++			 * no protocol, FIFO, timeout or lane-0 PHY error.
++			 */
++			if (cfg_hnd->cfg->cmd_dma_irq_timeout_nonfatal && idle &&
++			    error_free) {
++				dev_warn_once(&msm_host->pdev->dev,
++					      "command DMA completion IRQ missing; continuing on idle MSM8x60 engine (base=%#llx len=%d trigger=%#x intr=%#x fifo=%#x clk=%#x)\n",
++					      dma_base, len, trigger, intr, fifo, clk);
++				ret = len;
++			} else {
++				dev_err(&msm_host->pdev->dev,
++					"command DMA timeout: base=%#llx len=%d ctrl=%#x trig_ctrl=%#x trigger=%#x intr=%#x status=%#x fifo=%#x ack=%#x timeout=%#x dln0=%#x clk=%#x\n",
++					dma_base, len,
++					dsi_read(msm_host, REG_DSI_CTRL),
++					dsi_read(msm_host, REG_DSI_TRIG_CTRL),
++					trigger, intr, status, fifo, ack, timeout, dln0,
++					clk);
++				ret = -ETIMEDOUT;
++			}
++		}
+ 		else
+ 			ret = len;
+ 	} else {
+@@ -1718,6 +1889,10 @@ static int dsi_host_attach(struct mipi_dsi_host *host,
+ 	msm_host->lanes = dsi->lanes;
+ 	msm_host->format = dsi->format;
+ 	msm_host->mode_flags = dsi->mode_flags;
++	msm_host->rgb_swap = SWAP_RGB;
++	if (of_device_is_compatible(dsi->dev.of_node,
++				    "sony,hikari-r63306-tmd-mdv22"))
++		msm_host->rgb_swap = SWAP_BGR;
+ 	if (dsi->dsc) {
+ 		msm_host->dsc = dsi->dsc;
+ 		if (dsi->mode_flags & MIPI_DSI_MODE_DSC_ALL_SLICES_IN_PKT)
+@@ -2106,6 +2281,12 @@ void msm_dsi_host_destroy(struct mipi_dsi_host *host)
+ 	mutex_destroy(&msm_host->cmd_mutex);
+ 	mutex_destroy(&msm_host->dev_mutex);
+ 
++	if (msm_host->keep_bus_clks_on) {
++		clk_bulk_disable_unprepare(msm_host->num_bus_clks,
++					   msm_host->bus_clks);
++		msm_host->keep_bus_clks_on = false;
++	}
++
+ 	pm_runtime_disable(&msm_host->pdev->dev);
+ }
+ 
+@@ -2188,6 +2369,9 @@ int msm_dsi_host_xfer_prepare(struct mipi_dsi_host *host,
+ 		msm_host->dma_cmd_ctrl_restore |
+ 		DSI_CTRL_CMD_MODE_EN |
+ 		DSI_CTRL_ENABLE);
++	/* MSM8x60 requires command mode to reach hardware before DMA setup. */
++	wmb();
++	(void)dsi_read(msm_host, REG_DSI_CTRL);
+ 	dsi_intr_ctrl(msm_host, DSI_IRQ_MASK_CMD_DMA_DONE, 1);
+ 
+ 	return 0;
+@@ -2364,6 +2548,10 @@ void msm_dsi_host_cmd_xfer_commit(struct mipi_dsi_host *host, u32 dma_base,
+ 
+ 	dsi_write(msm_host, REG_DSI_DMA_BASE, dma_base);
+ 	dsi_write(msm_host, REG_DSI_DMA_LEN, len);
++
++	/* Order and flush the DMA descriptor registers before triggering V2. */
++	wmb();
++	(void)dsi_read(msm_host, REG_DSI_DMA_LEN);
+ 	dsi_write(msm_host, REG_DSI_TRIG_DMA, 1);
+ 
+ 	/* Make sure trigger happens */
+diff --git a/drivers/gpu/drm/msm/dsi/phy/dsi_phy.c b/drivers/gpu/drm/msm/dsi/phy/dsi_phy.c
+index 1fb3899b88bf2638ff4075fffa867a3d33a0fac1..da77deeecba8a52382d4910503baba67119ce034 100644
+--- a/drivers/gpu/drm/msm/dsi/phy/dsi_phy.c
++++ b/drivers/gpu/drm/msm/dsi/phy/dsi_phy.c
+@@ -514,6 +514,10 @@ int msm_dsi_cphy_timing_calc_v4(struct msm_dsi_dphy_timing *timing,
+ }
+ 
+ static const struct of_device_id dsi_phy_dt_match[] = {
++#ifdef CONFIG_DRM_MSM_DSI_45NM_PHY
++	{ .compatible = "qcom,msm8660-dsi-phy-45nm",
++	  .data = &dsi_phy_45nm_msm8x60_cfgs },
++#endif
+ #ifdef CONFIG_DRM_MSM_DSI_28NM_PHY
+ 	{ .compatible = "qcom,dsi-phy-28nm-hpm",
+ 	  .data = &dsi_phy_28nm_hpm_cfgs },
+@@ -808,6 +812,12 @@ void msm_dsi_phy_disable(struct msm_dsi_phy *phy)
+ 	pm_runtime_put(&phy->pdev->dev);
+ }
+ 
++void msm_dsi_phy_quiesce_boot_state(struct msm_dsi_phy *phy)
++{
++	if (phy && phy->cfg->ops.quiesce_boot_state)
++		phy->cfg->ops.quiesce_boot_state(phy);
++}
++
+ void msm_dsi_phy_set_usecase(struct msm_dsi_phy *phy,
+ 			     enum msm_dsi_phy_usecase uc)
+ {
+diff --git a/drivers/gpu/drm/msm/dsi/phy/dsi_phy.h b/drivers/gpu/drm/msm/dsi/phy/dsi_phy.h
+index f5d3e806f8fd5146601e2a46fd38992c0ff1e21b..b5df76d87554ed86ae0fd9f1c2eab834ba354b43 100644
+--- a/drivers/gpu/drm/msm/dsi/phy/dsi_phy.h
++++ b/drivers/gpu/drm/msm/dsi/phy/dsi_phy.h
+@@ -18,6 +18,7 @@ struct msm_dsi_phy_ops {
+ 	int (*enable)(struct msm_dsi_phy *phy,
+ 			struct msm_dsi_phy_clk_request *clk_req);
+ 	void (*disable)(struct msm_dsi_phy *phy);
++	void (*quiesce_boot_state)(struct msm_dsi_phy *phy);
+ 	void (*save_pll_state)(struct msm_dsi_phy *phy);
+ 	int (*restore_pll_state)(struct msm_dsi_phy *phy);
+ 	bool (*set_continuous_clock)(struct msm_dsi_phy *phy, bool enable);
+@@ -40,6 +41,7 @@ struct msm_dsi_phy_cfg {
+ };
+ 
+ extern const struct msm_dsi_phy_cfg dsi_phy_28nm_hpm_cfgs;
++extern const struct msm_dsi_phy_cfg dsi_phy_45nm_msm8x60_cfgs;
+ extern const struct msm_dsi_phy_cfg dsi_phy_28nm_hpm_famb_cfgs;
+ extern const struct msm_dsi_phy_cfg dsi_phy_28nm_lp_cfgs;
+ extern const struct msm_dsi_phy_cfg dsi_phy_28nm_8226_cfgs;
+diff --git a/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c b/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..0f9e366a6903bdf55e8017217a1342dd70591eed
+--- /dev/null
++++ b/drivers/gpu/drm/msm/dsi/phy/dsi_phy_45nm.c
+@@ -0,0 +1,207 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * MSM8x60 45nm DSI PHY
++ *
++ * The first implementation deliberately supports the one source-verified
++ * Sony Hikari MDV22 profile (four lanes, 418.037760 MHz).  Values are from
++ * the Fuji downstream msm_dss_io_8x60.c PHY database, not from later 28nm
++ * PHYs.  It is a bootstrap implementation, kept separate from newer PHYs
++ * so the hardware is not misidentified.
++ */
++#include <linux/clk-provider.h>
++#include <linux/delay.h>
++
++#include "dsi_phy.h"
++
++#define HIKARI_BITCLK	418037760UL
++#define HIKARI_LEGACY_BITCLK	418000000UL
++#define HIKARI_BYTECLK	(HIKARI_BITCLK / 8)
++/*
++ * The PHY's non-byte output feeds DSI_SRC, not the final pixel clock.
++ * Fuji's 418 MHz profile uses an 836 MHz VCO / 4 DSI divider, hence the
++ * 209.018880 MHz source from which MMCC derives the 69.672960 MHz pixel
++ * clock. DSI_PIXEL_PLL_CLK is the historical binding name for that output.
++ */
++#define HIKARI_DSI_SRC_CLK	(HIKARI_BITCLK / 2)
++#define HIKARI_PHY_RESOURCE_OFFSET	0xf0
++
++#define PHY_REG(_absolute_offset)	((_absolute_offset) - HIKARI_PHY_RESOURCE_OFFSET)
++
++static const u8 hikari_regulator[] = { 0x13, 0x01, 0x01, 0x00 };
++static const u8 hikari_timing[] = { 0x78, 0x1b, 0x11, 0x00, 0x3e, 0x43,
++	0x16, 0x1e, 0x1d, 0x03, 0x04 };
++static const u8 hikari_ctrl[] = { 0x7f, 0x00, 0x00, 0x89 };
++static const u8 hikari_strength[] = { 0xdd, 0x02, 0x86, 0x00 };
++static const u8 hikari_pll[] = { 0x40, 0x91, 0xb1, 0xd9, 0x00, 0x2f,
++	0x48, 0x63, 0x31, 0x0f, 0x03, 0x05, 0x14, 0x03, 0x00, 0x00,
++	0x54, 0x06, 0x10, 0x04, 0x00 };
++
++static void write_table(void __iomem *base, u32 offset, const u8 *table,
++			size_t count)
++{
++	while (count--) {
++		writel(*table++, base + offset);
++		offset += 4;
++	}
++}
++
++static bool hikari_rate_is_supported(unsigned long rate)
++{
++	/* The BSP table is for 418 MHz; CCF rounding yields 418.000 or 418.038. */
++	return rate >= HIKARI_LEGACY_BITCLK - 100000 &&
++		rate <= HIKARI_BITCLK + 100000;
++}
++
++static int dsi_45nm_pll_init(struct msm_dsi_phy *phy)
++{
++	struct device *dev = &phy->pdev->dev;
++	struct clk_hw *hw;
++
++	hw = devm_clk_hw_register_fixed_rate(dev, "dsi1pllbyte", NULL, 0,
++					    HIKARI_BYTECLK);
++	if (IS_ERR(hw))
++		return PTR_ERR(hw);
++	phy->provided_clocks->hws[DSI_BYTE_PLL_CLK] = hw;
++	hw = devm_clk_hw_register_fixed_rate(dev, "dsi1pll", NULL, 0,
++					    HIKARI_DSI_SRC_CLK);
++	if (IS_ERR(hw))
++		return PTR_ERR(hw);
++	phy->provided_clocks->hws[DSI_PIXEL_PLL_CLK] = hw;
++	return 0;
++}
++
++/*
++ * The raw MDV22 PHY table provides PLL defaults, then the Sony 8x60 BSP
++ * overrides these divider fields for the selected link rate. Keep that
++ * ordering: omitting these writes leaves the PLL off the Hikari profile.
++ */
++static void dsi_45nm_program_hikari_dividers(void __iomem *base)
++{
++	u32 val;
++
++	/* VCO 836 MHz, ref divider 27, bit divider 2, byte 16, DSI 4. */
++	writel(417 & 0xff, base + PHY_REG(0x204));
++	val = readl(base + PHY_REG(0x208));
++	val &= ~0x07;
++	val |= (417 >> 8) & 0x07;
++	writel(val, base + PHY_REG(0x208));
++	val = readl(base + PHY_REG(0x20c));
++	val &= ~0x3f;
++	val |= 26;
++	writel(val, base + PHY_REG(0x20c));
++	val = readl(base + PHY_REG(0x220));
++	val &= ~0x0f;
++	val |= 1;
++	writel(val, base + PHY_REG(0x220));
++	writel(15, base + PHY_REG(0x224));
++	writel(3, base + PHY_REG(0x228));
++}
++
++static int dsi_45nm_enable(struct msm_dsi_phy *phy,
++			   struct msm_dsi_phy_clk_request *clk_req)
++{
++	void __iomem *base = phy->base;
++	u32 val;
++	int i;
++
++	if (!hikari_rate_is_supported(clk_req->bitclk_rate))
++		return -EINVAL;
++
++	/* Exact MDV22 host clock-lane timing from Sony's Hikari panel data. */
++	phy->timing.shared_timings.clk_post = 0x04;
++	phy->timing.shared_timings.clk_pre = 0x1b;
++	phy->timing.shared_timings.clk_pre_inc_by_2 = false;
++	phy->timing.shared_timings.byte_intf_clk_div_2 = false;
++
++	/* Sony applies the analog pre-enable controls before PHY programming. */
++	writel(0x050, base + PHY_REG(0x214));
++	writel(0x00f, base + PHY_REG(0x258));
++	writel(0, base + PHY_REG(0x25c));
++
++	/* Same reset/calibration sequencing as the exact MSM8x60 BSP. */
++	writel(1, base + PHY_REG(0x128));
++	wmb();
++	usleep_range(1, 2);
++	writel(0, base + PHY_REG(0x128));
++	wmb();
++	usleep_range(1, 2);
++	write_table(base, PHY_REG(0x2cc), hikari_regulator, ARRAY_SIZE(hikari_regulator));
++	write_table(base, PHY_REG(0x260), hikari_timing, ARRAY_SIZE(hikari_timing));
++	write_table(base, PHY_REG(0x290), hikari_ctrl, ARRAY_SIZE(hikari_ctrl));
++	write_table(base, PHY_REG(0x2a0), hikari_strength, ARRAY_SIZE(hikari_strength));
++	writel(0x0000ff11, base + PHY_REG(0x0f4));
++	writel(1, base + PHY_REG(0x0f0));
++	/* The legacy BSP polls until calibration completes; bound it at 20 ms. */
++	for (i = 0; i < 2000; i++) {
++		val = readl(base + PHY_REG(0x0fc));
++		if (!(val & BIT(28)))
++			break;
++		udelay(10);
++	}
++	if (val & BIT(28))
++		return -ETIMEDOUT;
++	/* Legacy hardware requires PLL_CTRL_0 to be committed last. */
++	write_table(base, PHY_REG(0x204), &hikari_pll[1], ARRAY_SIZE(hikari_pll) - 1);
++	dsi_45nm_program_hikari_dividers(base);
++	/*
++	 * Sony enables the 45 nm PLL separately from programming its table.
++	 * Fixed-rate CCF providers describe the two outputs but cannot turn the
++	 * underlying hardware on, so commit PLL_CTRL_0 with ENABLE set only after
++	 * every other PHY/PLL register is configured.
++	 */
++	writel(hikari_pll[0] | BIT(0), base + PHY_REG(0x200));
++	wmb();
++	dev_info(&phy->pdev->dev,
++		 "Hikari 45nm DSI PHY enabled: bit %lu, byte %lu, source %lu Hz, PLL_CTRL_0 %#x\n",
++		 HIKARI_BITCLK, HIKARI_BYTECLK, HIKARI_DSI_SRC_CLK,
++		 readl(base + PHY_REG(0x200)));
++	return 0;
++}
++
++static void dsi_45nm_disable(struct msm_dsi_phy *phy)
++{
++	void __iomem *base = phy->base;
++
++	/* Match Sony's clock-disable path before powering down the PHY. */
++	writel(hikari_pll[0], base + PHY_REG(0x200));
++	writel(0x05f, base + PHY_REG(0x214));
++	writel(0x08f, base + PHY_REG(0x258));
++	writel(1, base + PHY_REG(0x25c));
++	writel(2, base + PHY_REG(0x2cc));
++	writel(0, base + PHY_REG(0x290));
++	writel(0x7f, base + PHY_REG(0x294));
++	writel(0, base + PHY_REG(0x118));
++	wmb();
++}
++
++static void dsi_45nm_quiesce_boot_state(struct msm_dsi_phy *phy)
++{
++	/*
++	 * Fuji's no-continuous-splash handoff clears PLL_CTRL_0 before the
++	 * DSI AHB branches are gated.  This is separate from the normal PHY
++	 * disable path because the DRM driver has not enabled the PHY yet.
++	 */
++	writel(0, phy->pll_base);
++	/* Flush the posted write while the DSI slave AHB clock is still on. */
++	readl(phy->pll_base);
++}
++
++static const struct regulator_bulk_data dsi_45nm_regulators[] = {
++	{ .supply = "vdda", .init_load_uA = 100000 }, /* PM8058 L0, 1.2 V */
++};
++
++const struct msm_dsi_phy_cfg dsi_phy_45nm_msm8x60_cfgs = {
++	.regulator_data = dsi_45nm_regulators,
++	.num_regulators = ARRAY_SIZE(dsi_45nm_regulators),
++	.ops = {
++		.enable = dsi_45nm_enable,
++		.disable = dsi_45nm_disable,
++		.quiesce_boot_state = dsi_45nm_quiesce_boot_state,
++		.pll_init = dsi_45nm_pll_init,
++	},
++	.min_pll_rate = HIKARI_BITCLK,
++	.max_pll_rate = HIKARI_BITCLK,
++	/* The 45nm register map is addressed from the DSI block base. */
++	.io_start = { 0x047000f0 },
++	.num_dsi_phy = 1,
++};
+diff --git a/drivers/gpu/drm/msm/msm_fb.c b/drivers/gpu/drm/msm/msm_fb.c
+index 60c108d35d2a1c5ad55489a9925214979541ea80..469347fde254b81b4c071260f6670875aa8bb2b6 100644
+--- a/drivers/gpu/drm/msm/msm_fb.c
++++ b/drivers/gpu/drm/msm/msm_fb.c
+@@ -86,7 +86,12 @@ int msm_framebuffer_prepare(struct drm_framebuffer *fb, bool needs_dirtyfb)
+ 
+ 	for (i = 0; i < n; i++) {
+ 		msm_gem_vma_get(fb->obj[i]);
+-		ret = msm_gem_get_and_pin_iova(fb->obj[i], vm, &msm_fb->iova[i]);
++		if (vm)
++			ret = msm_gem_get_and_pin_iova(fb->obj[i], vm,
++						       &msm_fb->iova[i]);
++		else
++			ret = msm_gem_get_and_pin_phys(fb->obj[i],
++						       &msm_fb->iova[i]);
+ 		drm_dbg_state(fb->dev, "FB[%u]: iova[%d]: %08llx (%d)\n",
+ 			      fb->base.id, i, msm_fb->iova[i], ret);
+ 		if (ret)
+@@ -112,7 +117,10 @@ void msm_framebuffer_cleanup(struct drm_framebuffer *fb, bool needed_dirtyfb)
+ 	memset(msm_fb->iova, 0, sizeof(msm_fb->iova));
+ 
+ 	for (i = 0; i < n; i++) {
+-		msm_gem_unpin_iova(fb->obj[i], vm);
++		if (vm)
++			msm_gem_unpin_iova(fb->obj[i], vm);
++		else
++			msm_gem_unpin_phys(fb->obj[i]);
+ 		msm_gem_vma_put(fb->obj[i]);
+ 	}
+ }
+diff --git a/drivers/gpu/drm/msm/msm_fbdev.c b/drivers/gpu/drm/msm/msm_fbdev.c
+index 89ca9da3e1f272a134518daf46ac3adeca50422f..186e7ca226c693e218c8f9fa7618db0e885449b6 100644
+--- a/drivers/gpu/drm/msm/msm_fbdev.c
++++ b/drivers/gpu/drm/msm/msm_fbdev.c
+@@ -142,7 +142,10 @@ int msm_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
+ 	 * in panic (ie. lock-safe, etc) we could avoid pinning the
+ 	 * buffer now:
+ 	 */
+-	ret = msm_gem_get_and_pin_iova(bo, priv->kms->vm, &paddr);
++	if (priv->kms->vm)
++		ret = msm_gem_get_and_pin_iova(bo, priv->kms->vm, &paddr);
++	else
++		ret = msm_gem_get_and_pin_phys(bo, &paddr);
+ 	if (ret) {
+ 		drm_err(dev, "failed to get buffer obj iova: %d\n", ret);
+ 		goto err_drm_client_buffer_delete;
+@@ -166,6 +169,7 @@ int msm_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
+ 	fbi->screen_size = bo->size;
+ 	fbi->fix.smem_start = paddr;
+ 	fbi->fix.smem_len = bo->size;
++	drm_info(dev, "fbdev scanout address %08llx\n", paddr);
+ 
+ 	DBG("par=%p, %dx%d", fbi->par, fbi->var.xres, fbi->var.yres);
+ 	DBG("allocated %dx%d fb", buffer->fb->width, buffer->fb->height);
+@@ -179,7 +183,10 @@ int msm_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
+ 	return 0;
+ 
+ err_msm_gem_unpin:
+-	msm_gem_unpin_iova(bo, priv->kms->vm);
++	if (priv->kms->vm)
++		msm_gem_unpin_iova(bo, priv->kms->vm);
++	else
++		msm_gem_unpin_phys(bo);
+ 	msm_gem_vma_put(bo);
+ err_drm_client_buffer_delete:
+ 	drm_client_buffer_delete(buffer);
+diff --git a/drivers/gpu/drm/msm/msm_gem.c b/drivers/gpu/drm/msm/msm_gem.c
+index c4cff3d53d81bc951472c5fe6346d19a5e39e6d8..b4c0c206617237bd090ea46903b12d7854cb2256 100644
+--- a/drivers/gpu/drm/msm/msm_gem.c
++++ b/drivers/gpu/drm/msm/msm_gem.c
+@@ -8,6 +8,7 @@
+ #include <linux/vmalloc.h>
+ #include <linux/spinlock.h>
+ #include <linux/shmem_fs.h>
++#include <linux/dma-map-ops.h>
+ #include <linux/dma-buf.h>
+ #include <linux/pagemap.h>
+ 
+@@ -102,7 +103,7 @@ void msm_gem_vma_put(struct drm_gem_object *obj)
+ 	if (atomic_dec_return(&to_msm_bo(obj)->vma_ref))
+ 		return;
+ 
+-	if (!priv->kms)
++	if (!priv->kms || !priv->kms->vm)
+ 		return;
+ 
+ #ifdef CONFIG_DRM_MSM_KMS
+@@ -196,7 +197,28 @@ static struct page **get_pages(struct drm_gem_object *obj)
+ 		struct page **p;
+ 		size_t npages = obj->size >> PAGE_SHIFT;
+ 
+-		p = drm_gem_get_pages(obj);
++		if ((msm_obj->flags & MSM_BO_SCANOUT) &&
++		    !device_iommu_mapped(dev->dev)) {
++			struct page *base;
++			size_t i;
++
++			base = dma_alloc_contiguous(dev->dev, obj->size,
++						    GFP_KERNEL | __GFP_NOWARN);
++			if (!base)
++				return ERR_PTR(-ENOMEM);
++
++			p = kvmalloc_array(npages, sizeof(*p), GFP_KERNEL);
++			if (!p) {
++				dma_free_contiguous(dev->dev, base, obj->size);
++				return ERR_PTR(-ENOMEM);
++			}
++
++			for (i = 0; i < npages; i++)
++				p[i] = base + i;
++			msm_obj->contiguous_pages = base;
++		} else {
++			p = drm_gem_get_pages(obj);
++		}
+ 
+ 		if (IS_ERR(p)) {
+ 			DRM_DEV_ERROR(dev->dev, "could not get pages: %ld\n",
+@@ -214,6 +236,13 @@ static struct page **get_pages(struct drm_gem_object *obj)
+ 
+ 			DRM_DEV_ERROR(dev->dev, "failed to allocate sgt\n");
+ 			msm_obj->sgt = NULL;
++			if (msm_obj->contiguous_pages) {
++				dma_free_contiguous(dev->dev,
++						    msm_obj->contiguous_pages,
++						    obj->size);
++				msm_obj->contiguous_pages = NULL;
++				kvfree(p);
++			}
+ 			return ptr;
+ 		}
+ 
+@@ -256,7 +285,14 @@ static void put_pages(struct drm_gem_object *obj)
+ 
+ 		update_device_mem(obj->dev->dev_private, -obj->size);
+ 
+-		drm_gem_put_pages(obj, msm_obj->pages, true, false);
++		if (msm_obj->contiguous_pages) {
++			dma_free_contiguous(obj->dev->dev,
++					    msm_obj->contiguous_pages, obj->size);
++			msm_obj->contiguous_pages = NULL;
++			kvfree(msm_obj->pages);
++		} else {
++			drm_gem_put_pages(obj, msm_obj->pages, true, false);
++		}
+ 
+ 		msm_obj->pages = NULL;
+ 		update_lru(obj);
+@@ -320,6 +356,34 @@ void msm_gem_unpin_pages_locked(struct drm_gem_object *obj)
+ 	msm_gem_unpin_locked(obj);
+ }
+ 
++int msm_gem_get_and_pin_phys(struct drm_gem_object *obj, uint64_t *phys)
++{
++	struct msm_gem_object *msm_obj = to_msm_bo(obj);
++	struct page **pages;
++	int ret = 0;
++
++	msm_gem_lock(obj);
++	pages = msm_gem_get_pages_locked(obj, MSM_MADV_WILLNEED);
++	if (IS_ERR(pages)) {
++		ret = PTR_ERR(pages);
++	} else if (!msm_obj->contiguous_pages) {
++		ret = -EINVAL;
++	} else {
++		*phys = page_to_phys(msm_obj->contiguous_pages);
++		pin_obj_locked(obj);
++	}
++	msm_gem_unlock(obj);
++
++	return ret;
++}
++
++void msm_gem_unpin_phys(struct drm_gem_object *obj)
++{
++	msm_gem_lock(obj);
++	msm_gem_unpin_locked(obj);
++	msm_gem_unlock(obj);
++}
++
+ static pgprot_t msm_gem_pgprot(struct msm_gem_object *msm_obj, pgprot_t prot)
+ {
+ 	if (msm_obj->flags & MSM_BO_WC)
+diff --git a/drivers/gpu/drm/msm/msm_gem.h b/drivers/gpu/drm/msm/msm_gem.h
+index dff60cbc9d95a80d08da4ea5b7d54855eb72acfb..1953d078d167ea9882f3e0f635a4c7fc43bc7fa2 100644
+--- a/drivers/gpu/drm/msm/msm_gem.h
++++ b/drivers/gpu/drm/msm/msm_gem.h
+@@ -216,6 +216,7 @@ struct msm_gem_object {
+ 	struct list_head node;
+ 
+ 	struct page **pages;
++	struct page *contiguous_pages;
+ 	struct sg_table *sgt;
+ 	void *vaddr;
+ 
+@@ -282,6 +283,8 @@ void msm_gem_pin_obj_locked(struct drm_gem_object *obj);
+ struct page **msm_gem_get_pages_locked(struct drm_gem_object *obj, unsigned madv);
+ struct page **msm_gem_pin_pages_locked(struct drm_gem_object *obj);
+ void msm_gem_unpin_pages_locked(struct drm_gem_object *obj);
++int msm_gem_get_and_pin_phys(struct drm_gem_object *obj, uint64_t *phys);
++void msm_gem_unpin_phys(struct drm_gem_object *obj);
+ int msm_gem_dumb_create(struct drm_file *file, struct drm_device *dev,
+ 		struct drm_mode_create_dumb *args);
+ void *msm_gem_get_vaddr_locked(struct drm_gem_object *obj);
+diff --git a/drivers/gpu/drm/panel/Kconfig b/drivers/gpu/drm/panel/Kconfig
+index cbdf7b8f7f7afc7f8aa3a9cefd2258ca81ac9673..738651015e039fba73ba590d6ed75a53ba99aa43 100644
+--- a/drivers/gpu/drm/panel/Kconfig
++++ b/drivers/gpu/drm/panel/Kconfig
+@@ -8,6 +8,13 @@ config DRM_PANEL
+ menu "Display Panels"
+ 	depends on DRM && DRM_PANEL
+ 
++config DRM_PANEL_RENESAS_R63306_TMD_MDV22
++	tristate "Renesas R63306 TMD MDV22 panel"
++	depends on OF && GPIOLIB && REGULATOR
++	depends on DRM_MIPI_DSI
++	help
++	  Enable the Sony Hikari-specific TMD MDV22 720x1280 video-mode panel.
++
+ config DRM_PANEL_ABT_Y030XX067A
+ 	tristate "ABT Y030XX067A 320x480 LCD panel"
+ 	depends on OF && SPI
+diff --git a/drivers/gpu/drm/panel/Makefile b/drivers/gpu/drm/panel/Makefile
+index 3b523cf37833067c3b0b02ffd90694c3558f0741..6f92da037692cdccbf50f1dfcd5e1e1895672da2 100644
+--- a/drivers/gpu/drm/panel/Makefile
++++ b/drivers/gpu/drm/panel/Makefile
+@@ -2,6 +2,7 @@
+ obj-$(CONFIG_DRM_PANEL_ABT_Y030XX067A) += panel-abt-y030xx067a.o
+ obj-$(CONFIG_DRM_PANEL_ANBERNIC_TD4310) += panel-anbernic-td4310.o
+ obj-$(CONFIG_DRM_PANEL_ARM_VERSATILE) += panel-arm-versatile.o
++obj-$(CONFIG_DRM_PANEL_RENESAS_R63306_TMD_MDV22) += panel-renesas-r63306-tmd-mdv22.o
+ obj-$(CONFIG_DRM_PANEL_ASUS_Z00T_TM5P5_NT35596) += panel-asus-z00t-tm5p5-n35596.o
+ obj-$(CONFIG_DRM_PANEL_AUO_A030JTN01) += panel-auo-a030jtn01.o
+ obj-$(CONFIG_DRM_PANEL_BOE_BF060Y8M_AJ0) += panel-boe-bf060y8m-aj0.o
+diff --git a/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c b/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..c6e4b90ccb8fb97fadf2a4bb1b390c4e8c9a86f7
+--- /dev/null
++++ b/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
+@@ -0,0 +1,130 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* Sony Hikari TMD MDV22 (Renesas R63306) 720x1280 DSI panel. */
++#include <linux/delay.h>
++#include <linux/gpio/consumer.h>
++#include <linux/module.h>
++#include <linux/regulator/consumer.h>
++#include <drm/drm_mipi_dsi.h>
++#include <drm/drm_modes.h>
++#include <drm/drm_panel.h>
++
++struct mdv22 { struct drm_panel panel; struct mipi_dsi_device *dsi;
++	struct regulator_bulk_data supplies[2]; struct gpio_desc *power, *reset; };
++#define to_mdv22(p) container_of(p, struct mdv22, panel)
++
++/* Exact ID00/ID01 MDV22 sequence from Sony mipi_tmd_video_wxga_mdv22.c. */
++static const u8 mdv22_init[][17] = {
++	{1,0xb0,0x00},{1,0xb2,0x00},{1,0xb3,0x0c},{1,0xb4,0x02},
++	{3,0xb9,0x01,0x00,0x75},{1,0xbb,0x00},{6,0xbe,0xff,0x0f,0x1a,0x18,0x02,0x40},
++	{5,0xc0,0x40,0x02,0x7f,0xc8,0x08},{15,0xc1,0x00,0xa8,0x00,0x00,0x00,0x00,0x00,0x9c,0x08,0x24,0x0b,0x00,0x00,0x00,0x00},
++	{5,0xc2,0x00,0x00,0x0b,0x00,0x00},{1,0xc3,0x04},{3,0xc4,0x4d,0x83,0x00},
++	{10,0xc6,0x13,0x00,0x08,0x71,0x00,0x00,0x00,0x00,0x00,0x00},{1,0xc7,0x22},{4,0xc8,0x07,0x00,0x07,0x00},
++	{13,0xc9,0x43,0x25,0x3b,0x39,0x31,0x23,0x27,0x2c,0x26,0x29,0x40,0x2d,0x74},
++	{13,0xca,0x7c,0x1a,0x24,0x26,0x2e,0x3c,0x38,0x33,0x39,0x36,0x1f,0x12,0x4b},
++	{13,0xcb,0x43,0x25,0x3b,0x39,0x31,0x23,0x27,0x2c,0x26,0x29,0x40,0x2d,0x74},
++	{13,0xcc,0x7c,0x1a,0x24,0x26,0x2e,0x3c,0x38,0x33,0x39,0x36,0x1f,0x12,0x4b},
++	{13,0xcd,0x43,0x25,0x3b,0x39,0x31,0x23,0x27,0x2c,0x26,0x29,0x40,0x2d,0x74},
++	{13,0xce,0x7c,0x1a,0x24,0x26,0x2e,0x3c,0x38,0x33,0x39,0x36,0x1f,0x12,0x4b},
++	{3,0xd0,0x69,0x65,0x01},{2,0xd1,0x77,0xd4},{1,0xd3,0x33},{2,0xd5,0x0c,0x0c},{6,0xd8,0x34,0x64,0x23,0x25,0x62,0x32},
++	{11,0xde,0x01,0x00,0x31,0x46,0x00,0x00,0x00,0x00,0x00,0x00,0x00},{1,0xe2,0x00},
++};
++static const u8 mdv22_post_sleep[][17] = {
++	{4,0xc8,0x4c,0x0c,0x0c,0x0c},{13,0xc9,0x00,0x40,0x00,0x16,0x32,0x2e,0x3a,0x43,0x3e,0x3c,0x45,0x79,0x3f},
++	{13,0xca,0x00,0x46,0x1a,0x23,0x21,0x1c,0x25,0x31,0x2d,0x49,0x5f,0x7f,0x3f},
++	{13,0xcb,0x00,0x4c,0x20,0x3a,0x42,0x40,0x47,0x4b,0x42,0x3e,0x46,0x7e,0x3f},
++	{13,0xcc,0x00,0x41,0x19,0x21,0x1d,0x14,0x18,0x1f,0x1d,0x25,0x3f,0x73,0x3f},
++	{13,0xcd,0x23,0x79,0x5a,0x5f,0x57,0x4c,0x51,0x51,0x45,0x3f,0x4b,0x7f,0x3f},
++	{13,0xce,0x00,0x40,0x14,0x20,0x1a,0x0e,0x0e,0x13,0x08,0x00,0x05,0x46,0x1c},
++	{11,0xde,0x10,0x7b,0x11,0x0a,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
++};
++static int mdv22_send(struct mipi_dsi_device *dsi, const u8 t[][17], size_t n)
++{ size_t i; int ret; for (i=0;i<n;i++) { ret=mipi_dsi_generic_write(dsi, &t[i][1], t[i][0]+1); if (ret<0) return ret; } return 0; }
++static int mdv22_prepare(struct drm_panel *panel)
++{ struct mdv22 *m=to_mdv22(panel); int ret;
++	ret=regulator_bulk_enable(2,m->supplies); if(ret) return ret;
++	gpiod_set_value_cansleep(m->reset, 0);
++	msleep(10);
++	gpiod_set_value_cansleep(m->reset, 1);
++	msleep(10);
++	gpiod_set_value_cansleep(m->power, 1);
++	msleep(50);
++	ret=mdv22_send(m->dsi,mdv22_init,ARRAY_SIZE(mdv22_init)); if(ret) goto power_off;
++	ret=mipi_dsi_dcs_exit_sleep_mode(m->dsi); if(ret) goto power_off; msleep(100);
++	ret=mdv22_send(m->dsi,mdv22_post_sleep,ARRAY_SIZE(mdv22_post_sleep)); if(ret) goto power_off; msleep(20);
++	ret=mipi_dsi_dcs_set_display_on(m->dsi); if(ret) goto power_off;
++	return 0;
++power_off:
++	gpiod_set_value_cansleep(m->reset,0);
++	gpiod_set_value_cansleep(m->power,0);
++	regulator_bulk_disable(2,m->supplies);
++	return ret;
++}
++static int mdv22_unprepare(struct drm_panel *panel)
++{
++	struct mdv22 *m = to_mdv22(panel);
++
++	mipi_dsi_dcs_enter_sleep_mode(m->dsi);
++	msleep(80);
++	gpiod_set_value_cansleep(m->power, 0);
++	msleep(50);
++	gpiod_set_value_cansleep(m->reset, 0);
++	msleep(10);
++	regulator_bulk_disable(2, m->supplies);
++	return 0;
++}
++static int mdv22_enable(struct drm_panel *panel)
++{ return 0; }
++static int mdv22_disable(struct drm_panel *panel)
++{ return 0; }
++static const struct drm_display_mode mdv22_mode = { .clock=69673,.hdisplay=720,.hsync_start=848,.hsync_end=851,.htotal=896,.vdisplay=1280,.vsync_start=1289,.vsync_end=1293,.vtotal=1296,.width_mm=53,.height_mm=95,.type=DRM_MODE_TYPE_DRIVER|DRM_MODE_TYPE_PREFERRED };
++static int mdv22_modes(struct drm_panel *panel, struct drm_connector *c) { struct drm_display_mode *m=drm_mode_duplicate(c->dev,&mdv22_mode); if(!m)return -ENOMEM; drm_mode_set_name(m); drm_mode_probed_add(c,m); c->display_info.width_mm=53; c->display_info.height_mm=95; return 1; }
++static const struct drm_panel_funcs mdv22_funcs = { .prepare=mdv22_prepare,.enable=mdv22_enable,.disable=mdv22_disable,.unprepare=mdv22_unprepare,.get_modes=mdv22_modes };
++static int mdv22_probe(struct mipi_dsi_device *dsi)
++{
++	struct mdv22 *m;
++	int ret;
++
++	m = devm_drm_panel_alloc(&dsi->dev, struct mdv22, panel,
++				 &mdv22_funcs, DRM_MODE_CONNECTOR_DSI);
++	if (IS_ERR(m))
++		return PTR_ERR(m);
++
++	/* The MSM8x60 DSI host and PHY must be active before panel commands. */
++	m->panel.prepare_prev_first = true;
++
++	m->dsi = dsi;
++	m->supplies[0].supply = "vci";
++	m->supplies[1].supply = "vddio";
++	ret = devm_regulator_bulk_get(&dsi->dev, 2, m->supplies);
++	if (ret)
++		return ret;
++	m->power = devm_gpiod_get(&dsi->dev, "power", GPIOD_OUT_LOW);
++	if (IS_ERR(m->power))
++		return PTR_ERR(m->power);
++	m->reset = devm_gpiod_get(&dsi->dev, "reset", GPIOD_OUT_LOW);
++	if (IS_ERR(m->reset))
++		return PTR_ERR(m->reset);
++	ret = drm_panel_of_backlight(&m->panel);
++	if (ret)
++		return dev_err_probe(&dsi->dev, ret, "failed to get backlight\n");
++	ret = devm_drm_panel_add(&dsi->dev, &m->panel);
++	if (ret)
++		return ret;
++
++	mipi_dsi_set_drvdata(dsi, m);
++	dsi->lanes = 4;
++	dsi->format = MIPI_DSI_FMT_RGB888;
++	/* Fuji MDV22 specifies non-burst synchronous-event, with HSA/HE pulses. */
++	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_HSE;
++	ret = mipi_dsi_attach(dsi);
++	if (ret)
++		return dev_err_probe(&dsi->dev, ret, "failed to attach DSI host\n");
++
++	return 0;
++}
++static void mdv22_remove(struct mipi_dsi_device *dsi)
++{
++	mipi_dsi_detach(dsi);
++}
++static const struct of_device_id mdv22_of[]={ { .compatible="sony,hikari-r63306-tmd-mdv22" },{} };MODULE_DEVICE_TABLE(of,mdv22_of);
++static struct mipi_dsi_driver mdv22_driver={.probe=mdv22_probe,.remove=mdv22_remove,.driver={.name="panel-renesas-r63306-tmd-mdv22",.of_match_table=mdv22_of}};module_mipi_dsi_driver(mdv22_driver);MODULE_LICENSE("GPL");
+-- 
+2.53.0
+

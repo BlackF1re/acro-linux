@@ -74,9 +74,11 @@ scripts/materialize-hikari-kernel.sh /path/to/new/linux-hikari
 KERNEL_SRC=/path/to/new/linux-hikari scripts/build-hikari-debian-kernel.sh
 ```
 
-`kernel/patches/post-series` carries a subsystem split of the complete source integration commit
-`f7a6e62ff206edff9cee8c04226e85f1102a9a85` after the baseline Hikari
-corrections. Its original author and message are preserved in the mail patch.
+`kernel/patches/series` now contains 17 final subsystem patches. It incorporates
+the complete source integration commit
+`f7a6e62ff206edff9cee8c04226e85f1102a9a85`, subsequent maintenance cleanup,
+and all former strict transforms. Original exports and author metadata remain
+in `research/patches/pre-subsystem-series-20261005/`; `post-series` is empty.
 The original commit has a verified SSH ED25519 signature, fingerprint
 `SHA256:NF7UE1n7G4bcbFLO6CyE9Bz5M4zZh/72LX7EK5a80t8`.
 Export/application was checked to reproduce its exact tree:
@@ -111,7 +113,47 @@ Historical test worktrees remain local references, not release branches.
 ## Maintenance patch audit
 
 See [PATCH-AUDIT.md](PATCH-AUDIT.md). The original integration export is
-archived; the subsystem driver patches plus canonical DTS preserve its exact prepared tree. Patch 0086 only quiets
-startup diagnostics. Root access, diagnostic packages, BOOT and GPU hardware
+archived; the final subsystem patches preserve the maintained prepared tree
+exactly. Logging cleanup is incorporated in the owning subsystem. Root access, diagnostic packages, BOOT and GPU hardware
 sequencing are retained. No maintenance kernel has been deployed as part of
 this source cleanup.
+
+
+## One subsystem per patch — 2026-10-05
+
+The new 17-patch series independently materialized from the pinned upstream
+base with all source gates passing. Its entire tree is byte-identical to the
+previous 60-mail-patch + 4-transform prepared source:
+`e3d73fd2f7bffefd6e42b0ec789d4e0af81fde45`.
+The materializer now enforces that tree hash and rejects dirty preparation.
+No target code changed; no phone kernel/runtime was installed or restarted.
+Existing DT schema defects and physical acceptance limits remain unchanged.
+See `kernel/patches/README.md` for ownership and original-to-subsystem mapping.
+
+
+## Patch-only source preparation — 2026-10-05
+
+The default build/install source is now
+`/home/paul/xperia/src/linux-hikari-current`, materialized from the locked
+17-patch series. Explicit `KERNEL_SRC` overrides remain available.
+
+```sh
+scripts/materialize-hikari-kernel.sh /home/paul/xperia/src/linux-hikari-current
+scripts/build-hikari-debian-kernel.sh
+```
+
+If the source directory already exists, the materializer refuses to reset it:
+use a fresh path and explicit KERNEL_SRC. `prepare-hikari-kernel-tree.sh` is
+now a read-only check. It cannot copy DTS, replace source text, delete old
+profiles, or edit Makefiles. Board prerequisites already belong to patch
+`0017-hikari-board.patch`; missing/divergent files stop the build.
+
+The old `/src/linux` uncommitted source changes were losslessly exported under
+`research/patches/direct-source-edits-20261005/` without touching its worktree or
+index. They are historical, not a replacement for the latest integrated SYSTEM.
+No source change was made to the working kernel or deployed to the phone.
+
+Build and install entry points additionally require the complete clean source
+tree to match `HIKARI_PREPARED_TREE`. Unexported C/driver changes are rejected
+before compilation or installation, not just divergent DTS. Ignored build
+outputs are excluded; the check never resets, stages or edits source.

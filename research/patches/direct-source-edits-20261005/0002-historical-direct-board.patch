@@ -1,0 +1,1387 @@
+diff --git a/arch/arm/boot/dts/qcom/Makefile b/arch/arm/boot/dts/qcom/Makefile
+index 74ef2b7bd8c6ffc6493b33a86ecd99ad956732e2..886727717e30da12852fd888971ea657f65091ad 100644
+--- a/arch/arm/boot/dts/qcom/Makefile
++++ b/arch/arm/boot/dts/qcom/Makefile
+@@ -63,3 +63,16 @@ dtb-$(CONFIG_ARCH_QCOM) += \
+ 	qcom-sdx55-telit-fn980-tlb.dtb \
+ 	qcom-sdx65-mtp.dtb
+ dtb-$(CONFIG_ARCH_QCOM) += qcom-msm8260-sony-hikari.dtb
++dtb-$(CONFIG_ARCH_QCOM) += qcom-msm8260-sony-hikari.dtb
++dtb-$(CONFIG_ARCH_QCOM) += qcom-msm8260-sony-hikari.dtb
++dtb-$(CONFIG_ARCH_QCOM) += qcom-msm8260-sony-hikari.dtb
++dtb-$(CONFIG_ARCH_QCOM) += qcom-msm8260-sony-hikari.dtb
++dtb-$(CONFIG_ARCH_QCOM) += qcom-msm8260-sony-hikari.dtb
++dtb-$(CONFIG_ARCH_QCOM) += qcom-msm8260-sony-hikari.dtb
++dtb-$(CONFIG_ARCH_QCOM) += qcom-msm8260-sony-hikari.dtb
++dtb-$(CONFIG_ARCH_QCOM) += qcom-msm8260-sony-hikari.dtb
++dtb-$(CONFIG_ARCH_QCOM) += qcom-msm8260-sony-hikari.dtb
++dtb-$(CONFIG_ARCH_QCOM) += qcom-msm8260-sony-hikari.dtb
++dtb-$(CONFIG_ARCH_QCOM) += qcom-msm8260-sony-hikari.dtb
++dtb-$(CONFIG_ARCH_QCOM) += qcom-msm8260-sony-hikari.dtb
++dtb-$(CONFIG_ARCH_QCOM) += qcom-msm8260-sony-hikari.dtb
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-gpu-base.dtsi b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-gpu-base.dtsi
+new file mode 100644
+index 0000000000000000000000000000000000000000..458c647cc8c8c771c8021ed856e0ab40e53d65e3
+--- /dev/null
++++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-gpu-base.dtsi
+@@ -0,0 +1,41 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Sony Xperia acro S (Hikari) Adreno A220 hardware description.
++ *
++ * The SYSTEM DT is the only production target, so the GPU is enabled here.
++ *
++ * Hardware facts come from Sony/CAF MSM8x60 board data: GFX3D is at
++ * 0x04300000..0x0431ffff, GIC SPI 80, and the five legacy operating points are
++ * 266.667, 228.571, 200, 177.778 and 27 MHz.  The clock topology follows the
++ * working MSM8x60/Tenderloin Freedreno port but explicitly supplies GFX3D AXI
++ * as the DRM/MSM "bus" clock instead of depending on bootloader clock state.
++ */
++
++/ {
++	gpu: gpu@4300000 {
++		compatible = "qcom,adreno-220.0", "qcom,adreno";
++		reg = <0x04300000 0x00020000>;
++		reg-names = "kgsl_3d0_reg_memory";
++		interrupts = <GIC_SPI 80 IRQ_TYPE_LEVEL_HIGH>;
++		interrupt-names = "kgsl_3d0_irq";
++
++		clocks = <&mmcc GFX3D_CLK>,
++			 <&mmcc GFX3D_AHB_CLK>,
++			 <&mmcc GMEM_AXI_CLK>,
++			 <&mmcc GFX3D_AXI_CLK>;
++		clock-names = "core", "iface", "mem_iface", "bus";
++		power-domains = <&mmcc GFX3D_GDSC>;
++		operating-points-v2 = <&gpu_opp_table>;
++		status = "okay";
++
++		gpu_opp_table: opp-table {
++			compatible = "operating-points-v2";
++
++			opp-266667000 { opp-hz = /bits/ 64 <266667000>; };
++			opp-228571000 { opp-hz = /bits/ 64 <228571000>; };
++			opp-200000000 { opp-hz = /bits/ 64 <200000000>; };
++			opp-177778000 { opp-hz = /bits/ 64 <177778000>; };
++			opp-27000000  { opp-hz = /bits/ 64 <27000000>; };
++		};
++	};
++};
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-gpu.dtsi b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-gpu.dtsi
+new file mode 100644
+index 0000000000000000000000000000000000000000..cc83607281ae06f54feccda18c866b633076a810
+--- /dev/null
++++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-gpu.dtsi
+@@ -0,0 +1,6 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Dedicated Hikari Adreno A220 bring-up profile. */
++
++&gpu {
++	status = "okay";
++};
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-hardware.dtsi b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-hardware.dtsi
+new file mode 100644
+index 0000000000000000000000000000000000000000..6f5b78750f6b7fa9453964cca76309d45d5f960b
+--- /dev/null
++++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-hardware.dtsi
+@@ -0,0 +1,686 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Sony Xperia acro S (Hikari) board hardware that is already backed by
++ * physical inventory plus exact Fuji/Hikari downstream wiring and by an
++ * existing mainline driver.  Keep speculative peripherals out of this file.
++ */
++
++#include <dt-bindings/input/input.h>
++#include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
++#include <dt-bindings/pinctrl/qcom,pmic-mpp.h>
++#include "pm8058.dtsi"
++
++/* Fuji/Hikari routes the PM8058 interrupt to MSM TLMM GPIO88, active low. */
++&pm8058 {
++	interrupts-extended = <&tlmm 88 IRQ_TYPE_LEVEL_LOW>;
++};
++
++/* MSM8x60's second SSBI arbiter connects the four-MPP PM8901. */
++&{/} {
++	/*
++	 * Fuji's board thermistor is routed through PM8058 MPP10 to XOADC
++	 * AMUX7.  The voltage/temperature curve is the exact scale_msm_therm
++	 * table from Sony's board kernel, expressed in the units returned by
++	 * the mainline XOADC consumer API (microvolts and millicelsius).
++	 */
++	hikari_msm_therm: msm-thermal-sensor {
++		compatible = "generic-adc-thermal";
++		#thermal-sensor-cells = <0>;
++		io-channels = <&pm8058_xoadc 0x00 0x07>;
++		io-channel-names = "sensor-channel";
++		temperature-lookup-table = <
++			(-30000) 2150000
++			(-20000) 2107000
++			(-10000) 2037000
++			(0)      1929000
++			(10000)  1776000
++			(20000)  1579000
++			(25000)  1467000
++			(30000)  1349000
++			(40000)  1108000
++			(50000)   878000
++			(60000)   677000
++			(70000)   513000
++			(80000)   385000
++			(90000)   287000
++			(100000)  215000
++			(110000)  186000
++			(120000)  107000
++		>;
++	};
++
++	/*
++	 * The removable pack NTC is fed from L18 (2.2 V) through 100 kOhm.
++	 * Hikari accepts two Sony battery families whose non-overlapping
++	 * resistance ranges allow one voltage-ordered table to describe both.
++	 */
++	hikari_battery_therm: battery-thermal-sensor {
++		compatible = "generic-adc-thermal";
++		#thermal-sensor-cells = <0>;
++		io-channels = <&pm8058_xoadc 0x00 0x06>;
++		io-channel-names = "sensor-channel";
++		temperature-lookup-table = <
++			(-20000) 1416245
++			(0)      1353846
++			(5000)   1329402
++			(10000)  1301674
++			(15000)  1270946
++			(20000)  1238041
++			(25000)  1204525
++			(30000)  1171001
++			(35000)  1138736
++			(40000)  1108189
++			(45000)  1080407
++			(50000)  1055359
++			(55000)  1033510
++			(60000)  1014655
++			(65000)   997814
++			(70000)   983858
++			(100000)  934905
++			(-20000)  885783
++			(0)       725469
++			(5000)    674341
++			(10000)   621808
++			(15000)   570370
++			(20000)   520611
++			(25000)   473155
++			(30000)   430088
++			(35000)   392276
++			(40000)   357454
++			(45000)   327660
++			(50000)   301812
++			(55000)   280279
++			(60000)   261674
++			(65000)   244444
++			(70000)   232200
++			(100000)  185348
++		>;
++	};
++
++	pm8901_ssbi: ssbi@c00000 {
++		compatible = "qcom,ssbi";
++		reg = <0x00c00000 0x1000>;
++		qcom,controller-type = "pmic-arbiter";
++
++		pm8901: pmic {
++			compatible = "qcom,pm8901";
++			interrupt-parent = <&tlmm>;
++			interrupts = <91 IRQ_TYPE_LEVEL_LOW>;
++			#interrupt-cells = <2>;
++			interrupt-controller;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			pm8901_mpps: mpps@50 {
++				compatible = "qcom,pm8901-mpp", "qcom,ssbi-mpp";
++				reg = <0x50>;
++				gpio-controller;
++				#gpio-cells = <2>;
++				gpio-ranges = <&pm8901_mpps 0 0 4>;
++				interrupt-controller;
++				#interrupt-cells = <2>;
++
++				hikari_ext_5v_enable: ext-5v-enable-state {
++					pins = "mpp1";
++					function = "digital";
++					output-low;
++					power-source = <PM8901_MPP_MSMIO>;
++				};
++			};
++		};
++	};
++
++	ext_5v: regulator-ext-5v {
++		compatible = "regulator-fixed";
++		regulator-name = "ext-5v";
++		regulator-min-microvolt = <5000000>;
++		regulator-max-microvolt = <5000000>;
++		vin-supply = <&usb_otg_guard>;
++		/* The BQ24160 parent driver registers this child regulator. */
++		post-init-providers = <&usb_otg_guard>;
++		gpio = <&pm8901_mpps 1 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_ext_5v_enable>;
++	};
++
++	usb_otg_vbus: regulator-usb-otg-vbus {
++		compatible = "regulator-fixed";
++		regulator-name = "usb-otg-vbus";
++		regulator-min-microvolt = <5000000>;
++		regulator-max-microvolt = <5000000>;
++		vin-supply = <&ext_5v>;
++		gpio = <&tlmm 28 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		startup-delay-us = <1000>;
++		interrupt-parent = <&tlmm>;
++		interrupts = <104 IRQ_TYPE_EDGE_FALLING>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_ncp373_enable &hikari_ncp373_fault>;
++	};
++};
++
++&{/thermal-zones} {
++	battery-pack {
++		polling-delay-passive = <2000>;
++		polling-delay = <10000>;
++		thermal-sensors = <&hikari_battery_therm>;
++	};
++
++	msm-board-thermal {
++		polling-delay-passive = <1000>;
++		polling-delay = <5000>;
++		thermal-sensors = <&hikari_msm_therm>;
++	};
++};
++
++/*
++ * Exact downstream rails:
++ *   ClearPad VDD        = PM8901 L1, 3.05 V
++ *   SDCC1/eMMC VDD     = PM8901 L5, 2.85 V, always on
++ *   SDCC1/eMMC VCCQ    = PM8901 LVS0, always on
++ *   shared sensor VIO  = PM8058 L8, 1.80 V, enabled at board init
++ *   shared sensor VDD  = PM8058 L10, 2.85 V, enabled at board init
++ *   SDCC3/microSD VDD  = PM8058 L14, 2.85 V
++ */
++&rpm {
++	regulators-0 {
++		pm8901_l1: l1 {
++			regulator-min-microvolt = <3050000>;
++			regulator-max-microvolt = <3050000>;
++		};
++
++		pm8901_l5: l5 {
++			regulator-min-microvolt = <2850000>;
++			regulator-max-microvolt = <2850000>;
++			regulator-always-on;
++		};
++
++		pm8901_lvs0: lvs0 {
++			regulator-always-on;
++		};
++	};
++
++	regulators-1 {
++		pm8058_l8: l8 {
++			regulator-min-microvolt = <1800000>;
++			regulator-max-microvolt = <1800000>;
++			regulator-always-on;
++		};
++
++		pm8058_l10: l10 {
++			regulator-min-microvolt = <2850000>;
++			regulator-max-microvolt = <2850000>;
++			regulator-always-on;
++		};
++
++		pm8058_l14: l14 {
++			regulator-min-microvolt = <2850000>;
++			regulator-max-microvolt = <2850000>;
++		};
++
++		/* Fuji/Hikari uses L18 as the 2.2 V XOADC reference supply. */
++		pm8058_l18: l18 {
++			regulator-min-microvolt = <2200000>;
++			regulator-max-microvolt = <2200000>;
++		};
++	};
++};
++
++&tlmm {
++	hikari_ncp373_enable: ncp373-enable-state {
++		pins = "gpio28";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++		output-low;
++	};
++
++	hikari_ncp373_fault: ncp373-fault-state {
++		pins = "gpio104";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++	hikari_gsbi3_i2c_pins: gsbi3-i2c-state {
++		pins = "gpio43", "gpio44";
++		function = "gsbi3";
++		drive-strength = <8>;
++		bias-disable;
++	};
++
++	hikari_touch_irq: touch-irq-state {
++		pins = "gpio127";
++		function = "gpio";
++		input-enable;
++		bias-disable;
++	};
++
++	hikari_gsbi12_i2c_pins: gsbi12-i2c-state {
++		pins = "gpio115", "gpio116";
++		function = "gsbi12";
++		drive-strength = <16>;
++		bias-disable;
++	};
++
++	hikari_mpu3050_irq: mpu3050-irq-state {
++		pins = "gpio30";
++		function = "gpio";
++		input-enable;
++		bias-disable;
++	};
++
++	hikari_akm8972_irq: akm8972-irq-state {
++		pins = "gpio31";
++		function = "gpio";
++		input-enable;
++		bias-disable;
++	};
++
++	hikari_apds9702_irq: apds9702-irq-state {
++		pins = "gpio34";
++		function = "gpio";
++		input-enable;
++		bias-disable;
++	};
++
++	hikari_bma250_irq: bma250-irq-state {
++		pins = "gpio41";
++		function = "gpio";
++		input-enable;
++		bias-disable;
++	};
++
++	hikari_volume_down: volume-down-state {
++		pins = "gpio73";
++		function = "gpio";
++		input-enable;
++		bias-disable;
++	};
++
++	hikari_sim_detect: sim-detect-state {
++		pins = "gpio94";
++		function = "gpio";
++		input-enable;
++		bias-disable;
++	};
++
++	/* Sony's simple-remote driver uses TLMM61 as the plug-presence IRQ. */
++	hikari_headset_detect: headset-detect-state {
++		pins = "gpio61";
++		function = "gpio";
++		input-enable;
++		bias-disable;
++	};
++};
++
++/* PM8058 GPIO22 is the Hikari microSD card-detect input, active low. */
++&pm8058_gpio {
++	/* PM8058 GPIO31: USB ID, legacy zero-based index 30. */
++	hikari_usb_id: usb-id-state {
++		pinconf {
++			pins = "gpio31";
++			function = "normal";
++			input-enable;
++			bias-pull-up;
++			qcom,pull-up-strength = <PMIC_GPIO_PULL_UP_1P5>;
++			power-source = <PM8058_GPIO_S3>;
++		};
++	};
++	hikari_sd_detect: sd-card-detect-state {
++		pinconf {
++			pins = "gpio22";
++			function = "normal";
++			input-enable;
++			bias-pull-up;
++			qcom,pull-up-strength = <PMIC_GPIO_PULL_UP_30>;
++		};
++	};
++
++	/* Sony configures PM8058 GPIO26 as the wake-capable volume-up input. */
++	hikari_volume_up: volume-up-state {
++		pinconf {
++			pins = "gpio26";
++			function = "normal";
++			input-enable;
++			bias-disable;
++			power-source = <PM8058_GPIO_S3>;
++		};
++	};
++
++	/* PN544 VEN is PM8058 GPIO17, open drain from VPH on Hikari ROW. */
++	hikari_nfc_enable: nfc-enable-state {
++		pinconf {
++			pins = "gpio17";
++			function = "normal";
++			output-low;
++			bias-disable;
++			drive-open-drain;
++			power-source = <PM8058_GPIO_VPH>;
++			qcom,drive-strength = <PMIC_GPIO_STRENGTH_MED>;
++		};
++	};
++
++	/* PN544 firmware-download select is PM8058 GPIO27 from S3. */
++	hikari_nfc_firmware: nfc-firmware-state {
++		pinconf {
++			pins = "gpio27";
++			function = "normal";
++			output-low;
++			bias-disable;
++			power-source = <PM8058_GPIO_S3>;
++			qcom,drive-strength = <PMIC_GPIO_STRENGTH_LOW>;
++		};
++	};
++
++	/* PN544 IRQ is PM8058 GPIO28, pulled down and sampled on a rising edge. */
++	hikari_nfc_irq: nfc-irq-state {
++		pinconf {
++			pins = "gpio28";
++			function = "normal";
++			input-enable;
++			bias-pull-down;
++			power-source = <PM8058_GPIO_S3>;
++		};
++	};
++};
++
++&pm8058_mpps {
++	/*
++	 * Exact Fuji/Hikari XOADC routing from board-semc_fuji.c:
++	 * MPP3 -> AMUX5 (headset), MPP7 -> AMUX6 (battery thermistor),
++	 * MPP10 -> AMUX7 (MSM thermistor), MPP8 -> AMUX8 (battery ID),
++	 * and MPP5 -> AMUX9 (charger current monitor).
++	 */
++	hikari_xoadc_mpp3: xoadc-mpp3-state {
++		pins = "mpp3";
++		function = "analog";
++		input-enable;
++		bias-high-impedance;
++		qcom,amux-route = <PMIC_MPP_AMUX_ROUTE_CH5>;
++	};
++
++	hikari_xoadc_mpp5: xoadc-mpp5-state {
++		pins = "mpp5";
++		function = "analog";
++		input-enable;
++		bias-high-impedance;
++		/* Value 4 is AMUX9 on the SSBI PM8058 MPP controller. */
++		qcom,amux-route = <4>;
++	};
++
++	hikari_xoadc_mpp7: xoadc-mpp7-state {
++		pins = "mpp7";
++		function = "analog";
++		input-enable;
++		bias-high-impedance;
++		qcom,amux-route = <PMIC_MPP_AMUX_ROUTE_CH6>;
++	};
++
++	hikari_xoadc_mpp8: xoadc-mpp8-state {
++		pins = "mpp8";
++		function = "analog";
++		input-enable;
++		bias-high-impedance;
++		qcom,amux-route = <PMIC_MPP_AMUX_ROUTE_CH8>;
++	};
++
++	hikari_xoadc_mpp10: xoadc-mpp10-state {
++		pins = "mpp10";
++		function = "analog";
++		input-enable;
++		bias-high-impedance;
++		qcom,amux-route = <PMIC_MPP_AMUX_ROUTE_CH7>;
++	};
++
++	/* PM8058 MPP11: VBUS detect, legacy zero-based index 10. */
++	hikari_usb_vbus_detect: usb-vbus-detect-state {
++		pins = "mpp11";
++		function = "digital";
++		input-enable;
++		power-source = <PM8058_MPP_S3>;
++	};
++};
++
++&pm8058_xoadc {
++	xoadc-ref-supply = <&pm8058_l18>;
++	pinctrl-names = "default";
++	pinctrl-0 = <&hikari_xoadc_mpp3 &hikari_xoadc_mpp5
++		     &hikari_xoadc_mpp7 &hikari_xoadc_mpp8
++		     &hikari_xoadc_mpp10>;
++
++	adc-channel@5 {
++		reg = <0x00 0x05>;
++		label = "headset-accessory";
++	};
++
++	adc-channel@6 {
++		reg = <0x00 0x06>;
++		label = "battery-thermistor";
++	};
++
++	adc-channel@7 {
++		reg = <0x00 0x07>;
++		label = "msm-thermistor";
++	};
++
++	adc-channel@8 {
++		reg = <0x00 0x08>;
++		label = "battery-id";
++	};
++
++	adc-channel@9 {
++		reg = <0x00 0x09>;
++		label = "charger-current-monitor";
++	};
++};
++
++/*
++ * Exact Hikari physical keys from keypad-fuji_hikari.c.  Camera focus and
++ * shutter use the PM8058 5x5 matrix at row 1, columns 0/1.  The old board
++ * data used 15 ms debounce, 2 ms scan delay and 122 us row hold and allowed
++ * the matrix to wake the phone.
++ */
++&pm8058_keypad {
++	linux,keymap = <
++		MATRIX_KEY(1, 0, KEY_CAMERA_FOCUS)
++		MATRIX_KEY(1, 1, KEY_CAMERA)
++	>;
++	keypad,num-rows = <5>;
++	keypad,num-columns = <5>;
++	debounce = <15>;
++	scan-delay = <2>;
++	row-hold = <122000>;
++	wakeup-source;
++};
++
++/ {
++	hikari_gpio_keys: gpio-keys {
++		compatible = "gpio-keys";
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_volume_up &hikari_volume_down
++			     &hikari_sim_detect &hikari_headset_detect>;
++
++		volume-up-key {
++			label = "Volume Up";
++			linux,code = <KEY_VOLUMEUP>;
++			/* Sony reads the PMIC real-time bit inverted: asserted is low. */
++			gpios = <&pm8058_gpio 25 GPIO_ACTIVE_LOW>;
++			debounce-interval = <10>;
++			wakeup-source;
++		};
++
++		volume-down-key {
++			label = "Volume Down";
++			linux,code = <KEY_VOLUMEDOWN>;
++			gpios = <&tlmm 73 GPIO_ACTIVE_HIGH>;
++			debounce-interval = <10>;
++			wakeup-source;
++		};
++
++		sim-detect-switch {
++			label = "SIM detection";
++			linux,input-type = <EV_SW>;
++			linux,code = <SW_JACK_PHYSICAL_INSERT>;
++			gpios = <&tlmm 94 GPIO_ACTIVE_HIGH>;
++			debounce-interval = <100>;
++			wakeup-source;
++		};
++
++		headset-detect-switch {
++			label = "Headset detection";
++			linux,input-type = <EV_SW>;
++			linux,code = <SW_HEADPHONE_INSERT>;
++			/* Physical testing and Sony's inverted status path: high = inserted. */
++			gpios = <&tlmm 61 GPIO_ACTIVE_HIGH>;
++			debounce-interval = <1500>;
++			wakeup-source;
++		};
++	};
++};
++
++/* Physical inventory: MAG2GA eMMC on MSM SDCC1, 8-bit. */
++&sdcc1 {
++	vmmc-supply = <&pm8901_l5>;
++	vqmmc-supply = <&pm8901_lvs0>;
++	status = "okay";
++};
++
++/* Physical inventory: removable microSD slot on MSM SDCC3. */
++&sdcc3 {
++	vmmc-supply = <&pm8058_l14>;
++	cd-gpios = <&pm8058_gpio 21 GPIO_ACTIVE_LOW>;
++	pinctrl-names = "default";
++	pinctrl-0 = <&hikari_sd_detect>;
++	status = "okay";
++};
++
++/*
++ * Hikari ClearPad is a Synaptics RMI4 device on GSBI3 I2C address 0x2c.
++ * Sony's legacy driver used F11 and a falling-edge IRQ on TLMM GPIO127.
++ * Its pointer area is 720x1280; the extra strip below Y=1279 was translated
++ * by Sony-specific software into BACK/HOME/MENU virtual keys, so do not
++ * invent an F1A hardware function here.
++ */
++&gsbi3 {
++	qcom,mode = <GSBI_PROT_I2C>;
++	status = "okay";
++};
++
++&gsbi3_i2c {
++	pinctrl-names = "default";
++	pinctrl-0 = <&hikari_gsbi3_i2c_pins>;
++	status = "okay";
++
++	touchscreen@2c {
++		compatible = "syna,rmi4-i2c";
++		reg = <0x2c>;
++		interrupts-extended = <&tlmm 127 IRQ_TYPE_EDGE_FALLING>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_touch_irq>;
++		vdd-supply = <&pm8901_l1>;
++		/* Hikari has one 3.05 V ClearPad rail.  RMI4 names both
++		 * logical consumers, so both map to the same physical supply. */
++		vio-supply = <&pm8901_l1>;
++		/* Sony's ClearPad driver waits 400 ms after enabling this rail. */
++		syna,startup-delay-ms = <400>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		rmi4-f11@11 {
++			reg = <0x11>;
++			syna,sensor-type = <1>;
++			syna,clip-x-high = <719>;
++			syna,clip-y-high = <1279>;
++		};
++	};
++};
++
++/*
++ * GSBI8 also carries the PN544 NFC controller.  Sony registers it at 0x28,
++ * with rising-edge IRQ on PM8058 GPIO28, VEN on GPIO17 and FWDL on GPIO27.
++ * The mainline PN544 HCI driver owns the exact OFF/ON/FWDL toggle sequence.
++ */
++&gsbi8_i2c {
++	proximity@54 {
++		compatible = "avago,apds9702";
++		reg = <0x54>;
++		interrupts-extended = <&tlmm 34 IRQ_TYPE_EDGE_BOTH>;
++		dout-gpios = <&tlmm 34 GPIO_ACTIVE_LOW>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_apds9702_irq>;
++		/* Exact Hikari trg/pwr/burst/freq/duration/threshold/filter. */
++		avago,control-word = <0xdfbc>;
++		wakeup-source;
++	};
++
++	nfc@28 {
++		compatible = "nxp,pn544-i2c";
++		reg = <0x28>;
++		interrupts-extended = <&pm8058_gpio 27 IRQ_TYPE_EDGE_RISING>;
++		enable-gpios = <&pm8058_gpio 16 GPIO_ACTIVE_HIGH>;
++		firmware-gpios = <&pm8058_gpio 26 GPIO_ACTIVE_HIGH>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_nfc_enable &hikari_nfc_firmware &hikari_nfc_irq>;
++	};
++};
++
++/*
++ * Motion stack.  Hikari's exact downstream data places MPU3050 on GSBI12
++ * primary I2C and BMA250 on the MPU3050 secondary bus.  Use the mainline
++ * MPU3050 i2c-gate instead of carrying the old InvenSense MPL glue.
++ */
++&gsbi12 {
++	qcom,mode = <GSBI_PROT_I2C>;
++	status = "okay";
++};
++
++&gsbi12_i2c {
++	pinctrl-names = "default";
++	pinctrl-0 = <&hikari_gsbi12_i2c_pins>;
++	status = "okay";
++
++	gyroscope@68 {
++		compatible = "invensense,mpu3050";
++		reg = <0x68>;
++		vlogic-supply = <&pm8058_l8>;
++		vdd-supply = <&pm8058_l10>;
++		interrupts-extended = <&tlmm 30 IRQ_TYPE_EDGE_RISING>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_mpu3050_irq>;
++		mount-matrix = "0", "1", "0",
++			       "1", "0", "0",
++			       "0", "0", "-1";
++
++		i2c-gate {
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			accelerometer@18 {
++				compatible = "bosch,bma250";
++				reg = <0x18>;
++				vddio-supply = <&pm8058_l8>;
++				vdd-supply = <&pm8058_l10>;
++				interrupts-extended = <&tlmm 41 IRQ_TYPE_EDGE_RISING>;
++				pinctrl-names = "default";
++				pinctrl-0 = <&hikari_bma250_irq>;
++				mount-matrix = "1", "0", "0",
++					       "0", "-1", "0",
++					       "0", "0", "-1";
++			};
++		};
++	};
++
++	magnetometer@c {
++		compatible = "asahi-kasei,ak8972";
++		reg = <0x0c>;
++		vdd-supply = <&pm8058_l10>;
++		vid-supply = <&pm8058_l8>;
++		interrupts-extended = <&tlmm 31 IRQ_TYPE_LEVEL_HIGH>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_akm8972_irq>;
++		mount-matrix = "-1", "0", "0",
++			       "0", "1", "0",
++			       "0", "0", "-1";
++	};
++};
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-safe.dtsi b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-safe.dtsi
+new file mode 100644
+index 0000000000000000000000000000000000000000..bd67baebeb61f54f1f941e2b9ccd1231441eacb5
+--- /dev/null
++++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-safe.dtsi
+@@ -0,0 +1,50 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Hikari diagnostic-survival profile.
++ *
++ * Keep the physically verified BOOT #5.1 USB/ramoops/initramfs path available
++ * without probing the still-experimental MSM8x60 multimedia island.  This is
++ * intentionally a DT-only fallback: the normal Hikari DT continues to carry
++ * the full display bring-up and remains the development target.
++ */
++
++/ {
++	model = "Sony Xperia acro S (Hikari, USB-safe diagnostics)";
++};
++
++&mmcc {
++	status = "disabled";
++};
++
++&mdp {
++	status = "disabled";
++};
++
++&dsi {
++	status = "disabled";
++};
++
++&dsi_phy {
++	status = "disabled";
++};
++
++&lcd_backlight {
++	status = "disabled";
++};
++
++/* These project-added NoC providers are only needed by multimedia bring-up. */
++&afab {
++	status = "disabled";
++};
++
++&sfab {
++	status = "disabled";
++};
++
++&mmfab {
++	status = "disabled";
++};
++
++&dfab {
++	status = "disabled";
++};
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-wireless.dtsi b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-wireless.dtsi
+new file mode 100644
+index 0000000000000000000000000000000000000000..944875c56c63307a827be7be6dd618234789144c
+--- /dev/null
++++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-wireless.dtsi
+@@ -0,0 +1,165 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Sony Xperia acro S (Hikari) Broadcom BCM4330 radio wiring.
++ *
++ * Downstream Sony sources place WLAN on MSM SDCC4 and Bluetooth on GSBI6
++ * UARTDM.  Keep firmware/calibration data out of DT: those remain userspace
++ * firmware assets and must come from the device/vendor firmware package.
++ */
++
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/interrupt-controller/irq.h>
++#include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
++#include <dt-bindings/soc/qcom,gsbi.h>
++
++/ {
++	hikari_wifi_vdd: wifi-vdd-regulator {
++		compatible = "regulator-fixed";
++		/*
++		 * Sony advertises MMC_VDD_27_28 | MMC_VDD_28_29 to the MMC
++		 * core although the physical PM8058 S3 rail is 1.8 V.  This fixed
++		 * regulator is therefore only an OCR adapter.  Its parent is the
++		 * real shared PM8058 S3 rail used by WLAN and the Timpani codec.
++		 */
++		regulator-name = "wlan-mmc-ocr-2v8";
++		regulator-min-microvolt = <2800000>;
++		regulator-max-microvolt = <2800000>;
++		regulator-always-on;
++		vin-supply = <&pm8058_s3>;
++	};
++
++	hikari_wifi_pwrseq: wifi-pwrseq {
++		compatible = "mmc-pwrseq-simple";
++		reset-gpios = <&tlmm 130 GPIO_ACTIVE_LOW>;
++		post-power-on-delay-ms = <200>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_wifi_sleep_clk>;
++	};
++};
++
++&pm8058_gpio {
++	/* PM8058 GPIO38 FUNC2 is the BCM4330 32.768 kHz sleep clock. */
++	hikari_wifi_sleep_clk: wifi-sleep-clk-state {
++		pins = "gpio38";
++		function = PM8058_GPIO38_39_CLK_32KHZ;
++		output-high;
++		bias-disable;
++		power-source = <PM8058_GPIO_S3>;
++		qcom,drive-strength = <PMIC_GPIO_STRENGTH_LOW>;
++	};
++};
++
++&tlmm {
++	/* Exact Sony Hikari SDC4 pad state: 8 mA and pulled-up CMD/DATA. */
++	hikari_sdc4_pins: sdc4-state {
++		clk-pins {
++			pins = "sdc4_clk";
++			drive-strength = <8>;
++			bias-disable;
++		};
++
++		cmd-data-pins {
++			pins = "sdc4_cmd", "sdc4_data";
++			drive-strength = <8>;
++			bias-pull-up;
++		};
++	};
++
++	hikari_wifi_hostwake: wifi-hostwake-state {
++		pins = "gpio128";
++		function = "gpio";
++		input-enable;
++		bias-disable;
++	};
++
++	/* GSBI6 UARTDM carries BCM4330 Bluetooth H4 with RTS/CTS flow control. */
++	hikari_bt_uart: bluetooth-uart-state {
++		pins = "gpio53", "gpio54", "gpio55", "gpio56";
++		function = "gsbi6";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
++	hikari_bt_reset: bluetooth-reset-state {
++		pins = "gpio23";
++		function = "gpio";
++		output-low;
++		bias-disable;
++		drive-strength = <2>;
++	};
++
++	hikari_bt_device_wake: bluetooth-device-wake-state {
++		pins = "gpio137";
++		function = "gpio";
++		output-low;
++		bias-disable;
++		drive-strength = <2>;
++	};
++
++	hikari_bt_host_wake: bluetooth-host-wake-state {
++		pins = "gpio63";
++		function = "gpio";
++		input-enable;
++		bias-pull-down;
++		drive-strength = <2>;
++	};
++};
++
++/*
++ * BCM4330 WLAN is permanently soldered to SDCC4.  Sony's board data uses a
++ * four-bit bus, defines 24 MHz as the intermediate operating point and 48 MHz
++ * as the maximum, and marks the card non-removable.  Mainline PL18x traffic at
++ * 48 MHz eventually corrupts an SDIO frame on this device, while 24 MHz keeps
++ * the source-defined operating point without relying on the unstable ceiling.
++ * The old virtual card-detect callback is unnecessary with DT non-removable.
++ * GPIO130 is WL_RST_N and GPIO128 is the separate out-of-band HOST_WAKE IRQ.
++ */
++&sdcc4 {
++	/* Logical OCR adapter backed by the real PM8058 S3 supply. */
++	vmmc-supply = <&hikari_wifi_vdd>;
++	bus-width = <4>;
++	max-frequency = <24000000>;
++	non-removable;
++	mmc-pwrseq = <&hikari_wifi_pwrseq>;
++	pinctrl-names = "default";
++	pinctrl-0 = <&hikari_sdc4_pins>;
++	#address-cells = <1>;
++	#size-cells = <0>;
++	status = "okay";
++
++	wifi@1 {
++		compatible = "brcm,bcm4330-fmac", "brcm,bcm4329-fmac";
++		reg = <1>;
++		interrupt-parent = <&tlmm>;
++		interrupts = <128 IRQ_TYPE_LEVEL_HIGH>;
++		interrupt-names = "host-wake";
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_wifi_hostwake>;
++	};
++};
++
++/*
++ * BCM4330 Bluetooth uses GSBI6 UARTDM.  Sony drives BT_RST_N high to power
++ * the controller, MSM_WAKES_BT on GPIO137 and samples BT_WAKES_MSM on GPIO63.
++ * Mainline hci_bcm/serdev replaces the legacy bt_power + bcm_bt_lpm glue.
++ */
++&gsbi6 {
++	qcom,mode = <GSBI_PROT_UART_W_FC>;
++	status = "okay";
++};
++
++&gsbi6_serial {
++	pinctrl-names = "default";
++	pinctrl-0 = <&hikari_bt_uart>;
++	uart-has-rtscts;
++	status = "okay";
++
++	bluetooth {
++		compatible = "brcm,bcm4330-bt";
++		shutdown-gpios = <&tlmm 23 GPIO_ACTIVE_HIGH>;
++		device-wakeup-gpios = <&tlmm 137 GPIO_ACTIVE_HIGH>;
++		host-wakeup-gpios = <&tlmm 63 GPIO_ACTIVE_HIGH>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_bt_reset &hikari_bt_device_wake &hikari_bt_host_wake>;
++	};
++};
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+index e44578909b5d671574b6da7fdeb054c78d36690e..ec24af9527e5272b275d43488302952c2df2a748 100644
+--- a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
++++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+@@ -32,8 +32,9 @@ scm {
+ 	/*
+ 	 * The legacy Fuji/TWRP kernel and a physical TWRP /proc/iomem capture
+ 	 * both identify this as the 128 KiB persistent ram_console region.
+-	 * Keep it mapped: ramoops writes the console itself.  Its zero ECC layout
+-	 * is deliberately compatible with the legacy TWRP ram_console reader.
++	 * Keep it mapped: ramoops writes the console itself.  The legacy recovery
++	 * enables Reed-Solomon ECC with its persistent_ram defaults, so mainline
++	 * must use the same 16-byte parity blocks for reliable full-ring capture.
+ 	 */
+ 	reserved-memory {
+ 		#address-cells = <1>;
+@@ -44,7 +45,7 @@ ramoops@7ffe0000 {
+ 			compatible = "ramoops";
+ 			reg = <0x7ffe0000 0x00020000>;
+ 			console-size = <0x00020000>;
+-			ecc-size = <0>;
++			ecc-size = <16>;
+ 		};
+ 	};
+ 
+@@ -60,20 +61,41 @@ battery: battery {
+ 		charge-term-current-microamp = <50000>;
+ 	};
+ 
++	cpufreq: cpu-frequency-controller@903000 {
++		compatible = "qcom,msm8660-cpufreq";
++		reg = <0x00903000 0x1000>,
++		      <0x02041000 0x1000>,
++		      <0x02051000 0x1000>;
++		reg-names = "scpll", "acc0", "acc1";
++		qcom,l2cc = <&l2cc>;
++
++		cpu0-supply = <&pm8901_s0>;
++		cpu1-supply = <&pm8901_s1>;
++		mem-supply = <&pm8058_s0>;
++		dig-supply = <&pm8058_s1>;
++
++		interconnects = <&afab AFAB_MAS_AMPSS_M0 &afab AFAB_SLV_EBI_CH0>;
++		interconnect-names = "cpu-mem";
++		nvmem-cells = <&speed_bin>;
++		nvmem-cell-names = "speed-bin";
++	};
++
+ 	/*
+ 	 * The low bank starts at the historical MSM8x60 shared-memory physical
+ 	 * base.  CONFIG_ARCH_QCOM_RESERVE_SMEM then retains its first 2 MiB for
+ 	 * SMEM, leaving 0x40200000 as the first normal Linux address.  The legacy
+-	 * resource view starts at that latter address; see FIRST_BOOT_MEMORY.md.
+-	 * This remains a deliberately minimal bring-up memory description, not a
+-	 * claim that every byte of nominal RAM is currently understood.
++	 * resource view starts at that latter address.  The remaining ranges match
++	 * Sony's three-bank Fuji map exactly: 44 MiB at PHYS_OFFSET, 384 MiB at
++	 * 0x48000000 and 511 MiB at 0x60000000.  The gap below 0x48000000 and the
++	 * final MiB above 0x7fefffff are therefore intentionally not System RAM.
+ 	 */
+ };
+ 
+ /* Override the placeholder System RAM node supplied by qcom-msm8660.dtsi. */
+ &{/memory@0} {
+ 	reg = <0x40000000 0x02e00000>,
+-	      <0x48000000 0x26600000>;
++	      <0x48000000 0x18000000>,
++	      <0x60000000 0x1ff00000>;
+ };
+ 
+ /*
+@@ -87,12 +109,28 @@ &gsbi12 {
+ 
+ /*
+  * HSUSB1 is the connector-facing ChipIdea controller.  The address and IRQ
+- * are shared MSM8x60 facts; `peripheral` and the two PHY rails come from the
+- * Fuji/Hikari downstream board code.  PMIC VBUS/ID callbacks were only used
+- * for legacy OTG role switching, so BOOT #5 deliberately supports device
+- * mode only and does not invent an extcon or host-role GPIO description.
++ * are shared MSM8x60 facts and the two PHY rails come from the Fuji/Hikari
++ * downstream board code.  USB ID, VBUS detection and the protected VBUS
++ * source below reproduce the exact Sony connector topology in current USB
++ * role-switch and regulator frameworks.
+  */
+ &{/} {
++	usb_connector: connector {
++		compatible = "gpio-usb-b-connector", "usb-b-connector";
++		type = "micro";
++		id-gpios = <&pm8058_gpio 31 GPIO_ACTIVE_HIGH>;
++		vbus-gpios = <&pm8058_mpps 11 GPIO_ACTIVE_LOW>;
++		vbus-supply = <&usb_otg_vbus>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&hikari_usb_id &hikari_usb_vbus_detect>;
++
++		port {
++			usb_connector_hs: endpoint {
++				remote-endpoint = <&usb_hs1_drd>;
++			};
++		};
++	};
++
+ 	usb_hs1: usb@12500000 {
+ 		compatible = "qcom,ci-hdrc";
+ 		reg = <0x12500000 0x200>, <0x12500200 0x200>;
+@@ -104,13 +142,21 @@ usb_hs1: usb@12500000 {
+ 		resets = <&gcc USB_HS1_RESET>;
+ 		reset-names = "core";
+ 		phy_type = "ulpi";
+-		dr_mode = "peripheral";
++		dr_mode = "otg";
++		usb-role-switch;
++		role-switch-default-mode = "peripheral";
+ 		ahb-burst-config = <0>;
+ 		phys = <&usb_hs1_phy>;
+ 		phy-names = "usb-phy";
+ 		#reset-cells = <1>;
+ 		status = "okay";
+ 
++		port {
++			usb_hs1_drd: endpoint {
++				remote-endpoint = <&usb_connector_hs>;
++			};
++		};
++
+ 		ulpi {
+ 			usb_hs1_phy: phy {
+ 				compatible = "qcom,usb-hs-phy-msm8660",
+@@ -133,12 +179,16 @@ mmcc: clock-controller@4000000 {
+ 		#clock-cells = <1>;
+ 		#reset-cells = <1>;
+ 		#power-domain-cells = <1>;
+-		/* MSM8x60 GCC exposes PLL8 as the shared MMSS parent. */
++		/*
++		 * MSM8x60 GCC exposes PLL8 as the shared MMSS parent.  Hikari has
++		 * only DSI1 wired here.  Do not alias the absent DSI2 inputs to the
++		 * DSI1 PHY: both names would then resolve to the same clk_hw and CCF
++		 * would select the first matching mux entry (hardware value 1/DSI2)
++		 * instead of value 3/DSI1.
++		 */
+ 		clocks = <&pxo_board>, <&gcc PLL8_VOTE>, <&gcc PLL8_VOTE>,
+-			 <&dsi_phy DSI_PIXEL_PLL_CLK>, <&dsi_phy DSI_BYTE_PLL_CLK>,
+ 			 <&dsi_phy DSI_PIXEL_PLL_CLK>, <&dsi_phy DSI_BYTE_PLL_CLK>;
+-		clock-names = "pxo", "pll3", "pll8_vote", "dsi1pll", "dsi1pllbyte",
+-			      "dsi2pll", "dsi2pllbyte";
++		clock-names = "pxo", "pll3", "pll8_vote", "dsi1pll", "dsi1pllbyte";
+ 		status = "okay";
+ 	};
+ 
+@@ -185,6 +235,39 @@ mmss_sfpb: syscon@5700000 {
+ 		reg = <0x05700000 0x1000>;
+ 	};
+ 
++	/*
++	 * MSM8x60 has two MDP IOMMU ports, each with two context banks. Sony's
++	 * devices-iommu.c gives these exact apertures and interrupt assignments;
++	 * the binding orders them non-secure first, secure second. Keep the
++	 * APQ8064 fallback because the upstream msm_iommu driver represents this
++	 * common first-generation Qualcomm IOMMU implementation.
++	 */
++	mdp_port0: iommu@7500000 {
++		compatible = "qcom,msm8660-iommu", "qcom,apq8064-iommu";
++		reg = <0x07500000 0x00100000>;
++		interrupts = <GIC_SPI 64 IRQ_TYPE_LEVEL_HIGH>,
++			     <GIC_SPI 63 IRQ_TYPE_LEVEL_HIGH>;
++		clocks = <&mmcc SMMU_AHB_CLK>, <&mmcc MDP_AXI_CLK>;
++		clock-names = "smmu_pclk", "iommu_clk";
++		#iommu-cells = <1>;
++		qcom,ncb = <2>;
++		/* Physical context writes read back zero; no production client. */
++		status = "disabled";
++	};
++
++	mdp_port1: iommu@7600000 {
++		compatible = "qcom,msm8660-iommu", "qcom,apq8064-iommu";
++		reg = <0x07600000 0x00100000>;
++		interrupts = <GIC_SPI 62 IRQ_TYPE_LEVEL_HIGH>,
++			     <GIC_SPI 61 IRQ_TYPE_LEVEL_HIGH>;
++		clocks = <&mmcc SMMU_AHB_CLK>, <&mmcc MDP_AXI_CLK>;
++		clock-names = "smmu_pclk", "iommu_clk";
++		#iommu-cells = <1>;
++		qcom,ncb = <2>;
++		/* Physical context writes read back zero; no production client. */
++		status = "disabled";
++	};
++
+ 	mdp: display-controller@5100000 {
+ 		compatible = "qcom,mdp4";
+ 		reg = <0x05100000 0x000f0000>;
+@@ -196,6 +279,15 @@ mdp: display-controller@5100000 {
+ 		clock-names = "core_clk", "iface_clk", "bus_clk", "lut_clk",
+ 			      "hdmi_clk", "tv_clk";
+ 		power-domains = <&mmcc MDP_GDSC>;
++		/*
++		 * The working Sony/TWRP Hikari configuration leaves MSM_IOMMU
++		 * disabled and scans out physically contiguous framebuffer memory.
++		 * Keep MDP detached until the MSM8x60 IOMMU register interface is
++		 * understood: on this device every context/MID write reads back zero.
++		 */
++		interconnects = <&mmfab MMFAB_MAS_MDP_PORT0
++				 &afab AFAB_SLV_EBI_CH0>;
++		interconnect-names = "mdp0-mem";
+ 		/*
+ 		 * The Sony MSM8x60 BSP powers mdp.0 through footswitch FS_MDP (4).
+ 		 * MMCC's MDP_GDSC is its genpd representation; the platform core
+@@ -207,7 +299,7 @@ ports {
+ 			#address-cells = <1>;
+ 			#size-cells = <0>;
+ 			/*
+-			 * MDP4 port 0 is the internal LCDC/LVDS path.  The DRM/MSM
++			 * MDP4 port 0 is the internal LCDC/LVDS path. The DRM/MSM
+ 			 * component walker deliberately skips it; DSI1 is port 1.
+ 			 */
+ 			port@1 {
+@@ -234,10 +326,18 @@ dsi: dsi@4700000 {
+ 		reg-names = "dsi_ctrl";
+ 		interrupts = <GIC_SPI 82 IRQ_TYPE_LEVEL_HIGH>;
+ 		clocks = <&mmcc DSI_M_AHB_CLK>, <&mmcc DSI_S_AHB_CLK>,
+-			 <&mmcc AMP_AHB_CLK>, <&mmcc DSI1_BYTE_CLK>,
+-			 <&mmcc MDP_PIXEL_CLK>,
+-			 <&mmcc DSI1_ESC_CLK>;
+-		clock-names = "iface", "bus", "core_mmss", "byte", "pixel", "core";
++			 <&mmcc AMP_AHB_CLK>, <&mmcc DSI_CLK>,
++			 <&mmcc DSI1_BYTE_CLK>,
++			 <&mmcc DSI_PIXEL_CLK>,
++			 <&mmcc DSI1_ESC_CLK>,
++			 <&rpmcc RPM_SFPB_CLK>, <&rpmcc RPM_SFPB_A_CLK>,
++			 <&rpmcc RPM_MMFPB_A_CLK>;
++		clock-names = "iface", "bus", "core_mmss", "src", "byte", "pixel", "core",
++			      "sfpb", "sfpb_a", "mmfpb_a";
++		/* Both dedicated DSI RCGs select DSI1 PLL with source value 3. */
++		assigned-clocks = <&mmcc DSI_SRC>, <&mmcc DSI_PIXEL_SRC>;
++		assigned-clock-parents = <&dsi_phy DSI_PIXEL_PLL_CLK>,
++					 <&dsi_phy DSI_PIXEL_PLL_CLK>;
+ 		phys = <&dsi_phy>;
+ 		phy-names = "dsi";
+ 		syscon-sfpb = <&mmss_sfpb>;
+@@ -270,12 +370,46 @@ panel@0 {
+ &rpm {
+ 	regulators-0 {
+ 		compatible = "qcom,rpm-pm8901-regulators";
++
++		pm8901_s0: s0 {
++			regulator-min-microvolt = <750000>;
++			regulator-max-microvolt = <1325000>;
++			qcom,switch-mode-frequency = <1600000>;
++		};
++
++		pm8901_s1: s1 {
++			regulator-min-microvolt = <750000>;
++			regulator-max-microvolt = <1325000>;
++			qcom,switch-mode-frequency = <1600000>;
++		};
++
+ 		pm8901_l2: l2 { regulator-min-microvolt = <2850000>; regulator-max-microvolt = <2850000>; };
+ 		pm8901_lvs1: lvs1 { regulator-always-on; };
+ 	};
+ 	regulators-1 {
+ 		compatible = "qcom,rpm-pm8058-regulators";
+ 
++		pm8058_s0: s0 {
++			regulator-min-microvolt = <800000>;
++			regulator-max-microvolt = <1325000>;
++			qcom,switch-mode-frequency = <1600000>;
++		};
++
++		pm8058_s1: s1 {
++			regulator-min-microvolt = <800000>;
++			regulator-max-microvolt = <1200000>;
++			qcom,switch-mode-frequency = <1600000>;
++		};
++
++		/* Shared WLAN/Timpani rail; exact voltage from Sony's Fuji BSP. */
++		pm8058_s3: s3 {
++			regulator-min-microvolt = <1800000>;
++			regulator-max-microvolt = <1800000>;
++			qcom,switch-mode-frequency = <1600000>;
++			regulator-always-on;
++			bias-pull-down;
++		};
++
+ 		pm8058_l6: l6 {
+ 			regulator-min-microvolt = <3050000>;
+ 			regulator-max-microvolt = <3050000>;
+@@ -295,6 +429,12 @@ pm8058_l0: l0 {
+ 	};
+ };
+ 
++&qfprom {
++	speed_bin: speed-bin@c0 {
++		reg = <0xc0 0x4>;
++	};
++};
++
+ &gsbi8 {
+ 	qcom,mode = <GSBI_PROT_I2C>;
+ 	status = "okay";
+@@ -307,6 +447,8 @@ &gsbi8_i2c {
+ 	lcd_backlight: backlight@40 {
+ 		compatible = "ams,as3676-backlight";
+ 		reg = <0x40>;
++		/* Hikari routes the ambient-light photodiode to AS3676 GPIO2. */
++		ams,als-connected;
+ 		status = "okay";
+ 	};
+ 
+@@ -318,7 +460,7 @@ bq27520: fuel-gauge@55 {
+ 		status = "okay";
+ 	};
+ 
+-	charger@6b {
++	bq24160: charger@6b {
+ 		compatible = "ti,bq24160";
+ 		reg = <0x6b>;
+ 		interrupt-parent = <&tlmm>;
+@@ -330,5 +472,17 @@ charger@6b {
+ 		ti,charge-term-current-microamp = <50000>;
+ 		wakeup-source;
+ 		status = "okay";
++
++		usb_otg_guard: usb-otg-guard {
++			regulator-name = "usb-otg-guard";
++			regulator-min-microvolt = <5000000>;
++			regulator-max-microvolt = <5000000>;
++		};
+ 	};
+ };
++
++#include "qcom-msm8260-sony-hikari-hardware.dtsi"
++
++#include "qcom-msm8260-sony-hikari-wireless.dtsi"
++
++#include "qcom-msm8260-sony-hikari-gpu-base.dtsi"
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8660.dtsi b/arch/arm/boot/dts/qcom/qcom-msm8660.dtsi
+index 8b0d3e71a9478a78738e07d5b191cd074a35c65a..f422daa25b4ed3a77cc3240e04047ab7aff90778 100644
+--- a/arch/arm/boot/dts/qcom/qcom-msm8660.dtsi
++++ b/arch/arm/boot/dts/qcom/qcom-msm8660.dtsi
+@@ -73,6 +73,13 @@ sleep_clk: sleep-clk {
+ 		};
+ 	};
+ 
++	thermal-zones {
++		soc-thermal {
++			polling-delay = <1000>;
++			thermal-sensors = <&tsens 0>;
++		};
++	};
++
+ 	soc: soc {
+ 		#address-cells = <1>;
+ 		#size-cells = <1>;
+@@ -113,12 +120,36 @@ tlmm: pinctrl@800000 {
+ 		};
+ 
+ 		gcc: clock-controller@900000 {
+-			compatible = "qcom,gcc-msm8660";
++			compatible = "qcom,gcc-msm8660", "syscon", "simple-mfd";
+ 			#clock-cells = <1>;
+ 			#reset-cells = <1>;
+ 			reg = <0x900000 0x4000>;
+ 			clocks = <&pxo_board>, <&cxo_board>;
+ 			clock-names = "pxo", "cxo";
++
++			tsens: thermal-sensor {
++				compatible = "qcom,msm8660-tsens";
++				nvmem-cells = <&tsens_calib>, <&tsens_calib_backup>;
++				nvmem-cell-names = "calib", "calib_backup";
++				interrupts = <GIC_SPI 178 IRQ_TYPE_LEVEL_HIGH>;
++				interrupt-names = "uplow";
++				#thermal-sensor-cells = <1>;
++			};
++		};
++
++		qfprom: efuse@700000 {
++			compatible = "qcom,msm8660-qfprom", "qcom,qfprom";
++			reg = <0x00700000 0x1000>;
++			#address-cells = <1>;
++			#size-cells = <1>;
++
++			tsens_calib: calib@be {
++				reg = <0xbe 0x1>;
++			};
++
++			tsens_calib_backup: calib-backup@bf {
++				reg = <0xbf 0x1>;
++			};
+ 		};
+ 
+ 		gsbi1: gsbi@16000000 {

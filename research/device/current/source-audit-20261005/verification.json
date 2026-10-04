@@ -1,0 +1,32 @@
+{
+  "upstream_base": "786262be6048deab760f68c8acc2c85607165894",
+  "before_tree": "e3d73fd2f7bffefd6e42b0ec789d4e0af81fde45",
+  "after_tree": "e3d73fd2f7bffefd6e42b0ec789d4e0af81fde45",
+  "subsystem_patches": 17,
+  "former_mail_patches": 60,
+  "former_strict_transforms": 4,
+  "unique_source_files": 87,
+  "original_component_reviews_preserved": 64,
+  "added_canonical_board_review": 1,
+  "independent_materializations": [
+    {
+      "log": "/home/paul/xperia/build/hikari-subsystems-verify-20261005.log",
+      "sha256": "6caede51f1365a96d91031427f6c8df209586a1c8e13b22157728c436622290a",
+      "result": "PASS"
+    },
+    {
+      "log": "/home/paul/xperia/build/hikari-subsystems-locked-20261005.log",
+      "sha256": "e05c2277354f602358b58b2823f811a631248da3faf4a9530e810481fd6f2105",
+      "result": "PASS"
+    }
+  ],
+  "source_gates": [
+    "MMCC:PASS",
+    "display:PASS",
+    "AS3676:PASS"
+  ],
+  "repository_unit_tests": "6 PASS",
+  "device_kernel_changed": false,
+  "device_phosh": "active, WLR_RENDERER=gles2",
+  "new_hardware_validation_claim": false
+}

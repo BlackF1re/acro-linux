@@ -1,0 +1,1590 @@
+From 45a2ac3f4bfc71d8400f8a4f4eb99941009021b6 Mon Sep 17 00:00:00 2001
+From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 00:05:29 +0700
+Subject: [PATCH] cpu: consolidate final Hikari subsystem support
+
+Repackage the prepared source without changing any byte of hardware
+implementation. Includes final corrections and logging cleanup.
+
+Prepared-source-tree: e3d73fd2f7bffefd6e42b0ec789d4e0af81fde45
+Original-author: BlackF1re <plevickij57@gmail.com>
+Original-series: research/patches/pre-subsystem-series-20261005
+Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+---
+ drivers/cpufreq/Kconfig.arm                   |    9 +
+ drivers/cpufreq/Makefile                      |    1 +
+ drivers/cpufreq/qcom-msm8660-cpufreq.c        | 1134 +++++++++++++++++
+ drivers/regulator/Kconfig                     |    8 +
+ drivers/regulator/Makefile                    |    1 +
+ .../regulator/qcom-msm8660-saw-regulator.c    |  367 ++++++
+ 6 files changed, 1520 insertions(+)
+ create mode 100644 drivers/cpufreq/qcom-msm8660-cpufreq.c
+ create mode 100644 drivers/regulator/qcom-msm8660-saw-regulator.c
+
+diff --git a/drivers/cpufreq/Kconfig.arm b/drivers/cpufreq/Kconfig.arm
+index a441668f9e0cc698ff7b4cacc7ca43a87689492e..9379c00c022d715856379ef1845262306f32abb8 100644
+--- a/drivers/cpufreq/Kconfig.arm
++++ b/drivers/cpufreq/Kconfig.arm
+@@ -273,3 +273,12 @@ config ARM_PXA2xx_CPUFREQ
+ 	  This add the CPUFreq driver support for Intel PXA2xx SOCs.
+ 
+ 	  If in doubt, say N.
++
++
++config ARM_QCOM_MSM8660_CPUFREQ
++	bool "Qualcomm MSM8660 CPU frequency driver"
++	depends on ARCH_QCOM && OF && REGULATOR && INTERCONNECT
++	select REGULATOR_QCOM_MSM8660_SAW
++	help
++	  CPU, shared L2 and voltage/fabric DVFS driver for Qualcomm
++	  MSM8260/MSM8660.
+diff --git a/drivers/cpufreq/Makefile b/drivers/cpufreq/Makefile
+index 6c7a39b7f8d26ecd0a6836883d218b67902306b7..f92bab95919276f0a8407a720338473f8dad51f1 100644
+--- a/drivers/cpufreq/Makefile
++++ b/drivers/cpufreq/Makefile
+@@ -104,3 +104,4 @@ obj-$(CONFIG_LOONGSON3_CPUFREQ)		+= loongson3_cpufreq.o
+ obj-$(CONFIG_SH_CPU_FREQ)		+= sh-cpufreq.o
+ obj-$(CONFIG_SPARC_US2E_CPUFREQ)	+= sparc-us2e-cpufreq.o
+ obj-$(CONFIG_SPARC_US3_CPUFREQ)		+= sparc-us3-cpufreq.o
++obj-$(CONFIG_ARM_QCOM_MSM8660_CPUFREQ) += qcom-msm8660-cpufreq.o
+diff --git a/drivers/cpufreq/qcom-msm8660-cpufreq.c b/drivers/cpufreq/qcom-msm8660-cpufreq.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..0834032a5afda5c8c0bd6641217e9d58f2f6edc4
+--- /dev/null
++++ b/drivers/cpufreq/qcom-msm8660-cpufreq.c
+@@ -0,0 +1,1134 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Qualcomm MSM8660 / MSM8260 Scorpion cpufreq bring-up driver.
++ *
++ * Initial target: Sony Hikari LT26w, speed-bin 1 / PVS 1.
++ *
++ * Clock/voltage tables and sequencing are ported from the historical
++ * OpenSEMC/Caf acpuclock-8x60 implementation.  This version intentionally
++ * refuses unknown fuse/boot states and is opt-in while being validated.
++ *
++ * On successful cpufreq registration the module pins itself: reboot is the
++ * rollback.  Do not attempt to unload a live CPU clock owner.
++ */
++
++#include <linux/clk.h>
++#include <linux/cpu.h>
++#include <linux/cpufreq.h>
++#include <linux/delay.h>
++#include <linux/interconnect.h>
++#include <linux/io.h>
++#include <linux/iopoll.h>
++#include <linux/kernel.h>
++#include <linux/mfd/syscon.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/nvmem-consumer.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
++#include <linux/regmap.h>
++#include <linux/regulator/consumer.h>
++#include <linux/slab.h>
++
++#include <dt-bindings/clock/qcom,gcc-msm8660.h>
++
++#define DRV_NAME                        "qcom-msm8660-cpufreq"
++
++#define NR_SCORPION_CPUS                2
++
++#define SCPLL_CPU0_OFF                  0x200
++#define SCPLL_CPU1_OFF                  0x300
++#define SCPLL_L2_OFF                    0x400
++
++#define PLL_CTL                         0x04
++#define PLL_CAL                         0x08
++#define PLL_STATUS                      0x10
++#define PLL_CFG                         0x1c
++#define PLL_FSM                         0x24
++#define PLL_LUT(l)                      (0x38 + (((l) / 4) * 4))
++
++#define ACC_CTL                         0x04
++#define ACC_SEL                         0x08
++
++#define KPSS_L2_CLK_SEL                 0x38
++#define CORE_SRC_MASK                   0x3
++
++#define CORE_SRC_MUX                    0
++#define CORE_SRC_SCPLL                  1
++
++#define SHOT_SWITCH                     4
++#define COMPLEX_SLEW                    7
++#define SCPLL_POWER_DOWN                0
++#define SCPLL_STANDBY                   2
++#define SCPLL_NORMAL                    7
++
++#define SCPLL_CAL_MIN_L                 0x08
++#define SCPLL_CAL_MAX_L                 0x1c
++
++#define MAX_VDD_SC_UV                   1325000
++#define MAX_VDD_MEM_UV                  1325000
++#define MAX_VDD_DIG_UV                  1200000
++
++#define SCPLL_LOW_VDD_FMAX_KHZ          594000
++#define SCPLL_LOW_VDD_UV                1000000
++#define SCPLL_NOMINAL_VDD_UV            1100000
++
++/* Interconnect API uses kB/s. */
++#define MBPS_TO_ICC(x)                  ((u32)(x) * 1000U)
++
++struct msm8660_l2_level {
++        unsigned int khz;
++        u8 l;
++        unsigned int vdd_dig_uv;
++        unsigned int vdd_mem_uv;
++        u8 bw_level;
++};
++
++struct msm8660_opp {
++        unsigned int khz;
++        unsigned int vdd_sc_uv;
++        u8 l2_idx;
++};
++
++/*
++ * Historical l2_freq_tbl_v2, excluding the AFAB-only calibration row.
++ * Field order in the legacy source is:
++ * khz, src_sel, l_val, vdd_dig, vdd_mem, bw_level.
++ */
++static const struct msm8660_l2_level l2_levels[] = {
++        {  432000, 0x08, 1000000, 1100000, 0 },
++        {  486000, 0x09, 1000000, 1100000, 0 },
++        {  540000, 0x0a, 1000000, 1100000, 0 },
++        {  594000, 0x0b, 1000000, 1100000, 0 },
++        {  648000, 0x0c, 1000000, 1100000, 1 },
++        {  702000, 0x0d, 1100000, 1100000, 1 },
++        {  756000, 0x0e, 1100000, 1100000, 1 },
++        {  810000, 0x0f, 1100000, 1100000, 1 },
++        {  864000, 0x10, 1100000, 1100000, 1 },
++        {  918000, 0x11, 1100000, 1100000, 2 },
++        {  972000, 0x12, 1100000, 1100000, 2 },
++        { 1026000, 0x13, 1100000, 1100000, 2 },
++        { 1080000, 0x14, 1100000, 1200000, 2 },
++        { 1134000, 0x15, 1100000, 1200000, 2 },
++        { 1188000, 0x16, 1200000, 1200000, 3 },
++        { 1242000, 0x17, 1200000, 1212500, 3 },
++        { 1296000, 0x18, 1200000, 1225000, 3 },
++        { 1350000, 0x19, 1200000, 1225000, 3 },
++        { 1404000, 0x1a, 1200000, 1250000, 3 },
++};
++
++/* Historical speed-bin 1 / PVS 1 (1512 MHz nominal) table. */
++static const struct msm8660_opp opps[] = {
++        {  192000,  800000,  0 },
++        {  384000,  825000,  0 },
++        {  432000,  850000,  0 },
++        {  486000,  850000,  1 },
++        {  540000,  875000,  2 },
++        {  594000,  875000,  3 },
++        {  648000,  900000,  4 },
++        {  702000,  900000,  5 },
++        {  756000,  925000,  6 },
++        {  810000,  950000,  7 },
++        {  864000,  975000,  8 },
++        {  918000,  975000,  9 },
++        {  972000, 1000000, 10 },
++        { 1026000, 1000000, 11 },
++        { 1080000, 1025000, 12 },
++        { 1134000, 1025000, 13 },
++        { 1188000, 1050000, 14 },
++        { 1242000, 1075000, 15 },
++        { 1296000, 1100000, 16 },
++        { 1350000, 1125000, 17 },
++        { 1404000, 1150000, 18 },
++        { 1458000, 1150000, 18 },
++        { 1512000, 1175000, 18 },
++};
++
++#define FREQ_ENTRY(i) { .driver_data = (i), .frequency = opps[(i)].khz }
++
++static struct cpufreq_frequency_table freq_table[] = {
++        FREQ_ENTRY(0),  FREQ_ENTRY(1),  FREQ_ENTRY(2),  FREQ_ENTRY(3),
++        FREQ_ENTRY(4),  FREQ_ENTRY(5),  FREQ_ENTRY(6),  FREQ_ENTRY(7),
++        FREQ_ENTRY(8),  FREQ_ENTRY(9),  FREQ_ENTRY(10), FREQ_ENTRY(11),
++        FREQ_ENTRY(12), FREQ_ENTRY(13), FREQ_ENTRY(14), FREQ_ENTRY(15),
++        FREQ_ENTRY(16), FREQ_ENTRY(17), FREQ_ENTRY(18), FREQ_ENTRY(19),
++        FREQ_ENTRY(20), FREQ_ENTRY(21), FREQ_ENTRY(22),
++        { .frequency = CPUFREQ_TABLE_END },
++};
++
++static const u32 bw_mbps[] = {
++        824, 1336, 2008, 2480,
++};
++
++struct msm8660_cpufreq {
++        struct device *dev;
++
++        void __iomem *scpll;
++        void __iomem *pll[NR_SCORPION_CPUS];
++        void __iomem *l2_pll;
++        void __iomem *acc[NR_SCORPION_CPUS];
++
++        struct regmap *l2cc;
++
++        struct regulator *cpu_reg[NR_SCORPION_CPUS];
++        struct regulator *mem_reg;
++        struct regulator *dig_reg;
++        struct icc_path *icc;
++
++        struct mutex lock;
++
++        u8 cpu_idx[NR_SCORPION_CPUS];
++        u8 l2_idx;
++
++        unsigned int mem_uv;
++        unsigned int dig_uv;
++        unsigned int bw_level;
++
++        bool mem_enabled;
++        bool dig_enabled;
++        bool cpu_enabled[NR_SCORPION_CPUS];
++        bool registered;
++};
++
++static struct msm8660_cpufreq *drv;
++
++static inline unsigned int pll_lval(void __iomem *pll)
++{
++        return (readl_relaxed(pll + PLL_CTL) >> 3) & 0x3f;
++}
++
++static int find_opp(unsigned int khz)
++{
++        unsigned int i;
++
++        for (i = 0; i < ARRAY_SIZE(opps); i++)
++                if (opps[i].khz == khz)
++                        return i;
++
++        return -EINVAL;
++}
++
++static unsigned int cpu_hw_rate(struct msm8660_cpufreq *d, unsigned int cpu)
++{
++        u32 sel, ctl, bank, src, div;
++
++        if (cpu >= NR_SCORPION_CPUS)
++                return 0;
++
++        sel = readl_relaxed(d->acc[cpu] + ACC_SEL);
++        src = (sel >> 1) & 0x3;
++
++        if (src == CORE_SRC_SCPLL)
++                return pll_lval(d->pll[cpu]) * 54000;
++
++        if (src != CORE_SRC_MUX)
++                return 0;
++
++        /*
++         * ACC_SEL bit 0 names the inactive bank in the legacy programming
++         * sequence; the live bank is therefore the opposite bank.
++         */
++        bank = (sel & 1) ^ 1;
++        ctl = readl_relaxed(d->acc[cpu] + ACC_CTL);
++        ctl >>= bank * 8;
++        src = (ctl >> 4) & 0x7;
++        div = ctl & 0xf;
++
++        if (src == 3)             /* PLL8 = 384 MHz */
++                return 384000 / (div + 1);
++
++        if (src == 1)             /* AFAB boot source on Hikari */
++                return 384000;
++
++        return 0;
++}
++
++static unsigned int l2_hw_rate(struct msm8660_cpufreq *d)
++{
++        return pll_lval(d->l2_pll) * 54000;
++}
++
++static int scpll_wait(void __iomem *pll, u8 l)
++{
++        u32 v;
++        int ret;
++
++        ret = readl_poll_timeout_atomic(pll + PLL_CTL, v,
++                                        (((v >> 3) & 0x3f) == l),
++                                        1, 1000);
++        if (ret)
++                return ret;
++
++        return readl_poll_timeout_atomic(pll + PLL_STATUS, v,
++                                         !(v & 0x1),
++                                         1, 1000);
++}
++
++static int scpll_enable(void __iomem *pll, u8 l)
++{
++        writel_relaxed(SCPLL_STANDBY, pll + PLL_CTL);
++        mb();
++        udelay(10);
++
++        writel_relaxed(((u32)l << 3) | SHOT_SWITCH, pll + PLL_FSM);
++        writel_relaxed(SCPLL_NORMAL, pll + PLL_CTL);
++        mb();
++        udelay(20);
++
++        return scpll_wait(pll, l);
++}
++
++static int scpll_slew(void __iomem *pll, u8 l)
++{
++        writel_relaxed(((u32)l << 3) | COMPLEX_SLEW, pll + PLL_FSM);
++        writel_relaxed(SCPLL_NORMAL, pll + PLL_CTL);
++        mb();
++
++        return scpll_wait(pll, l);
++}
++
++static void scpll_disable(void __iomem *pll)
++{
++        writel_relaxed(SCPLL_POWER_DOWN, pll + PLL_CTL);
++        mb();
++}
++
++static void cpu_select_source(struct msm8660_cpufreq *d,
++                              unsigned int cpu, u32 source)
++{
++        u32 sel;
++
++        sel = readl_relaxed(d->acc[cpu] + ACC_SEL);
++        sel &= ~(0x3U << 1);
++        sel |= source << 1;
++        writel_relaxed(sel, d->acc[cpu] + ACC_SEL);
++}
++
++static void cpu_program_pll8(struct msm8660_cpufreq *d,
++                             unsigned int cpu, unsigned int khz)
++{
++        u32 sel, ctl, bank, div;
++
++        div = khz == 192000 ? 1 : 0;
++
++        sel = readl_relaxed(d->acc[cpu] + ACC_SEL);
++
++        /* Program the inactive bank, then flip to it. */
++        bank = sel & 1;
++        ctl = readl_relaxed(d->acc[cpu] + ACC_CTL);
++        ctl &= ~(0xffU << (bank * 8));
++        ctl |= ((0x30U | div) << (bank * 8));
++        writel_relaxed(ctl, d->acc[cpu] + ACC_CTL);
++
++        writel_relaxed(sel ^ 1U, d->acc[cpu] + ACC_SEL);
++}
++
++static int cpu_switch_clock(struct msm8660_cpufreq *d,
++                            unsigned int cpu, unsigned int target_khz)
++{
++        u32 sel, src;
++        int ret;
++
++        sel = readl_relaxed(d->acc[cpu] + ACC_SEL);
++        src = (sel >> 1) & 0x3;
++
++        if (target_khz == 192000 || target_khz == 384000) {
++                cpu_program_pll8(d, cpu, target_khz);
++
++                if (src == CORE_SRC_SCPLL) {
++                        cpu_select_source(d, cpu, CORE_SRC_MUX);
++                        mb();
++                        udelay(1);
++                        scpll_disable(d->pll[cpu]);
++                } else if (src != CORE_SRC_MUX) {
++                        return -EIO;
++                }
++
++                return cpu_hw_rate(d, cpu) == target_khz ? 0 : -EIO;
++        }
++
++        if (target_khz < 432000 || target_khz > 1512000 ||
++            target_khz % 54000)
++                return -EINVAL;
++
++        if (src == CORE_SRC_SCPLL) {
++                ret = scpll_slew(d->pll[cpu], target_khz / 54000);
++                if (ret)
++                        return ret;
++        } else if (src == CORE_SRC_MUX) {
++                ret = scpll_enable(d->pll[cpu], target_khz / 54000);
++                if (ret)
++                        return ret;
++
++                cpu_select_source(d, cpu, CORE_SRC_SCPLL);
++                mb();
++        } else {
++                return -EIO;
++        }
++
++        return cpu_hw_rate(d, cpu) == target_khz ? 0 : -EIO;
++}
++
++struct cpu_clock_work {
++        struct msm8660_cpufreq *d;
++        unsigned int cpu;
++        unsigned int khz;
++};
++
++static long cpu_clock_workfn(void *arg)
++{
++        struct cpu_clock_work *w = arg;
++
++        return cpu_switch_clock(w->d, w->cpu, w->khz);
++}
++
++struct cpu_voltage_work {
++        struct msm8660_cpufreq *d;
++        unsigned int cpu;
++        unsigned int uv;
++};
++
++static long cpu_voltage_workfn(void *arg)
++{
++        struct cpu_voltage_work *w = arg;
++
++        return regulator_set_voltage(w->d->cpu_reg[w->cpu],
++                                     w->uv, MAX_VDD_SC_UV);
++}
++
++static int set_cpu_clock_on_cpu(struct msm8660_cpufreq *d,
++                                unsigned int cpu, unsigned int khz)
++{
++        struct cpu_clock_work w = {
++                .d = d,
++                .cpu = cpu,
++                .khz = khz,
++        };
++
++        return (int)work_on_cpu(cpu, cpu_clock_workfn, &w);
++}
++
++static int set_cpu_voltage_on_cpu(struct msm8660_cpufreq *d,
++                                  unsigned int cpu, unsigned int uv)
++{
++        struct cpu_voltage_work w = {
++                .d = d,
++                .cpu = cpu,
++                .uv = uv,
++        };
++
++        return (int)work_on_cpu(cpu, cpu_voltage_workfn, &w);
++}
++
++static u8 compute_l2_vote(struct msm8660_cpufreq *d,
++                          unsigned int changing_cpu, u8 new_cpu_idx)
++{
++        u8 idx0 = d->cpu_idx[0];
++        u8 idx1 = d->cpu_idx[1];
++
++        if (changing_cpu == 0)
++                idx0 = new_cpu_idx;
++        else
++                idx1 = new_cpu_idx;
++
++        return max(opps[idx0].l2_idx, opps[idx1].l2_idx);
++}
++
++static unsigned int scpll_dig_requirement(unsigned int cpu_khz,
++                                          unsigned int l2_khz)
++{
++        if (l2_khz > SCPLL_LOW_VDD_FMAX_KHZ ||
++            cpu_khz > SCPLL_LOW_VDD_FMAX_KHZ)
++                return SCPLL_NOMINAL_VDD_UV;
++
++        return SCPLL_LOW_VDD_UV;
++}
++
++static void compute_shared_requirements(struct msm8660_cpufreq *d,
++                                        unsigned int changing_cpu,
++                                        u8 new_cpu_idx,
++                                        u8 new_l2_idx,
++                                        unsigned int *mem_uv,
++                                        unsigned int *dig_uv,
++                                        unsigned int *bw_level)
++{
++        u8 idx[2] = { d->cpu_idx[0], d->cpu_idx[1] };
++        const struct msm8660_l2_level *l2 = &l2_levels[new_l2_idx];
++        unsigned int pll_dig;
++
++        idx[changing_cpu] = new_cpu_idx;
++
++        *mem_uv = max(max(opps[idx[0]].vdd_sc_uv,
++                           opps[idx[1]].vdd_sc_uv),
++                       l2->vdd_mem_uv);
++
++        pll_dig = max(scpll_dig_requirement(opps[idx[0]].khz, l2->khz),
++                      scpll_dig_requirement(opps[idx[1]].khz, l2->khz));
++
++        *dig_uv = max(l2->vdd_dig_uv, pll_dig);
++        *bw_level = l2->bw_level;
++}
++
++static int set_icc_level(struct msm8660_cpufreq *d, unsigned int level)
++{
++        if (level >= ARRAY_SIZE(bw_mbps))
++                return -EINVAL;
++
++        return icc_set_bw(d->icc, 0, MBPS_TO_ICC(bw_mbps[level]));
++}
++
++static int set_l2_level(struct msm8660_cpufreq *d, u8 idx)
++{
++        unsigned int src;
++        int ret;
++
++        if (idx >= ARRAY_SIZE(l2_levels))
++                return -EINVAL;
++
++        ret = regmap_read(d->l2cc, KPSS_L2_CLK_SEL, &src);
++        if (ret)
++                return ret;
++
++        if ((src & CORE_SRC_MASK) != CORE_SRC_SCPLL)
++                return -EIO;
++
++        ret = scpll_slew(d->l2_pll, l2_levels[idx].l);
++        if (ret)
++                return ret;
++
++        if (l2_hw_rate(d) != l2_levels[idx].khz)
++                return -EIO;
++
++        d->l2_idx = idx;
++        return 0;
++}
++
++static int transition_cpu(struct msm8660_cpufreq *d,
++                          unsigned int cpu, u8 new_idx)
++{
++        u8 old_idx, old_l2_idx, new_l2_idx;
++        unsigned int old_cpu_uv, new_cpu_uv;
++        unsigned int new_mem_uv, new_dig_uv, new_bw;
++        unsigned int old_mem_uv, old_dig_uv, old_bw;
++        int ret;
++
++        if (cpu >= NR_SCORPION_CPUS || new_idx >= ARRAY_SIZE(opps))
++                return -EINVAL;
++
++        mutex_lock(&d->lock);
++
++        old_idx = d->cpu_idx[cpu];
++        if (old_idx == new_idx) {
++                ret = 0;
++                goto out;
++        }
++
++        old_l2_idx = d->l2_idx;
++        new_l2_idx = compute_l2_vote(d, cpu, new_idx);
++
++        old_cpu_uv = opps[old_idx].vdd_sc_uv;
++        new_cpu_uv = opps[new_idx].vdd_sc_uv;
++
++        old_mem_uv = d->mem_uv;
++        old_dig_uv = d->dig_uv;
++        old_bw = d->bw_level;
++
++        compute_shared_requirements(d, cpu, new_idx, new_l2_idx,
++                                    &new_mem_uv, &new_dig_uv, &new_bw);
++
++        /*
++         * Raise shared rails before CPU voltage, matching the historical
++         * MEM -> DIG -> SC ordering.  Raising ICC early is conservative on
++         * the modern interconnect API and was validated by the L2 step test.
++         */
++        if (new_mem_uv > old_mem_uv) {
++                ret = regulator_set_voltage(d->mem_reg, new_mem_uv,
++                                            MAX_VDD_MEM_UV);
++                if (ret)
++                        goto out;
++        }
++
++        if (new_dig_uv > old_dig_uv) {
++                ret = regulator_set_voltage(d->dig_reg, new_dig_uv,
++                                            MAX_VDD_DIG_UV);
++                if (ret)
++                        goto out;
++        }
++
++        if (new_cpu_uv > old_cpu_uv) {
++                ret = set_cpu_voltage_on_cpu(d, cpu, new_cpu_uv);
++                if (ret)
++                        goto out;
++        }
++
++        if (new_bw > old_bw) {
++                ret = set_icc_level(d, new_bw);
++                if (ret)
++                        goto out;
++        }
++
++        ret = set_cpu_clock_on_cpu(d, cpu, opps[new_idx].khz);
++        if (ret)
++                goto out;
++
++        /*
++         * Historical order: CPU first, then recomputed max L2 vote.
++         */
++        if (new_l2_idx != old_l2_idx) {
++                ret = set_l2_level(d, new_l2_idx);
++                if (ret) {
++                        int rb;
++
++                        rb = set_cpu_clock_on_cpu(d, cpu,
++                                                  opps[old_idx].khz);
++                        if (rb)
++                                dev_crit(d->dev,
++                                         "CPU%u rollback failed after L2 error: %d\n",
++                                         cpu, rb);
++                        goto out;
++                }
++        }
++
++        d->cpu_idx[cpu] = new_idx;
++
++        /*
++         * On decreases, clocks are already safe; now remove excess votes.
++         * CPU SC first, then DIG, then MEM mirrors the legacy order.
++         */
++        if (new_bw < old_bw) {
++                ret = set_icc_level(d, new_bw);
++                if (ret)
++                        dev_warn(d->dev, "ICC decrease failed: %d\n", ret);
++        }
++
++        if (new_cpu_uv < old_cpu_uv) {
++                ret = set_cpu_voltage_on_cpu(d, cpu, new_cpu_uv);
++                if (ret)
++                        dev_warn(d->dev, "CPU%u voltage decrease failed: %d\n",
++                                 cpu, ret);
++        }
++
++        if (new_dig_uv < old_dig_uv) {
++                ret = regulator_set_voltage(d->dig_reg, new_dig_uv,
++                                            MAX_VDD_DIG_UV);
++                if (ret)
++                        dev_warn(d->dev, "DIG decrease failed: %d\n", ret);
++        }
++
++        if (new_mem_uv < old_mem_uv) {
++                ret = regulator_set_voltage(d->mem_reg, new_mem_uv,
++                                            MAX_VDD_MEM_UV);
++                if (ret)
++                        dev_warn(d->dev, "MEM decrease failed: %d\n", ret);
++        }
++
++        d->mem_uv = new_mem_uv;
++        d->dig_uv = new_dig_uv;
++        d->bw_level = new_bw;
++
++        dev_dbg(d->dev,
++                "CPU%u %u->%u kHz, L2=%u kHz, MEM=%u DIG=%u BW=%u\n",
++                cpu, opps[old_idx].khz, opps[new_idx].khz,
++                l2_levels[new_l2_idx].khz,
++                new_mem_uv, new_dig_uv, new_bw);
++
++        ret = 0;
++out:
++        mutex_unlock(&d->lock);
++        return ret;
++}
++
++static unsigned int msm8660_get(unsigned int cpu)
++{
++        if (!drv || cpu >= NR_SCORPION_CPUS)
++                return 0;
++
++        return cpu_hw_rate(drv, cpu);
++}
++
++static int msm8660_target_index(struct cpufreq_policy *policy,
++                                unsigned int index)
++{
++        unsigned int opp_idx;
++
++        if (!drv || policy->cpu >= NR_SCORPION_CPUS)
++                return -ENODEV;
++
++        opp_idx = freq_table[index].driver_data;
++        if (opp_idx >= ARRAY_SIZE(opps))
++                return -EINVAL;
++
++        return transition_cpu(drv, policy->cpu, opp_idx);
++}
++
++static int msm8660_policy_init(struct cpufreq_policy *policy)
++{
++        unsigned int cur;
++
++        if (!drv || policy->cpu >= NR_SCORPION_CPUS)
++                return -ENODEV;
++
++        cpumask_copy(policy->cpus, cpumask_of(policy->cpu));
++        policy->freq_table = freq_table;
++        policy->cpuinfo.transition_latency = 1000000;
++
++        cur = msm8660_get(policy->cpu);
++        if (!cur || find_opp(cur) < 0)
++                return -EIO;
++
++        policy->cur = cur;
++        return 0;
++}
++
++static struct cpufreq_driver msm8660_cpufreq_driver = {
++        .name = "msm8660-scorpion",
++        .flags = CPUFREQ_NEED_INITIAL_FREQ_CHECK,
++        .verify = cpufreq_generic_frequency_table_verify,
++        .target_index = msm8660_target_index,
++        .get = msm8660_get,
++        .init = msm8660_policy_init,
++};
++
++static int read_fuse(struct device *dev, u32 *fuse)
++{
++        struct nvmem_cell *cell;
++        size_t len;
++        void *buf;
++
++        cell = devm_nvmem_cell_get(dev, "speed-bin");
++        if (IS_ERR(cell))
++                return PTR_ERR(cell);
++
++        buf = nvmem_cell_read(cell, &len);
++        if (IS_ERR(buf))
++                return PTR_ERR(buf);
++
++        if (len < sizeof(*fuse)) {
++                kfree(buf);
++                return -EINVAL;
++        }
++
++        memcpy(fuse, buf, sizeof(*fuse));
++        kfree(buf);
++        return 0;
++}
++
++static int validate_fuse(struct msm8660_cpufreq *d)
++{
++        u32 fuse, speed_bin, pvs;
++        int ret;
++
++        ret = read_fuse(d->dev, &fuse);
++        if (ret)
++                return ret;
++
++        speed_bin = fuse & 0xf;
++        if (speed_bin == 0xf)
++                speed_bin = (fuse >> 4) & 0xf;
++
++        pvs = (fuse >> 10) & 0x7;
++        if (pvs == 0x7)
++                pvs = (fuse >> 13) & 0x7;
++
++        dev_dbg(d->dev, "QFPROM fuse=%#010x speed-bin=%u PVS=%u\n",
++                 fuse, speed_bin, pvs);
++
++        if (speed_bin != 1 || pvs != 1) {
++                dev_err(d->dev,
++                        "this validation build requires speed-bin 1 / PVS 1\n");
++                return -EINVAL;
++        }
++
++        return 0;
++}
++
++static int validate_scpll(struct msm8660_cpufreq *d,
++                          const char *name, void __iomem *pll)
++{
++        u32 cal, cfg, status;
++
++        cal = readl_relaxed(pll + PLL_CAL);
++        cfg = readl_relaxed(pll + PLL_CFG);
++        status = readl_relaxed(pll + PLL_STATUS);
++
++        dev_dbg(d->dev, "%s CAL=%#010x CFG=%#010x STATUS=%#010x L=%#x\n",
++                 name, cal, cfg, status, pll_lval(pll));
++
++        if (((cal >> 24) & 0xff) < SCPLL_CAL_MAX_L ||
++            ((cal >> 16) & 0xff) != SCPLL_CAL_MIN_L ||
++            !readl_relaxed(pll + PLL_LUT(SCPLL_CAL_MAX_L)) ||
++            (cfg & BIT(4)) ||
++            (status & 0x3))
++                return -EINVAL;
++
++        return 0;
++}
++
++static int validate_pll8_384(void)
++{
++        struct of_phandle_args args = {
++                .args_count = 1,
++                .args = { PLL8 },
++        };
++        struct device_node *np;
++        struct clk *pll8;
++        int ret = 0;
++
++        np = of_find_compatible_node(NULL, NULL, "qcom,gcc-msm8660");
++        if (!np)
++                return -ENODEV;
++
++        args.np = np;
++        pll8 = of_clk_get_from_provider(&args);
++        of_node_put(np);
++        if (IS_ERR(pll8))
++                return PTR_ERR(pll8);
++
++        if (clk_get_rate(pll8) != 384000000)
++                ret = -EINVAL;
++
++        clk_put(pll8);
++        return ret;
++}
++
++static int validate_boot_state(struct msm8660_cpufreq *d,
++                               int *cpu0_idx, int *cpu1_idx)
++{
++        unsigned int l2sel;
++        unsigned int c0, c1, l2;
++        int ret;
++
++        ret = validate_scpll(d, "CPU0 SCPLL", d->pll[0]);
++        if (ret)
++                return ret;
++
++        ret = validate_scpll(d, "CPU1 SCPLL", d->pll[1]);
++        if (ret)
++                return ret;
++
++        ret = validate_scpll(d, "L2 SCPLL", d->l2_pll);
++        if (ret)
++                return ret;
++
++        ret = regmap_read(d->l2cc, KPSS_L2_CLK_SEL, &l2sel);
++        if (ret)
++                return ret;
++
++        c0 = cpu_hw_rate(d, 0);
++        c1 = cpu_hw_rate(d, 1);
++        l2 = l2_hw_rate(d);
++
++        dev_dbg(d->dev,
++                 "boot clocks: CPU0=%u CPU1=%u L2=%u kHz L2src=%u\n",
++                 c0, c1, l2, l2sel & CORE_SRC_MASK);
++
++        /*
++         * Exact Hikari state established during bring-up:
++         * CPU0 756 SCPLL, CPU1 384 AFAB/mux, L2 432 SCPLL.
++         */
++        if (((readl_relaxed(d->acc[0] + ACC_SEL) >> 1) & 0x3) !=
++                    CORE_SRC_SCPLL ||
++            ((readl_relaxed(d->acc[1] + ACC_SEL) >> 1) & 0x3) !=
++                    CORE_SRC_MUX ||
++            (l2sel & CORE_SRC_MASK) != CORE_SRC_SCPLL ||
++            c0 != 756000 || c1 != 384000 || l2 != 432000)
++                return -EINVAL;
++
++        *cpu0_idx = find_opp(c0);
++        *cpu1_idx = find_opp(c1);
++        if (*cpu0_idx < 0 || *cpu1_idx < 0)
++                return -EINVAL;
++
++        return 0;
++}
++
++static void disable_probe_votes(struct msm8660_cpufreq *d)
++{
++        if (d->cpu_enabled[1]) {
++                regulator_disable(d->cpu_reg[1]);
++                d->cpu_enabled[1] = false;
++        }
++
++        if (d->cpu_enabled[0]) {
++                regulator_disable(d->cpu_reg[0]);
++                d->cpu_enabled[0] = false;
++        }
++
++        if (d->dig_enabled) {
++                regulator_disable(d->dig_reg);
++                d->dig_enabled = false;
++        }
++
++        if (d->mem_enabled) {
++                regulator_disable(d->mem_reg);
++                d->mem_enabled = false;
++        }
++}
++
++static int adopt_boot_state(struct msm8660_cpufreq *d,
++                            u8 cpu0_idx, u8 cpu1_idx)
++{
++        u8 target_l2;
++        unsigned int mem_uv, dig_uv, bw;
++        int ret;
++
++        d->cpu_idx[0] = cpu0_idx;
++        d->cpu_idx[1] = cpu1_idx;
++        d->l2_idx = 0; /* validated boot L2 = 432 MHz */
++
++        target_l2 = max(opps[cpu0_idx].l2_idx, opps[cpu1_idx].l2_idx);
++
++        compute_shared_requirements(d, 0, cpu0_idx, target_l2,
++                                    &mem_uv, &dig_uv, &bw);
++
++        /*
++         * Establish Linux-owned votes before touching clocks.  At the known
++         * boot state this is CPU0=925mV, CPU1=825mV, MEM=1100mV,
++         * DIG=1100mV and ICC level 1.
++         */
++        ret = regulator_set_voltage(d->mem_reg, mem_uv, MAX_VDD_MEM_UV);
++        if (ret)
++                return ret;
++        ret = regulator_enable(d->mem_reg);
++        if (ret) {
++                dev_err(d->dev, "MEM regulator_enable failed: %d\n", ret);
++                return ret;
++        }
++        d->mem_enabled = true;
++
++        ret = regulator_set_voltage(d->dig_reg, dig_uv, MAX_VDD_DIG_UV);
++        if (ret)
++                goto err;
++        ret = regulator_enable(d->dig_reg);
++        if (ret) {
++                dev_err(d->dev, "DIG regulator_enable failed: %d\n", ret);
++                goto err;
++        }
++        d->dig_enabled = true;
++
++        ret = set_cpu_voltage_on_cpu(d, 0, opps[cpu0_idx].vdd_sc_uv);
++        if (ret) {
++                dev_err(d->dev, "CPU0 initial VDD vote failed: %d\n", ret);
++                goto err;
++        }
++        ret = regulator_enable(d->cpu_reg[0]);
++        if (ret) {
++                dev_err(d->dev, "CPU0 regulator_enable failed: %d\n", ret);
++                goto err;
++        }
++        d->cpu_enabled[0] = true;
++
++        ret = set_cpu_voltage_on_cpu(d, 1, opps[cpu1_idx].vdd_sc_uv);
++        if (ret) {
++                dev_err(d->dev, "CPU1 initial VDD vote failed: %d\n", ret);
++                goto err;
++        }
++        ret = regulator_enable(d->cpu_reg[1]);
++        if (ret) {
++                dev_err(d->dev, "CPU1 regulator_enable failed: %d\n", ret);
++                goto err;
++        }
++        d->cpu_enabled[1] = true;
++
++        ret = set_icc_level(d, bw);
++        if (ret) {
++                dev_err(d->dev, "initial ICC vote failed: %d\n", ret);
++                goto err;
++        }
++
++        /*
++         * Boot left CPU0 at 756 while L2 stayed at 432.  Bring L2 up to the
++         * historical max-vote requirement before cpufreq becomes autonomous.
++         * The identical 432->756 live slew was already validated separately.
++         */
++        if (target_l2 != d->l2_idx) {
++                ret = set_l2_level(d, target_l2);
++                if (ret) {
++                        set_icc_level(d, 0);
++                        goto err;
++                }
++        }
++
++        d->mem_uv = mem_uv;
++        d->dig_uv = dig_uv;
++        d->bw_level = bw;
++
++        dev_dbg(d->dev,
++                 "adopted: CPU0=%u CPU1=%u L2=%u kHz MEM=%u DIG=%u ICC=%u MB/s\n",
++                 opps[d->cpu_idx[0]].khz, opps[d->cpu_idx[1]].khz,
++                 l2_levels[d->l2_idx].khz, d->mem_uv, d->dig_uv,
++                 bw_mbps[d->bw_level]);
++
++        return 0;
++
++err:
++        disable_probe_votes(d);
++        return ret;
++}
++
++static int map_resources(struct platform_device *pdev,
++                         struct msm8660_cpufreq *d)
++{
++        struct resource *res;
++
++        /*
++         * This 0x00903000 SCPLL resource overlaps the modern GCC mapping.
++         * Map it without request_mem_region(), as in the successful L2
++         * diagnostic.
++         */
++        res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "scpll");
++        if (!res)
++                return -ENODEV;
++
++        d->scpll = devm_ioremap(&pdev->dev, res->start, resource_size(res));
++        if (!d->scpll)
++                return -ENOMEM;
++
++        d->pll[0] = d->scpll + SCPLL_CPU0_OFF;
++        d->pll[1] = d->scpll + SCPLL_CPU1_OFF;
++        d->l2_pll = d->scpll + SCPLL_L2_OFF;
++
++        d->acc[0] = devm_platform_ioremap_resource_byname(pdev, "acc0");
++        if (IS_ERR(d->acc[0]))
++                return PTR_ERR(d->acc[0]);
++
++        d->acc[1] = devm_platform_ioremap_resource_byname(pdev, "acc1");
++        if (IS_ERR(d->acc[1]))
++                return PTR_ERR(d->acc[1]);
++
++        d->l2cc = syscon_regmap_lookup_by_phandle(pdev->dev.of_node,
++                                                  "qcom,l2cc");
++        if (IS_ERR(d->l2cc))
++                return PTR_ERR(d->l2cc);
++
++        return 0;
++}
++
++static int get_power_resources(struct msm8660_cpufreq *d)
++{
++        d->cpu_reg[0] = devm_regulator_get(d->dev, "cpu0");
++        if (IS_ERR(d->cpu_reg[0]))
++                return PTR_ERR(d->cpu_reg[0]);
++
++        d->cpu_reg[1] = devm_regulator_get(d->dev, "cpu1");
++        if (IS_ERR(d->cpu_reg[1]))
++                return PTR_ERR(d->cpu_reg[1]);
++
++        d->mem_reg = devm_regulator_get(d->dev, "mem");
++        if (IS_ERR(d->mem_reg))
++                return PTR_ERR(d->mem_reg);
++
++        d->dig_reg = devm_regulator_get(d->dev, "dig");
++        if (IS_ERR(d->dig_reg))
++                return PTR_ERR(d->dig_reg);
++
++        d->icc = devm_of_icc_get(d->dev, "cpu-mem");
++        if (IS_ERR(d->icc))
++                return PTR_ERR(d->icc);
++
++        return 0;
++}
++
++static int msm8660_probe(struct platform_device *pdev)
++{
++        struct msm8660_cpufreq *d;
++        int cpu0_idx, cpu1_idx;
++        int ret;
++
++
++        if (num_possible_cpus() < NR_SCORPION_CPUS)
++                return -ENODEV;
++
++        d = devm_kzalloc(&pdev->dev, sizeof(*d), GFP_KERNEL);
++        if (!d)
++                return -ENOMEM;
++
++        d->dev = &pdev->dev;
++        mutex_init(&d->lock);
++        platform_set_drvdata(pdev, d);
++
++        ret = map_resources(pdev, d);
++        if (ret)
++                return dev_err_probe(&pdev->dev, ret,
++                                     "failed to map clock resources\n");
++
++        ret = get_power_resources(d);
++        if (ret)
++                return dev_err_probe(&pdev->dev, ret,
++                                     "failed to get DVFS resources\n");
++
++        ret = validate_pll8_384();
++        if (ret)
++                return dev_err_probe(&pdev->dev, ret,
++                                     "PLL8 is not 384 MHz\n");
++
++        ret = validate_fuse(d);
++        if (ret)
++                return dev_err_probe(&pdev->dev, ret,
++                                     "unsupported fuse plan\n");
++
++        ret = validate_boot_state(d, &cpu0_idx, &cpu1_idx);
++        if (ret)
++                return dev_err_probe(&pdev->dev, ret,
++                                     "unsupported boot clock state\n");
++
++        ret = adopt_boot_state(d, cpu0_idx, cpu1_idx);
++        if (ret)
++                return dev_err_probe(&pdev->dev, ret,
++                                     "failed to adopt boot DVFS state\n");
++
++        drv = d;
++
++        ret = cpufreq_register_driver(&msm8660_cpufreq_driver);
++        if (ret) {
++                drv = NULL;
++
++                /*
++                 * Restore the pre-driver L2 state before dropping our votes.
++                 * CPU clocks themselves have not been changed yet.
++                 */
++                if (d->l2_idx != 0) {
++                        int rb = set_l2_level(d, 0);
++
++                        if (rb)
++                                dev_crit(d->dev,
++                                         "failed to restore boot L2: %d\n", rb);
++                }
++                set_icc_level(d, 0);
++                disable_probe_votes(d);
++                return dev_err_probe(&pdev->dev, ret,
++                                     "cpufreq registration failed\n");
++        }
++
++        d->registered = true;
++
++        /*
++         * This validation module owns live CPU clocks after registration.
++         * Reboot is the rollback; make accidental rmmod impossible.
++         */
++
++        dev_dbg(&pdev->dev,
++                 "ACTIVE: dual-core cpufreq 192-1512 MHz, nominal PVS, governors enabled\n");
++
++        return 0;
++}
++
++static const struct of_device_id msm8660_match[] = {
++        { .compatible = "qcom,msm8660-cpufreq" },
++        { }
++};
++MODULE_DEVICE_TABLE(of, msm8660_match);
++
++static struct platform_driver msm8660_platform_driver = {
++        .probe = msm8660_probe,
++        .driver = {
++                .name = DRV_NAME,
++                .of_match_table = msm8660_match,
++                .suppress_bind_attrs = true,
++        },
++};
++
++module_platform_driver(msm8660_platform_driver);
++
++MODULE_DESCRIPTION("MSM8660/8260 dual-core Scorpion cpufreq/DVFS validation driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/regulator/Kconfig b/drivers/regulator/Kconfig
+index 89789ac7a786c8c4c4a750cdcaa27a205762ac18..8d5058fb436754a109071842d0598b79269ee093 100644
+--- a/drivers/regulator/Kconfig
++++ b/drivers/regulator/Kconfig
+@@ -1897,3 +1897,11 @@ config REGULATOR_QCOM_LABIBB
+ 	  for LCD display panel.
+ 
+ endif
++
++
++config REGULATOR_QCOM_MSM8660_SAW
++	bool "Qualcomm MSM8660 SAW CPU regulator"
++	depends on ARCH_QCOM && OF
++	help
++	  CPU voltage regulator driver for the SAW v1 blocks used by
++	  Qualcomm MSM8260/MSM8660.
+diff --git a/drivers/regulator/Makefile b/drivers/regulator/Makefile
+index 5a764cec8df834de6f7775574e4bbd1d4dd8f6ef..c1540349018d9e35e9a2a3ee7d068433f2a73267 100644
+--- a/drivers/regulator/Makefile
++++ b/drivers/regulator/Makefile
+@@ -220,3 +220,4 @@ obj-$(CONFIG_REGULATOR_WM8400) += wm8400-regulator.o
+ obj-$(CONFIG_REGULATOR_WM8994) += wm8994-regulator.o
+ 
+ ccflags-$(CONFIG_REGULATOR_DEBUG) += -DDEBUG
++obj-$(CONFIG_REGULATOR_QCOM_MSM8660_SAW) += qcom-msm8660-saw-regulator.o
+diff --git a/drivers/regulator/qcom-msm8660-saw-regulator.c b/drivers/regulator/qcom-msm8660-saw-regulator.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..fd5ebaf8cb88515691aaf95b2d13fb3416fe5317
+--- /dev/null
++++ b/drivers/regulator/qcom-msm8660-saw-regulator.c
+@@ -0,0 +1,367 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Qualcomm MSM8660 / MSM8260 SAW v1 CPU regulator
++ *
++ * Hikari/Fuji legacy-compatible implementation.
++ *
++ * The SAW SPM initialization deliberately does NOT touch:
++ *   VCTL     +0x08
++ *   STS      +0x0c
++ *   PMIC_CTL +0x20
++ *
++ * CPU voltage changes are performed through VCTL and verified through STS.
++ */
++
++#include <linux/cpu.h>
++#include <linux/delay.h>
++#include <linux/io.h>
++#include <linux/iopoll.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
++#include <linux/regulator/driver.h>
++#include <linux/regulator/machine.h>
++#include <linux/regulator/of_regulator.h>
++
++/* MSM8x60 SAW v1 register layout */
++#define SAW_AVS_CTL              0x04
++#define SAW_VCTL                 0x08
++#define SAW_STS                  0x0c
++#define SAW_CFG                  0x10
++#define SAW_SPM_CTL              0x14
++#define SAW_SLP_TMR_DLY          0x18
++#define SAW_WAKE_TMR_DLY         0x1c
++#define SAW_PMIC_CTL             0x20
++#define SAW_SLP_CLK_EN           0x24
++#define SAW_PRECLMP_EN           0x28
++#define SAW_POSTCLMP_EN          0x2c
++#define SAW_CLMP_EN              0x30
++#define SAW_RST_EN               0x34
++#define SAW_MPM_CFG              0x38
++
++#define SAW_STS_PMIC_STATE(v)    (((v) >> 20) & 0x3)
++#define SAW_STS_PMIC_DATA(v)     (((v) >> 10) & 0xff)
++
++#define FTSMPS_BAND2             0x80
++#define FTSMPS_BAND2_MIN_UV      700000
++#define FTSMPS_BAND2_STEP_UV     12500
++
++/* Exact historical Hikari/Fuji regulator constraints. */
++#define HIKARI_MIN_UV            800000
++#define HIKARI_MAX_UV            1325000
++#define HIKARI_STEP_UV           12500
++#define HIKARI_N_VOLTAGES \
++	(((HIKARI_MAX_UV - HIKARI_MIN_UV) / HIKARI_STEP_UV) + 1)
++
++/* Legacy driver value: PMIC internal slew rate. */
++#define REGULATOR_SLEW_RATE_UV_US 1250
++
++struct msm8660_saw {
++	struct device *dev;
++	void __iomem *base;
++	unsigned int cpu;
++	int last_uV;
++	struct mutex lock;
++
++	struct regulator_desc desc;
++	struct regulator_dev *rdev;
++};
++
++struct msm8660_vdd_req {
++	struct msm8660_saw *saw;
++	u8 vlevel;
++	u32 sts;
++};
++
++/*
++ * Exact msm_spm_data[] initialization for MSM8x60 SoC major != 1.
++ *
++ * CONFIG_MSM_AVS_HW=n on this Hikari legacy configuration, therefore
++ * AVS_CTL is zero.
++ *
++ * VCTL, STS and PMIC_CTL are intentionally excluded, matching
++ * MSM_SPM_REG_NR_INITIALIZE in the legacy driver.
++ */
++static void msm8660_saw_hw_init(struct msm8660_saw *saw)
++{
++	writel_relaxed(0x00000000, saw->base + SAW_AVS_CTL);
++	writel_relaxed(0x0000001c, saw->base + SAW_CFG);
++	writel_relaxed(0x00000068, saw->base + SAW_SPM_CTL);
++	writel_relaxed(0x0c0cffff, saw->base + SAW_SLP_TMR_DLY);
++	writel_relaxed(0x78780fff, saw->base + SAW_WAKE_TMR_DLY);
++
++	writel_relaxed(saw->cpu ? 0x13 : 0x01,
++		       saw->base + SAW_SLP_CLK_EN);
++
++	writel_relaxed(0x00000007, saw->base + SAW_PRECLMP_EN);
++	writel_relaxed(0x00000000, saw->base + SAW_POSTCLMP_EN);
++	writel_relaxed(0x00000001, saw->base + SAW_CLMP_EN);
++	writel_relaxed(0x00000000, saw->base + SAW_RST_EN);
++	writel_relaxed(0x00000000, saw->base + SAW_MPM_CFG);
++
++	/* Match the legacy mb() after flushing the shadow registers. */
++	mb();
++}
++
++static int msm8660_uv_to_vlevel(int min_uV, int max_uV,
++				int *actual_uV, u8 *vlevel)
++{
++	int uV, vprog;
++
++	if (min_uV < HIKARI_MIN_UV)
++		min_uV = HIKARI_MIN_UV;
++
++	if (min_uV > HIKARI_MAX_UV || max_uV < HIKARI_MIN_UV)
++		return -EINVAL;
++
++	uV = FTSMPS_BAND2_MIN_UV +
++	     DIV_ROUND_UP(min_uV - FTSMPS_BAND2_MIN_UV,
++			  FTSMPS_BAND2_STEP_UV) *
++	     FTSMPS_BAND2_STEP_UV;
++
++	if (uV > max_uV || uV > HIKARI_MAX_UV)
++		return -EINVAL;
++
++	vprog = (uV - FTSMPS_BAND2_MIN_UV) / FTSMPS_BAND2_STEP_UV;
++
++	if (vprog < 0 || vprog > 0x3f)
++		return -EINVAL;
++
++	*actual_uV = uV;
++	*vlevel = FTSMPS_BAND2 | vprog;
++
++	return 0;
++}
++
++/*
++ * Must execute on the CPU whose SAW controls the requested Scorpion rail.
++ */
++static long msm8660_saw_set_vdd_cpu(void *arg)
++{
++	struct msm8660_vdd_req *req = arg;
++	struct msm8660_saw *saw = req->saw;
++	u32 sts;
++	int ret;
++
++	writel_relaxed(req->vlevel, saw->base + SAW_VCTL);
++	mb();
++
++	ret = readl_poll_timeout_atomic(saw->base + SAW_STS, sts,
++				       SAW_STS_PMIC_STATE(sts) == 0,
++				       1, 50);
++	if (ret) {
++		req->sts = sts;
++		return ret;
++	}
++
++	req->sts = sts;
++
++	if (SAW_STS_PMIC_DATA(sts) != req->vlevel)
++		return -EIO;
++
++	return 0;
++}
++
++static int msm8660_saw_set_voltage(struct regulator_dev *rdev,
++				   int min_uV, int max_uV,
++				   unsigned int *selector)
++{
++	struct msm8660_saw *saw = rdev_get_drvdata(rdev);
++	struct msm8660_vdd_req req;
++	int actual_uV;
++	int old_uV;
++	u8 vlevel;
++	long ret;
++
++	ret = msm8660_uv_to_vlevel(min_uV, max_uV,
++				  &actual_uV, &vlevel);
++	if (ret)
++		return ret;
++
++	mutex_lock(&saw->lock);
++
++	old_uV = saw->last_uV;
++
++	req.saw = saw;
++	req.vlevel = vlevel;
++	req.sts = 0;
++
++	ret = work_on_cpu(saw->cpu, msm8660_saw_set_vdd_cpu, &req);
++	if (ret) {
++		dev_err(saw->dev,
++			"cpu%u set %duV vlevel=0x%02x failed: %ld "
++			"STS=%08x state=%u data=0x%02x\n",
++			saw->cpu, actual_uV, vlevel, ret, req.sts,
++			SAW_STS_PMIC_STATE(req.sts),
++			SAW_STS_PMIC_DATA(req.sts));
++		goto out;
++	}
++
++	/*
++	 * Preserve the legacy SAW regulator's stabilization delay.
++	 * For the first request last_uV is unknown, so conservatively
++	 * behave like the zero-initialized historical driver.
++	 */
++	if (actual_uV > old_uV)
++		udelay(DIV_ROUND_UP(actual_uV - max(old_uV, 0),
++				    REGULATOR_SLEW_RATE_UV_US));
++
++	saw->last_uV = actual_uV;
++
++	if (selector)
++		*selector = (actual_uV - HIKARI_MIN_UV) / HIKARI_STEP_UV;
++out:
++	mutex_unlock(&saw->lock);
++	return ret;
++}
++
++static int msm8660_saw_get_voltage(struct regulator_dev *rdev)
++{
++	struct msm8660_saw *saw = rdev_get_drvdata(rdev);
++
++	/*
++	 * Bootloader VCTL is not trustworthy as the actual current voltage;
++	 * don't fabricate a voltage until this driver has successfully
++	 * programmed one itself.
++	 */
++	if (!saw->last_uV)
++		return -ENODATA;
++
++	return saw->last_uV;
++}
++
++static int msm8660_saw_list_voltage(struct regulator_dev *rdev,
++				    unsigned int selector)
++{
++	if (selector >= HIKARI_N_VOLTAGES)
++		return 0;
++
++	return HIKARI_MIN_UV + selector * HIKARI_STEP_UV;
++}
++
++static int msm8660_saw_map_voltage(struct regulator_dev *rdev,
++				   int min_uV, int max_uV)
++{
++	int uV;
++	int sel;
++
++	if (min_uV < HIKARI_MIN_UV)
++		min_uV = HIKARI_MIN_UV;
++
++	sel = DIV_ROUND_UP(min_uV - HIKARI_MIN_UV, HIKARI_STEP_UV);
++	if (sel < 0 || sel >= HIKARI_N_VOLTAGES)
++		return -EINVAL;
++
++	uV = HIKARI_MIN_UV + sel * HIKARI_STEP_UV;
++
++	if (uV > max_uV)
++		return -EINVAL;
++
++	return sel;
++}
++
++static const struct regulator_ops msm8660_saw_ops = {
++	.get_voltage = msm8660_saw_get_voltage,
++	.set_voltage = msm8660_saw_set_voltage,
++	.list_voltage = msm8660_saw_list_voltage,
++	.map_voltage = msm8660_saw_map_voltage,
++};
++
++static int msm8660_saw_probe(struct platform_device *pdev)
++{
++	struct regulator_config config = { };
++	struct regulator_init_data *init_data;
++	struct msm8660_saw *saw;
++	struct resource *res;
++	u32 cpu;
++	int ret;
++
++	ret = of_property_read_u32(pdev->dev.of_node, "qcom,cpu", &cpu);
++	if (ret)
++		return dev_err_probe(&pdev->dev, ret,
++				     "missing qcom,cpu\n");
++
++	if (cpu > 1)
++		return dev_err_probe(&pdev->dev, -EINVAL,
++				     "invalid qcom,cpu=%u\n", cpu);
++
++	saw = devm_kzalloc(&pdev->dev, sizeof(*saw), GFP_KERNEL);
++	if (!saw)
++		return -ENOMEM;
++
++	saw->dev = &pdev->dev;
++	saw->cpu = cpu;
++	mutex_init(&saw->lock);
++
++	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	saw->base = devm_ioremap_resource(&pdev->dev, res);
++	if (IS_ERR(saw->base))
++		return PTR_ERR(saw->base);
++
++	/*
++	 * First record the bootloader/current-kernel state, then perform
++	 * the exact legacy MSM8x60 SPM initialization.
++	 */
++	msm8660_saw_hw_init(saw);
++	saw->desc.name = devm_kasprintf(&pdev->dev, GFP_KERNEL,
++					"msm8660-saw-cpu%u", cpu);
++	if (!saw->desc.name)
++		return -ENOMEM;
++
++	saw->desc.id = cpu;
++	saw->desc.type = REGULATOR_VOLTAGE;
++	saw->desc.owner = THIS_MODULE;
++	saw->desc.ops = &msm8660_saw_ops;
++	saw->desc.n_voltages = HIKARI_N_VOLTAGES;
++
++	init_data = of_get_regulator_init_data(&pdev->dev,
++					       pdev->dev.of_node,
++					       &saw->desc);
++	if (!init_data)
++		return -ENOMEM;
++
++	/*
++	 * The bootloader/kernel already has a live CPU rail.  Parse the DT
++	 * voltage constraints, but do not let regulator registration itself
++	 * choose/apply a voltage.  cpufreq will explicitly adopt the boot
++	 * operating point afterwards.
++	 */
++	init_data->constraints.apply_uV = false;
++	config.dev = &pdev->dev;
++	config.driver_data = saw;
++	config.of_node = pdev->dev.of_node;
++	config.init_data = init_data;
++
++	saw->rdev = devm_regulator_register(&pdev->dev,
++					    &saw->desc, &config);
++	if (IS_ERR(saw->rdev))
++		return dev_err_probe(&pdev->dev, PTR_ERR(saw->rdev),
++				     "regulator registration failed\n");
++
++	platform_set_drvdata(pdev, saw);
++
++	dev_dbg(&pdev->dev,
++		 "MSM8660 SAW CPU%u regulator registered\n", cpu);
++
++
++	return 0;
++}
++
++static const struct of_device_id msm8660_saw_of_match[] = {
++	{ .compatible = "qcom,msm8660-saw-regulator" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, msm8660_saw_of_match);
++
++static struct platform_driver msm8660_saw_driver = {
++	.probe = msm8660_saw_probe,
++	.driver = {
++		.name = "qcom-msm8660-saw-regulator",
++		.of_match_table = msm8660_saw_of_match,
++	},
++};
++module_platform_driver(msm8660_saw_driver);
++
++MODULE_DESCRIPTION("Qualcomm MSM8660/MSM8260 SAW v1 CPU regulator");
++MODULE_LICENSE("GPL");
+-- 
+2.53.0
+

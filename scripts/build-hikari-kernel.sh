@@ -4,7 +4,7 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 hikari_build_root=${HIKARI_BUILD_ROOT:-/home/paul/xperia/build}
-kernel_src=${KERNEL_SRC:-/home/paul/xperia/src/linux}
+kernel_src=${KERNEL_SRC:-/home/paul/xperia/src/linux-hikari-current}
 build_dir=${BUILD_DIR:-"$hikari_build_root/linux-hikari-current"}
 cross_compile=${CROSS_COMPILE:-arm-linux-gnueabihf-}
 jobs=${JOBS:-"$(nproc)"}
@@ -27,6 +27,7 @@ git -C "$kernel_src" rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
   echo "KERNEL_SRC must be an external Linux git worktree" >&2
   exit 1
 }
+"$repo_root/scripts/check-hikari-kernel-source.sh" "$kernel_src"
 test -f "$kernel_fragment" || { echo "KERNEL_FRAGMENT must name a project config fragment" >&2; exit 1; }
 mkdir -p "$hikari_build_root"
 hikari_build_root=$(realpath -m -- "$hikari_build_root")

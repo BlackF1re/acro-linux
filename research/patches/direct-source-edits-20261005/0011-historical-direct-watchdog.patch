@@ -1,0 +1,12 @@
+diff --git a/drivers/watchdog/qcom-wdt.c b/drivers/watchdog/qcom-wdt.c
+index 4eb1bf9790125b9c3c3715ac313438d1d0378969..f2da61db39bd4d1b34af917442f0978400bd6df5 100644
+--- a/drivers/watchdog/qcom-wdt.c
++++ b/drivers/watchdog/qcom-wdt.c
+@@ -350,6 +350,7 @@ static int qcom_wdt_probe(struct platform_device *pdev)
+ 		set_bit(WDOG_HW_RUNNING, &wdt->wdd.status);
+ 	}
+ 
++	watchdog_stop_on_reboot(&wdt->wdd);
+ 	ret = devm_watchdog_register_device(dev, &wdt->wdd);
+ 	if (ret)
+ 		return ret;

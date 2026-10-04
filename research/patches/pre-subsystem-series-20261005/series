@@ -1,0 +1,59 @@
+# Canonical imported Hikari kernel patch application order.
+# Imported hardware-support commits followed by project-owned corrections.
+# Pure bring-up logging patches are intentionally excluded.
+# The three DTS-only Hikari commits are carried by kernel/dts/ and applied
+# after this series, so they are not replayed against the generated base DTS.
+0001-clk-qcom-gdsc-add-LEGACY_FOOTSWITCH-support-for-MSM8.patch
+0002-clk-qcom-gdsc-add-RPM_ALWAYS_ON-flag.patch
+0003-dt-bindings-interconnect-qcom-add-msm8660-NoC.patch
+0004-interconnect-qcom-add-MSM8x60-NoC-driver.patch
+0005-dt-bindings-clock-qcom-add-mmcc-msm8660-clock-IDs.patch
+0006-dt-bindings-reset-qcom-add-mmcc-msm8660-reset-IDs.patch
+0007-clk-qcom-add-MSM8x60-MMCC-driver.patch
+0008-fix-defer-MSM8x60-MMCC-until-RPM-is-ready.patch
+0009b-feat-add-Hikari-DRM-display-drivers.patch
+0010-fix-defer-MSM8x60-PLL2-configuration-to-consumers.patch
+0012-fix-correct-Hikari-DSI-clock-and-PHY-setup.patch
+0013-feat-add-Hikari-BQ24160-charging-support.patch
+0013b-power-supply-bq24160-consolidate-Hikari-policy.patch
+0014-fix-correct-Hikari-display-component-graph.patch
+0016-drm-msm-dsi-select-MSM8x60-V2-host-configuration.patch
+0018-clk-qcom-fix-MSM8x60-DSI-slave-AHB-halt-bit.patch
+0019-drm-panel-send-complete-Hikari-MDV22-commands.patch
+0021-drm-msm-dsi-correct-MSM8x60-link-clock-topology.patch
+0022-drm-msm-mdp4-make-voltage-rail-optional.patch
+0027b-drm-msm-dsi-quiesce-final-MSM8x60-boot-state.patch
+0024-phy-qcom-usb-hs-avoid-redundant-fixed-rail-voltage-r.patch
+0028-dt-bindings-display-msm-allow-MDP4-power-domain.patch
+0030-clk-qcom-reproduce-the-MSM8x60-MDP-footswitch-sequen.patch
+0031b-drm-msm-mdp4-check-clock-errors-without-debug-log.patch
+0032-clk-qcom-keep-MSM8x60-MDP-reset-clocks-enabled.patch
+0033-clk-qcom-access-MSM8x60-MMCC-through-secure-IO.patch
+0035-firmware-qcom-avoid-modern-SCM-probes-on-MSM8x60.patch
+0036-fix-match-MSM8x60-secure-MMCC-access-ABI.patch
+0038-clk-qcom-fix-MSM8x60-TV-halt-status-map.patch
+0039-dt-bindings-iommu-add-MSM8660-compatible.patch
+0043-drm-msm-mdp4-separate-DSI-video-vblank-from-commit-I.patch
+0044-clk-qcom-select-the-Hikari-rounded-pixel-rate.patch
+0045-drm-msm-dsi-enable-MSM8x60-core-clock.patch
+0046-drm-msm-dsi-start-the-MSM8x60-45nm-PLL.patch
+0048b-clk-qcom-model-final-MSM8x60-MDP-LUT-clock.patch
+0049-clk-qcom-select-the-MSM8x60-DSI-PLL-parent.patch
+0050-clk-qcom-skip-unreliable-MSM8x60-DSI-halt-poll.patch
+0051-drm-panel-fix-Hikari-MDV22-enable-order.patch
+0052-drm-msm-dsi-use-the-V2-controller-for-command-DMA.patch
+0056b-drm-msm-dsi-preserve-final-MSM8x60-command-DMA.patch
+0057b-clk-qcom-describe-final-MSM8x60-DSI-pixel-divider.patch
+0058-clk-qcom-skip-unreliable-MSM8x60-DSI-pixel-halt.patch
+0060-drm-msm-dsi-match-Hikari-video-host-timing.patch
+0061-drm-msm-dsi-match-Hikari-PHY-start-order.patch
+0062-drm-msm-mdp4-vote-scanout-memory-bandwidth.patch
+0065-drm-msm-support-contiguous-physical-scanout.patch
+0066-mfd-qcom-pm8xxx-add-PM8901-support.patch
+0067-dt-bindings-power-supply-add-BQ24160-OTG-guard.patch
+0069-pinctrl-qcom-map-PM8901-MPP-interrupts.patch
+0070-pinctrl-qcom-ssbi-mpp-honor-output-state.patch
+0071-pinctrl-qcom-use-PM8901-MPP-register-base.patch
+0076-watchdog-qcom-stop-watchdog-on-reboot.patch
+0077-thermal-qcom-add-MSM8660-TSENS-support.patch
+0078-mmc-mmci-read-Qualcomm-PIO-FIFO-address-window.patch

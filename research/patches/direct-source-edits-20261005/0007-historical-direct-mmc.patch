@@ -1,0 +1,64 @@
+diff --git a/drivers/mmc/host/mmci.c b/drivers/mmc/host/mmci.c
+index e500051bd572f7321edb663077a52b4d4f7307ad..ffc160dca0264d8c93d02dc801ce786c1cf96141 100644
+--- a/drivers/mmc/host/mmci.c
++++ b/drivers/mmc/host/mmci.c
+@@ -1608,12 +1608,39 @@ static int mmci_qcom_get_rx_fifocnt(struct mmci_host *host, u32 status, int r)
+ 	return 0;
+ }
+ 
++static void mmci_fifo_read(struct mmci_host *host, void *buffer,
++			   unsigned int words, unsigned int *word_offset)
++{
++	void __iomem *fifo = host->base + MMCIFIFO;
++	u32 *ptr = buffer;
++	unsigned int i;
++
++	if (!host->variant->qcom_fifo) {
++		ioread32_rep(fifo, buffer, words);
++		return;
++	}
++
++	/*
++	 * The Qualcomm FIFO is exposed as a cyclic address window.  Preserve
++	 * the offset across the eight-word bursts consumed by one PIO service,
++	 * matching the downstream Qualcomm driver.
++	 */
++	for (i = 0; i < words; i++) {
++		unsigned int offset = *word_offset * sizeof(*ptr);
++
++		*ptr++ = readl_relaxed(fifo + offset);
++		*word_offset = (*word_offset + 1) %
++				(host->variant->fifosize / sizeof(*ptr));
++	}
++}
++
+ static int mmci_pio_read(struct mmci_host *host, char *buffer, unsigned int remain)
+ {
+ 	void __iomem *base = host->base;
+ 	char *ptr = buffer;
+ 	u32 status = readl(host->base + MMCISTATUS);
+ 	int host_remain = host->size;
++	unsigned int fifo_word_offset = 0;
+ 
+ 	do {
+ 		int count = host->get_rx_fifocnt(host, status, host_remain);
+@@ -1633,14 +1660,16 @@ static int mmci_pio_read(struct mmci_host *host, char *buffer, unsigned int rema
+ 		if (unlikely(count & 0x3)) {
+ 			if (count < 4) {
+ 				unsigned char buf[4];
+-				ioread32_rep(base + MMCIFIFO, buf, 1);
++				mmci_fifo_read(host, buf, 1, &fifo_word_offset);
+ 				memcpy(ptr, buf, count);
+ 			} else {
+-				ioread32_rep(base + MMCIFIFO, ptr, count >> 2);
++				mmci_fifo_read(host, ptr, count >> 2,
++					       &fifo_word_offset);
+ 				count &= ~0x3;
+ 			}
+ 		} else {
+-			ioread32_rep(base + MMCIFIFO, ptr, count >> 2);
++			mmci_fifo_read(host, ptr, count >> 2,
++				       &fifo_word_offset);
+ 		}
+ 
+ 		ptr += count;

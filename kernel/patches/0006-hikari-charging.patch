@@ -1,0 +1,1258 @@
+From 2e4aa6126920e2f04be6968b1091bd35d59b9ce8 Mon Sep 17 00:00:00 2001
+From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 00:05:29 +0700
+Subject: [PATCH] charging: consolidate final Hikari subsystem support
+
+Repackage the prepared source without changing any byte of hardware
+implementation. Includes final corrections and logging cleanup.
+
+Prepared-source-tree: e3d73fd2f7bffefd6e42b0ec789d4e0af81fde45
+Original-author: BlackF1re <plevickij57@gmail.com>
+Original-series: research/patches/pre-subsystem-series-20261005
+Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+---
+ .../bindings/power/supply/bq27xxx.yaml        |  16 +
+ .../bindings/power/supply/ti,bq24160.yaml     | 128 +++
+ drivers/power/supply/Kconfig                  |  10 +
+ drivers/power/supply/Makefile                 |   1 +
+ drivers/power/supply/bq24160_charger.c        | 944 ++++++++++++++++++
+ drivers/power/supply/bq27xxx_battery.c        |  53 +
+ 6 files changed, 1152 insertions(+)
+ create mode 100644 Documentation/devicetree/bindings/power/supply/ti,bq24160.yaml
+ create mode 100644 drivers/power/supply/bq24160_charger.c
+
+diff --git a/Documentation/devicetree/bindings/power/supply/bq27xxx.yaml b/Documentation/devicetree/bindings/power/supply/bq27xxx.yaml
+index bc05400186cf1c18537a04695b4ca3b65a2e0e24..1fdc5c4d7ea266181ebdfc0add88e640bcd83fa8 100644
+--- a/Documentation/devicetree/bindings/power/supply/bq27xxx.yaml
++++ b/Documentation/devicetree/bindings/power/supply/bq27xxx.yaml
+@@ -67,10 +67,26 @@ properties:
+        - voltage-min-design-microvolt
+        Both or neither of the *-full-design-*-hours properties must be set.
+ 
++  ti,host-battery-insertion:
++    type: boolean
++    description: |
++      The battery is permanently connected and the gauge's hardware battery
++      insertion detection is disabled. The host must send BAT_INSERT after
++      gauge power loss before state-of-charge reporting can be used.
++
+   power-supplies: true
+ 
+ allOf:
+   - $ref: power-supply.yaml#
++  - if:
++      not:
++        properties:
++          compatible:
++            contains:
++              const: ti,bq27520g1
++    then:
++      properties:
++        ti,host-battery-insertion: false
+   - if:
+       properties:
+         compatible:
+diff --git a/Documentation/devicetree/bindings/power/supply/ti,bq24160.yaml b/Documentation/devicetree/bindings/power/supply/ti,bq24160.yaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..24fd5e2474687e81763f134de716ae080e68f342
+--- /dev/null
++++ b/Documentation/devicetree/bindings/power/supply/ti,bq24160.yaml
+@@ -0,0 +1,128 @@
++# SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/power/supply/ti,bq24160.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: Texas Instruments BQ24160 USB/IN power-path battery charger
++
++maintainers:
++  - Hikari Linux Project <noreply@example.invalid>
++
++allOf:
++  - $ref: power-supply.yaml#
++
++properties:
++  compatible:
++    const: ti,bq24160
++
++  reg:
++    maxItems: 1
++
++  interrupts:
++    maxItems: 1
++
++  fuel-gauge:
++    $ref: /schemas/types.yaml#/definitions/phandle
++    description: Reference to the fuel gauge used for safe temperature and voltage policy.
++
++  ti,usb-input-current-limit-microamp:
++    description: Conservative USB input limit for an otherwise unknown source.
++    enum: [100000, 150000, 500000]
++
++  power-supplies:
++    maxItems: 1
++    description: |
++      USB source provider reporting USB_TYPE and CURRENT_MAX. Sources without
++      capability reporting retain the conservative limit unless electrical
++      probing is explicitly enabled.
++
++  ti,adapter-input-current-limit-microamp:
++    description: Board ceiling for a CDP/DCP source or explicitly enabled USB probing.
++    enum: [500000, 800000, 900000, 1500000]
++    default: 1500000
++
++  ti,usb-vindpm-microvolt:
++    description: USB input-voltage threshold for hardware droop regulation.
++    minimum: 4200000
++    maximum: 4760000
++    enum: [4200000, 4280000, 4360000, 4440000, 4520000, 4600000, 4680000, 4760000]
++    default: 4520000
++
++  cradle-detect-gpios:
++    maxItems: 1
++    description: Active-low input indicating attachment to a powered cradle.
++
++  ti,cradle-input-current-limit-microamp:
++    description: Board ceiling for the cradle IN input.
++    enum: [1500000, 2500000]
++    default: 2500000
++
++  ti,in-vindpm-microvolt:
++    description: IN input-voltage threshold for hardware droop regulation.
++    enum: [4200000, 4280000, 4360000, 4440000, 4520000, 4600000, 4680000, 4760000]
++    default: 4520000
++
++  ti,opportunistic-usb-input:
++    type: boolean
++    description: |
++      Explicitly permit electrical current probing on sources without USB
++      capability reporting. A USB2 device on a USB3 host is not guaranteed
++      permission above 500 mA. Known advertised limits are always respected.
++      Without this property, unknown sources stay at the conservative limit.
++
++  pinctrl-names: true
++  pinctrl-0: true
++
++  ti,constant-charge-current-max-microamp:
++    minimum: 550000
++    maximum: 2500000
++
++  ti,constant-charge-voltage-max-microvolt:
++    minimum: 3500000
++    maximum: 4440000
++    multipleOf: 20000
++
++  ti,charge-term-current-microamp:
++    minimum: 50000
++    maximum: 400000
++    multipleOf: 50000
++
++  wakeup-source: true
++
++  usb-otg-guard:
++    type: object
++    description: Regulator which disconnects charging while USB host VBUS is active.
++    $ref: /schemas/regulator/regulator.yaml#
++    unevaluatedProperties: false
++
++required:
++  - compatible
++  - reg
++  - fuel-gauge
++  - ti,usb-input-current-limit-microamp
++  - ti,constant-charge-current-max-microamp
++  - ti,constant-charge-voltage-max-microvolt
++  - ti,charge-term-current-microamp
++
++unevaluatedProperties: false
++
++examples:
++  - |
++    #include <dt-bindings/interrupt-controller/irq.h>
++    i2c {
++      #address-cells = <1>;
++      #size-cells = <0>;
++
++      charger@6b {
++        compatible = "ti,bq24160";
++        reg = <0x6b>;
++        interrupts = <7 IRQ_TYPE_EDGE_BOTH>;
++        fuel-gauge = <&fuel_gauge>;
++        ti,usb-input-current-limit-microamp = <500000>;
++        ti,constant-charge-current-max-microamp = <1525000>;
++        ti,constant-charge-voltage-max-microvolt = <4200000>;
++        ti,charge-term-current-microamp = <50000>;
++      };
++    };
++...
+diff --git a/drivers/power/supply/Kconfig b/drivers/power/supply/Kconfig
+index b89ef40df7f82a41a40eba230999e49094047608..5024824a05a05b13a20db208eca2f412f583d179 100644
+--- a/drivers/power/supply/Kconfig
++++ b/drivers/power/supply/Kconfig
+@@ -775,6 +775,16 @@ config CHARGER_BQ2415X
+ 	  Say Y to enable support for the TI BQ2415x battery charger
+ 	  PMICs.
+ 
++config CHARGER_BQ24160
++	tristate "TI BQ24160 battery charger driver"
++	depends on I2C
++	select REGMAP_I2C
++	help
++	  Say Y to enable the TI BQ24160 USB/IN power-path charger.
++
++	  The driver supports conservative USB charging policy, the charger
++	  watchdog, status/fault reporting, and a power_supply interface.
++
+ 	  You'll need this driver to charge batteries on e.g. Nokia
+ 	  RX-51/N900.
+ 
+diff --git a/drivers/power/supply/Makefile b/drivers/power/supply/Makefile
+index f3c0d1006c1a2a9fdaf3228391ead9e33235cc66..748dbcbc1c7d37b574c6e35c3b2e3c87d193f723 100644
+--- a/drivers/power/supply/Makefile
++++ b/drivers/power/supply/Makefile
+@@ -98,6 +98,7 @@ obj-$(CONFIG_CHARGER_QCOM_SMBB)	+= qcom_smbb.o
+ obj-$(CONFIG_BATTERY_PM8916_BMS_VM)	+= pm8916_bms_vm.o
+ obj-$(CONFIG_CHARGER_PM8916_LBC)	+= pm8916_lbc.o
+ obj-$(CONFIG_CHARGER_BQ2415X)	+= bq2415x_charger.o
++obj-$(CONFIG_CHARGER_BQ24160)	+= bq24160_charger.o
+ obj-$(CONFIG_CHARGER_BQ24190)	+= bq24190_charger.o
+ obj-$(CONFIG_CHARGER_BQ24257)	+= bq24257_charger.o
+ obj-$(CONFIG_CHARGER_BQ24735)	+= bq24735-charger.o
+diff --git a/drivers/power/supply/bq24160_charger.c b/drivers/power/supply/bq24160_charger.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..48153965d9c705da14e26906bea6e316da8d6cd9
+--- /dev/null
++++ b/drivers/power/supply/bq24160_charger.c
+@@ -0,0 +1,944 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * TI BQ24160 power-path charger
++ *
++ * This deliberately keeps the policy surface small: Hikari's first native
++ * Linux charging configuration treats an unknown USB source conservatively.
++ * VIN-DPM bounds both inputs; unknown USB probing requires explicit opt-in.
++ * Temperature and battery voltage come from the existing BQ27520.
++ * It never writes BQ27520 state or NVM.
++ */
++
++#include <linux/delay.h>
++#include <linux/i2c.h>
++#include <linux/gpio/consumer.h>
++#include <linux/interrupt.h>
++#include <linux/jiffies.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/pm_wakeup.h>
++#include <linux/power_supply.h>
++#include <linux/regmap.h>
++#include <linux/regulator/driver.h>
++#include <linux/workqueue.h>
++
++#define BQ24160_REG_STATUS		0x00
++#define BQ24160_REG_BR_STATUS		0x01
++#define BQ24160_REG_CONTROL		0x02
++#define BQ24160_REG_VOLTAGE		0x03
++#define BQ24160_REG_VENDOR		0x04
++#define BQ24160_REG_CURRENT		0x05
++#define BQ24160_REG_DPM		0x06
++#define BQ24160_REG_NTC			0x07
++
++#define BQ24160_STATUS_TMR_RST		BIT(7)
++#define BQ24160_STATUS_STAT_MASK	GENMASK(6, 4)
++#define BQ24160_STATUS_SUPPLY_SEL_USB	BIT(3)
++#define BQ24160_STATUS_FAULT_MASK	GENMASK(2, 0)
++#define BQ24160_BR_IN_STATUS_MASK	GENMASK(7, 6)
++#define BQ24160_IN_LIMIT_2500		BIT(1)
++#define BQ24160_DPM_IN_MASK		GENMASK(2, 0)
++#define BQ24160_BR_USB_STATUS_MASK	GENMASK(5, 4)
++#define BQ24160_DPM_ACTIVE		BIT(6)
++#define BQ24160_DPM_USB_MASK		GENMASK(5, 3)
++#define BQ24160_BR_STATUS_OTG_LOCK	BIT(3)
++#define BQ24160_CTRL_RESET		BIT(7)
++#define BQ24160_CTRL_IUSB_MASK		GENMASK(6, 4)
++#define BQ24160_CTRL_EN_STAT		BIT(3)
++#define BQ24160_CTRL_TE		BIT(2)
++#define BQ24160_CTRL_CE		BIT(1)
++#define BQ24160_CTRL_HZ		BIT(0)
++#define BQ24160_VOLTAGE_MASK		GENMASK(7, 2)
++#define BQ24160_CURRENT_ICHG_MASK	GENMASK(7, 3)
++#define BQ24160_CURRENT_ITERM_MASK	GENMASK(2, 0)
++#define BQ24160_NTC_LOW_CHG		BIT(0)
++#define BQ24160_VENDOR_REV_MASK	GENMASK(2, 0)
++
++#define BQ24160_STAT_IN_READY		1
++#define BQ24160_STAT_USB_READY		2
++#define BQ24160_STAT_CHARGING_IN	3
++#define BQ24160_STAT_CHARGING_USB	4
++#define BQ24160_STAT_DONE		5
++#define BQ24160_STAT_FAULT		7
++
++#define BQ24160_WATCHDOG_MS		10000
++#define BQ24160_STATUS_MS		30000
++
++struct bq24160 {
++	struct device *dev;
++	struct regmap *regmap;
++	struct power_supply *psy;
++	struct power_supply *fuel_gauge;
++	struct power_supply *cradle_psy;
++	struct gpio_desc *cradle_det;
++	struct power_supply_desc psy_desc;
++	struct delayed_work watchdog_work;
++	struct delayed_work status_work;
++	struct mutex lock;
++	int irq;
++	u32 input_limit_ua;
++	u32 safe_usb_limit_ua;
++	u32 adapter_limit_ua;
++	u32 input_request_ua;
++	u32 source_ceiling_ua;
++	u32 learned_limit_ua;
++	u32 vindpm_uv;
++	u32 in_vindpm_uv;
++	u32 cradle_max_ua;
++	u32 cradle_request_ua;
++	bool opportunistic_usb;
++	bool use_cradle;
++	unsigned long input_step_after;
++	enum power_supply_usb_type usb_type;
++	bool source_online;
++	bool input_limited;
++	u32 charge_limit_ua;
++	u32 charge_voltage_uv;
++	u32 term_current_ua;
++	u32 programmed_charge_ua;
++	int cold_degc;
++	int warm_degc;
++	int hot_degc;
++	bool rev23_hold;
++	bool otg_locked;
++	bool charging;
++};
++
++static const enum power_supply_property bq24160_props[] = {
++	POWER_SUPPLY_PROP_STATUS,
++	POWER_SUPPLY_PROP_ONLINE,
++	POWER_SUPPLY_PROP_HEALTH,
++	POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX,
++	POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE_MAX,
++	POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
++	POWER_SUPPLY_PROP_USB_TYPE,
++};
++
++static int bq24160_read(struct bq24160 *bq, unsigned int reg, unsigned int *val)
++{
++	return regmap_read(bq->regmap, reg, val);
++}
++
++static int bq24160_update_control(struct bq24160 *bq, unsigned int mask,
++				  unsigned int val)
++{
++	unsigned int control;
++	int ret;
++
++	ret = regmap_read(bq->regmap, BQ24160_REG_CONTROL, &control);
++	if (ret)
++		return ret;
++
++	/* RESET is write-only and reads back as one; never echo it to the chip. */
++	control &= ~BQ24160_CTRL_RESET;
++	control &= ~mask;
++	control |= val & mask;
++
++	return regmap_write(bq->regmap, BQ24160_REG_CONTROL, control);
++}
++
++static void bq24160_set_charging(struct bq24160 *bq, bool charging)
++{
++	if (bq->charging == charging)
++		return;
++
++	bq->charging = charging;
++	if (charging)
++		pm_stay_awake(bq->dev);
++	else
++		pm_relax(bq->dev);
++}
++
++static int bq24160_disable(struct bq24160 *bq)
++{
++	/*
++	 * CE stops battery charging while retaining the input power path.  HZ is
++	 * deliberately not used here: entering high impedance on a live USB
++	 * source would defeat the safe "powered but not charging" state when the
++	 * fuel-gauge reading or thermal policy is unavailable.
++	 */
++	bq24160_set_charging(bq, false);
++	return bq24160_update_control(bq, BQ24160_CTRL_CE,
++				       BQ24160_CTRL_CE);
++}
++
++static const unsigned int bq24160_usb_limits[] = {
++	100000, 150000, 500000, 800000, 900000, 1500000,
++};
++
++static int bq24160_usb_code(unsigned int ua)
++{
++	/* BQ24160 IUSB encodings: 100, 150, 500, 800, 900, 1500 mA. */
++	if (ua >= 1500000)
++		return 5;
++	if (ua >= 900000)
++		return 4;
++	if (ua >= 800000)
++		return 3;
++	if (ua >= 500000)
++		return 2;
++	if (ua >= 150000)
++		return 1;
++	return 0;
++}
++
++/* Known advertised limits still take precedence over electrical probing. */
++static unsigned int bq24160_source_limit(struct bq24160 *bq)
++{
++	union power_supply_propval type, source_current;
++	unsigned int limit = bq->opportunistic_usb ? bq->adapter_limit_ua :
++						   bq->safe_usb_limit_ua;
++
++	bq->usb_type = POWER_SUPPLY_USB_TYPE_UNKNOWN;
++	if (power_supply_get_property_from_supplier(bq->psy,
++				POWER_SUPPLY_PROP_USB_TYPE, &type))
++		return limit;
++	if (type.intval != POWER_SUPPLY_USB_TYPE_SDP &&
++	    type.intval != POWER_SUPPLY_USB_TYPE_CDP &&
++	    type.intval != POWER_SUPPLY_USB_TYPE_DCP)
++		return limit;
++	bq->usb_type = type.intval;
++	/* A positively identified USB2 SDP never gets the probing override. */
++	if (type.intval == POWER_SUPPLY_USB_TYPE_SDP)
++		limit = bq->safe_usb_limit_ua;
++	if (power_supply_get_property_from_supplier(bq->psy,
++				POWER_SUPPLY_PROP_CURRENT_MAX, &source_current) ||
++	    source_current.intval < 100000)
++		return limit;
++
++	if (type.intval == POWER_SUPPLY_USB_TYPE_SDP)
++		limit = min_t(unsigned int, source_current.intval, 500000);
++	else
++		limit = min_t(unsigned int, source_current.intval, bq->adapter_limit_ua);
++	return bq24160_usb_limits[bq24160_usb_code(limit)];
++}
++
++static const unsigned int bq24160_in_limits[] = { 1500000, 2500000 };
++
++static int bq24160_select_input(struct bq24160 *bq, unsigned int *status)
++{
++	unsigned int supply;
++	bool cradle = false;
++	int detected, ret;
++
++	ret = bq24160_read(bq, BQ24160_REG_BR_STATUS, &supply);
++	if (ret)
++		return ret;
++	if (bq->cradle_det) {
++		detected = gpiod_get_value_cansleep(bq->cradle_det);
++		if (detected < 0)
++			return detected;
++		cradle = detected &&
++			 (FIELD_GET(BQ24160_BR_IN_STATUS_MASK, supply) == 0 ||
++			  FIELD_GET(BQ24160_BR_IN_STATUS_MASK, supply) == 2);
++	}
++	/* Never adopt a previous session's high limit when switching inputs. */
++	if (cradle != bq->use_cradle) {
++		ret = regmap_update_bits(bq->regmap, BQ24160_REG_VOLTAGE,
++					 BQ24160_IN_LIMIT_2500, 0);
++		if (ret)
++			return ret;
++		ret = bq24160_update_control(bq, BQ24160_CTRL_IUSB_MASK,
++					    bq24160_usb_code(bq->safe_usb_limit_ua) << 4);
++		if (ret)
++			return ret;
++	}
++	/* Selecting a different supply triggers the chip's own safe soft-start. */
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_STATUS,
++				 BQ24160_STATUS_SUPPLY_SEL_USB,
++				 cradle ? 0 : BQ24160_STATUS_SUPPLY_SEL_USB);
++	if (ret)
++		return ret;
++	if (cradle != bq->use_cradle) {
++		bq->source_online = false;
++		bq->use_cradle = cradle;
++	}
++	return bq24160_read(bq, BQ24160_REG_STATUS, status);
++}
++
++static int bq24160_adjust_input(struct bq24160 *bq, unsigned int status)
++{
++	const unsigned int *limits = bq->use_cradle ? bq24160_in_limits :
++						    bq24160_usb_limits;
++	unsigned int count = bq->use_cradle ? ARRAY_SIZE(bq24160_in_limits) :
++						ARRAY_SIZE(bq24160_usb_limits);
++	unsigned int supply, supply_state, dpm, ceiling, code;
++	bool online;
++	int ret;
++
++	ret = bq24160_read(bq, BQ24160_REG_BR_STATUS, &supply);
++	if (ret)
++		return ret;
++	ret = bq24160_read(bq, BQ24160_REG_DPM, &dpm);
++	if (ret)
++		return ret;
++
++	supply_state = bq->use_cradle ?
++		FIELD_GET(BQ24160_BR_IN_STATUS_MASK, supply) :
++		FIELD_GET(BQ24160_BR_USB_STATUS_MASK, supply);
++	/* A weak source remains the same session: do not retry its failed step. */
++	online = supply_state == 0 || supply_state == 2;
++	ceiling = bq->use_cradle ? min(bq->cradle_max_ua, bq->cradle_request_ua) :
++				 min(bq24160_source_limit(bq), bq->input_request_ua);
++	if (!online || !bq->source_online || ceiling != bq->source_ceiling_ua) {
++		bq->input_limit_ua = bq->use_cradle ? limits[0] :
++					min(bq->safe_usb_limit_ua, ceiling);
++		bq->learned_limit_ua = ceiling;
++		bq->input_limited = false;
++		bq->input_step_after = jiffies + msecs_to_jiffies(2000);
++	}
++	bq->source_online = online;
++	bq->source_ceiling_ua = ceiling;
++	if (!online)
++		return 0;
++
++	code = bq->use_cradle ? (bq->input_limit_ua >= 2500000) :
++				bq24160_usb_code(bq->input_limit_ua);
++	if ((dpm & BQ24160_DPM_ACTIVE) || supply_state == 2) {
++		/* At IN's lowest 1.5 A setting hardware DPM reduces actual draw. */
++		if (supply_state == 2 || time_after_eq(jiffies, bq->input_step_after)) {
++			if (code)
++				code--;
++			bq->input_limit_ua = limits[code];
++			bq->learned_limit_ua = bq->input_limit_ua;
++			bq->input_limited = true;
++			bq->input_step_after = jiffies + msecs_to_jiffies(2000);
++		}
++	} else if (!bq->input_limited &&
++		   FIELD_GET(BQ24160_STATUS_STAT_MASK, status) ==
++			(bq->use_cradle ? BQ24160_STAT_CHARGING_IN :
++					  BQ24160_STAT_CHARGING_USB) &&
++		   time_after_eq(jiffies, bq->input_step_after) &&
++		   bq->input_limit_ua < bq->learned_limit_ua) {
++		if (code + 1 < count && limits[code + 1] <= bq->learned_limit_ua)
++			bq->input_limit_ua = limits[code + 1];
++		bq->input_step_after = jiffies + msecs_to_jiffies(2000);
++	}
++	return 0;
++}
++
++static int bq24160_program_input(struct bq24160 *bq)
++{
++	int ret;
++
++	ret = bq24160_update_control(bq,
++				    BQ24160_CTRL_EN_STAT | BQ24160_CTRL_TE,
++				    BQ24160_CTRL_EN_STAT | BQ24160_CTRL_TE);
++	if (ret)
++		return ret;
++	if (bq->use_cradle)
++		return regmap_update_bits(bq->regmap, BQ24160_REG_VOLTAGE,
++					 BQ24160_IN_LIMIT_2500,
++					 bq->input_limit_ua >= 2500000 ?
++					 BQ24160_IN_LIMIT_2500 : 0);
++	return bq24160_update_control(bq, BQ24160_CTRL_IUSB_MASK,
++				     bq24160_usb_code(bq->input_limit_ua) << 4);
++}
++
++static int bq24160_set_limits(struct bq24160 *bq, unsigned int charge_ua)
++{
++	unsigned int vcode, icode, tcode, actual_ua;
++	bool low_charge;
++	int ret;
++
++	/* Datasheet values used by the exact Fuji implementation. */
++	vcode = clamp_val((bq->charge_voltage_uv / 1000 - 3500) / 20, 0, 63);
++	/*
++	 * LOW_CHG halves the programmed fast-charge current.  It is required for
++	 * the source-verified 400 mA 45..55 C Hikari thermal derate: normal mode
++	 * bottoms out at 550 mA.  Round down so hardware never exceeds policy.
++	 */
++	if (charge_ua < 550000) {
++		low_charge = true;
++		icode = clamp_val(((charge_ua / 1000) * 2 - 550) / 75, 0, 31);
++		actual_ua = (550 + icode * 75) * 500;
++	} else {
++		low_charge = false;
++		icode = clamp_val((charge_ua / 1000 - 550) / 75, 0, 31);
++		actual_ua = (550 + icode * 75) * 1000;
++	}
++	if (actual_ua > charge_ua)
++		return -EINVAL;
++	tcode = clamp_val((bq->term_current_ua / 1000 - 50) / 50, 0, 7);
++
++	/* Preserve the Fuji back-boost avoidance sequence while programming. */
++	ret = bq24160_update_control(bq,
++				      BQ24160_CTRL_HZ | BQ24160_CTRL_CE,
++				      BQ24160_CTRL_HZ | BQ24160_CTRL_CE);
++	if (ret)
++		return ret;
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_VOLTAGE,
++				 BQ24160_VOLTAGE_MASK, vcode << 2);
++	if (ret)
++		return ret;
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_CURRENT,
++				 BQ24160_CURRENT_ICHG_MASK | BQ24160_CURRENT_ITERM_MASK,
++				 icode << 3 | tcode);
++	if (ret)
++		return ret;
++	return regmap_update_bits(bq->regmap, BQ24160_REG_NTC,
++				 BQ24160_NTC_LOW_CHG,
++				 low_charge ? BQ24160_NTC_LOW_CHG : 0);
++}
++
++static int bq24160_gauge_property(struct bq24160 *bq,
++				  enum power_supply_property prop, int *value)
++{
++	union power_supply_propval val;
++	int ret;
++
++	ret = power_supply_get_property(bq->fuel_gauge, prop, &val);
++	if (!ret)
++		*value = val.intval;
++	return ret;
++}
++
++static int bq24160_sync_locked(struct bq24160 *bq)
++{
++	unsigned int status, vendor;
++	int temp, voltage, charge_ua, stat, ret;
++
++	ret = bq24160_read(bq, BQ24160_REG_STATUS, &status);
++	if (ret)
++		return ret;
++	/* This bit is a watchdog kick, and is safe for adopted boot charging. */
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_STATUS,
++				 BQ24160_STATUS_TMR_RST, BQ24160_STATUS_TMR_RST);
++	if (ret)
++		return ret;
++	/* A charger watchdog reset also resets the DPM threshold. */
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_DPM,
++				 BQ24160_DPM_USB_MASK | BQ24160_DPM_IN_MASK,
++				 ((bq->vindpm_uv - 4200000) / 80000) << 3 |
++				 (bq->in_vindpm_uv - 4200000) / 80000);
++	if (ret)
++		return ret;
++	/* Host mode deliberately disconnects the USB charger input from VBUS. */
++	if (bq->otg_locked)
++		return regmap_update_bits(bq->regmap, BQ24160_REG_BR_STATUS,
++					  BQ24160_BR_STATUS_OTG_LOCK,
++					  BQ24160_BR_STATUS_OTG_LOCK);
++	ret = bq24160_select_input(bq, &status);
++	if (ret)
++		return ret;
++	ret = bq24160_adjust_input(bq, status);
++	if (ret) {
++		bq->input_limit_ua = bq->use_cradle ? 1500000 :
++				min(bq->safe_usb_limit_ua,
++				    min(bq->input_request_ua, bq24160_source_limit(bq)));
++		bq24160_program_input(bq);
++		return ret;
++	}
++	ret = bq24160_program_input(bq);
++	if (ret)
++		return ret;
++
++	stat = FIELD_GET(BQ24160_STATUS_STAT_MASK, status);
++	/*
++	 * FAULT is a read-to-clear history field, whereas STAT describes the
++	 * current state.  A recovered fault can therefore be observed together
++	 * with USB_READY (the Hikari boot handoff has produced 0x27).  The chip
++	 * reports an active fault through STAT_FAULT, so do not prevent a new
++	 * charge cycle solely because a stale fault code accompanied READY.
++	 */
++	if (stat == BQ24160_STAT_FAULT ||
++	    (stat != BQ24160_STAT_USB_READY && stat != BQ24160_STAT_IN_READY &&
++	     stat != BQ24160_STAT_CHARGING_USB &&
++	     stat != BQ24160_STAT_CHARGING_IN && stat != BQ24160_STAT_DONE))
++		return bq24160_disable(bq);
++	/*
++	 * Hardware termination already stopped the charge cycle.  Do not toggle
++	 * CE here: doing so changes STAT away from DONE and the next watchdog pass
++	 * would immediately program and start a new cycle.
++	 */
++	if (stat == BQ24160_STAT_DONE) {
++		bq24160_set_charging(bq, false);
++		return 0;
++	}
++
++	ret = bq24160_gauge_property(bq, POWER_SUPPLY_PROP_TEMP, &temp);
++	if (ret)
++		return bq24160_disable(bq);
++	ret = bq24160_gauge_property(bq, POWER_SUPPLY_PROP_VOLTAGE_NOW, &voltage);
++	if (ret)
++		return bq24160_disable(bq);
++
++	if (temp < bq->cold_degc * 10 || temp > bq->hot_degc * 10)
++		return bq24160_disable(bq);
++	charge_ua = temp > bq->warm_degc * 10 ? 400000 : bq->charge_limit_ua;
++
++	ret = bq24160_read(bq, BQ24160_REG_VENDOR, &vendor);
++	if (ret)
++		return ret;
++	/*
++	 * Sony applies the revision-2.3 4.0/3.9 V restriction only from the
++	 * battery algorithm's WARM state (45..55 C), not during normal charging.
++	 */
++	if (FIELD_GET(BQ24160_VENDOR_REV_MASK, vendor) == 5 &&
++	    temp > bq->warm_degc * 10) {
++		if (voltage >= 4000000)
++			bq->rev23_hold = true;
++		else if (voltage <= 3900000)
++			bq->rev23_hold = false;
++		if (bq->rev23_hold)
++			return bq24160_disable(bq);
++	} else
++		bq->rev23_hold = false;
++	/*
++	 * A watchdog refresh must not restart a healthy charge cycle.  Re-enter
++	 * the HZ/CE programming sequence only when charging needs to start or
++	 * when thermal policy selected a different fast-charge current.
++	 */
++	if (bq->charging && (stat == BQ24160_STAT_CHARGING_USB ||
++			     stat == BQ24160_STAT_CHARGING_IN) &&
++	    bq->programmed_charge_ua == charge_ua)
++		return 0;
++
++	ret = bq24160_set_limits(bq, charge_ua);
++	if (ret)
++		return ret;
++	/* HZ/CE release is delayed to retain Sony's back-boost avoidance intent. */
++	msleep(220);
++	ret = bq24160_update_control(bq,
++				      BQ24160_CTRL_HZ | BQ24160_CTRL_CE, 0);
++	if (!ret) {
++		bq->programmed_charge_ua = charge_ua;
++		bq24160_set_charging(bq, true);
++	}
++	return ret;
++}
++
++static void bq24160_sync(struct bq24160 *bq)
++{
++	int ret;
++
++	mutex_lock(&bq->lock);
++	ret = bq24160_sync_locked(bq);
++	/* Recheck a newly raised final step before falling back to watchdog rate. */
++	if (!ret && bq->source_online && !bq->input_limited && bq->charging &&
++	    (bq->input_limit_ua < bq->learned_limit_ua ||
++	     time_before(jiffies, bq->input_step_after)))
++		mod_delayed_work(system_wq, &bq->status_work,
++				 msecs_to_jiffies(2000));
++	mutex_unlock(&bq->lock);
++	if (ret)
++		dev_warn_ratelimited(bq->dev, "charger policy update failed: %d\n", ret);
++	power_supply_changed(bq->psy);
++	if (bq->cradle_psy)
++		power_supply_changed(bq->cradle_psy);
++}
++
++static void bq24160_watchdog_work(struct work_struct *work)
++{
++	struct bq24160 *bq = container_of(to_delayed_work(work), struct bq24160,
++					  watchdog_work);
++
++	bq24160_sync(bq);
++	schedule_delayed_work(&bq->watchdog_work, msecs_to_jiffies(BQ24160_WATCHDOG_MS));
++}
++
++static void bq24160_status_work(struct work_struct *work)
++{
++	struct bq24160 *bq = container_of(to_delayed_work(work), struct bq24160,
++					  status_work);
++
++	bq24160_sync(bq);
++	schedule_delayed_work(&bq->status_work, msecs_to_jiffies(BQ24160_STATUS_MS));
++}
++
++static irqreturn_t bq24160_irq_thread(int irq, void *data)
++{
++	struct bq24160 *bq = data;
++
++	pm_wakeup_event(bq->dev, 500);
++	mod_delayed_work(system_wq, &bq->status_work, msecs_to_jiffies(300));
++	return IRQ_HANDLED;
++}
++
++static int bq24160_get_property(struct power_supply *psy,
++				enum power_supply_property prop,
++				union power_supply_propval *val)
++{
++	struct bq24160 *bq = power_supply_get_drvdata(psy);
++	unsigned int status, supply;
++	bool cradle = psy == bq->cradle_psy;
++	int detected, ret;
++
++	ret = bq24160_read(bq, BQ24160_REG_STATUS, &status);
++	if (ret)
++		return ret;
++	switch (prop) {
++	case POWER_SUPPLY_PROP_ONLINE:
++		ret = bq24160_read(bq, BQ24160_REG_BR_STATUS, &supply);
++		if (ret)
++			return ret;
++		if (cradle) {
++			detected = gpiod_get_value_cansleep(bq->cradle_det);
++			if (detected < 0)
++				return detected;
++			val->intval = detected &&
++				!FIELD_GET(BQ24160_BR_IN_STATUS_MASK, supply);
++		} else
++			val->intval = !bq->otg_locked &&
++				!FIELD_GET(BQ24160_BR_USB_STATUS_MASK, supply);
++		return 0;
++	case POWER_SUPPLY_PROP_STATUS:
++		if (cradle != bq->use_cradle)
++			val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
++		else if (FIELD_GET(BQ24160_STATUS_STAT_MASK, status) == BQ24160_STAT_DONE)
++			val->intval = POWER_SUPPLY_STATUS_FULL;
++		else
++			val->intval = bq->charging ? POWER_SUPPLY_STATUS_CHARGING :
++				POWER_SUPPLY_STATUS_NOT_CHARGING;
++		return 0;
++	case POWER_SUPPLY_PROP_HEALTH:
++		val->intval = FIELD_GET(BQ24160_STATUS_STAT_MASK, status) ==
++			BQ24160_STAT_FAULT ?
++			POWER_SUPPLY_HEALTH_UNSPEC_FAILURE : POWER_SUPPLY_HEALTH_GOOD;
++		return 0;
++	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX:
++		val->intval = bq->charge_limit_ua;
++		return 0;
++	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE_MAX:
++		val->intval = bq->charge_voltage_uv;
++		return 0;
++	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
++		if (cradle) {
++			ret = bq24160_read(bq, BQ24160_REG_VOLTAGE, &status);
++			if (ret)
++				return ret;
++			val->intval = status & BQ24160_IN_LIMIT_2500 ? 2500000 : 1500000;
++			return 0;
++		}
++		ret = bq24160_read(bq, BQ24160_REG_CONTROL, &status);
++		if (ret)
++			return ret;
++		status = FIELD_GET(BQ24160_CTRL_IUSB_MASK, status);
++		if (status >= ARRAY_SIZE(bq24160_usb_limits))
++			return -EIO;
++		val->intval = bq24160_usb_limits[status];
++		return 0;
++	case POWER_SUPPLY_PROP_USB_TYPE:
++		val->intval = bq->usb_type;
++		return 0;
++	default:
++		return -EINVAL;
++	}
++}
++
++static int bq24160_set_property(struct power_supply *psy,
++				enum power_supply_property prop,
++				const union power_supply_propval *val)
++{
++	struct bq24160 *bq = power_supply_get_drvdata(psy);
++	int ret;
++
++	if (prop != POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT)
++		return -EINVAL;
++	if (psy == bq->cradle_psy) {
++		if (val->intval != 1500000 && val->intval != 2500000)
++			return -EINVAL;
++	} else if (val->intval < 100000 || val->intval > 1500000)
++		return -EINVAL;
++
++	mutex_lock(&bq->lock);
++	if (psy == bq->cradle_psy)
++		bq->cradle_request_ua = val->intval;
++	else
++		bq->input_request_ua = bq24160_usb_limits[bq24160_usb_code(val->intval)];
++	ret = bq24160_sync_locked(bq);
++	mutex_unlock(&bq->lock);
++	mod_delayed_work(system_wq, &bq->status_work, msecs_to_jiffies(2000));
++	power_supply_changed(psy);
++	return ret;
++}
++
++static int bq24160_property_is_writeable(struct power_supply *psy,
++				       enum power_supply_property prop)
++{
++	return prop == POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT;
++}
++
++static void bq24160_external_power_changed(struct power_supply *psy)
++{
++	struct bq24160 *bq = power_supply_get_drvdata(psy);
++
++	mod_delayed_work(system_wq, &bq->status_work, 0);
++}
++
++static const struct regmap_config bq24160_regmap_config = {
++	.reg_bits = 8,
++	.val_bits = 8,
++	.max_register = 0x07,
++};
++
++static int bq24160_otg_guard_enable(struct regulator_dev *rdev)
++{
++	struct bq24160 *bq = rdev_get_drvdata(rdev);
++	int ret;
++
++	mutex_lock(&bq->lock);
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_BR_STATUS,
++				 BQ24160_BR_STATUS_OTG_LOCK,
++				 BQ24160_BR_STATUS_OTG_LOCK);
++	if (!ret) {
++		bq->otg_locked = true;
++		bq->source_online = false;
++		ret = bq24160_disable(bq);
++		if (ret) {
++			bq->otg_locked = false;
++			regmap_update_bits(bq->regmap, BQ24160_REG_BR_STATUS,
++					   BQ24160_BR_STATUS_OTG_LOCK, 0);
++		}
++	}
++	mutex_unlock(&bq->lock);
++
++	return ret;
++}
++
++static int bq24160_otg_guard_disable(struct regulator_dev *rdev)
++{
++	struct bq24160 *bq = rdev_get_drvdata(rdev);
++	int ret;
++
++	mutex_lock(&bq->lock);
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_BR_STATUS,
++				 BQ24160_BR_STATUS_OTG_LOCK, 0);
++	if (!ret)
++		bq->otg_locked = false;
++	mutex_unlock(&bq->lock);
++	if (!ret)
++		mod_delayed_work(system_wq, &bq->status_work, 0);
++
++	return ret;
++}
++
++static int bq24160_otg_guard_is_enabled(struct regulator_dev *rdev)
++{
++	struct bq24160 *bq = rdev_get_drvdata(rdev);
++	unsigned int val;
++	int ret;
++
++	ret = regmap_read(bq->regmap, BQ24160_REG_BR_STATUS, &val);
++	return ret ? ret : !!(val & BQ24160_BR_STATUS_OTG_LOCK);
++}
++
++static const struct regulator_ops bq24160_otg_guard_ops = {
++	.enable = bq24160_otg_guard_enable,
++	.disable = bq24160_otg_guard_disable,
++	.is_enabled = bq24160_otg_guard_is_enabled,
++};
++
++static const struct regulator_desc bq24160_otg_guard_desc = {
++	.name = "usb-otg-guard",
++	.of_match = "usb-otg-guard",
++	.type = REGULATOR_VOLTAGE,
++	.owner = THIS_MODULE,
++	.ops = &bq24160_otg_guard_ops,
++	.fixed_uV = 5000000,
++	.n_voltages = 1,
++};
++
++static int bq24160_probe(struct i2c_client *client)
++{
++	struct power_supply_config psy_cfg = {};
++	struct regulator_config regulator_cfg = {};
++	struct regulator_dev *rdev;
++	struct power_supply_desc *cradle_desc;
++	struct bq24160 *bq;
++	int ret;
++
++	bq = devm_kzalloc(&client->dev, sizeof(*bq), GFP_KERNEL);
++	if (!bq)
++		return -ENOMEM;
++	bq->dev = &client->dev;
++	bq->regmap = devm_regmap_init_i2c(client, &bq24160_regmap_config);
++	if (IS_ERR(bq->regmap))
++		return PTR_ERR(bq->regmap);
++	bq->fuel_gauge = devm_power_supply_get_by_reference(&client->dev, "fuel-gauge");
++	if (IS_ERR(bq->fuel_gauge))
++		return dev_err_probe(&client->dev, PTR_ERR(bq->fuel_gauge), "fuel gauge unavailable\n");
++
++	device_property_read_u32(&client->dev, "ti,usb-input-current-limit-microamp",
++				&bq->input_limit_ua);
++	device_property_read_u32(&client->dev, "ti,constant-charge-current-max-microamp", &bq->charge_limit_ua);
++	device_property_read_u32(&client->dev, "ti,constant-charge-voltage-max-microvolt", &bq->charge_voltage_uv);
++	device_property_read_u32(&client->dev, "ti,charge-term-current-microamp", &bq->term_current_ua);
++	if (!bq->input_limit_ua || bq->input_limit_ua > 500000 || !bq->charge_limit_ua ||
++	    !bq->charge_voltage_uv || !bq->term_current_ua)
++		return dev_err_probe(&client->dev, -EINVAL, "unsafe or incomplete charging policy\n");
++	bq->safe_usb_limit_ua = bq24160_usb_limits[bq24160_usb_code(bq->input_limit_ua)];
++	bq->input_limit_ua = bq->safe_usb_limit_ua;
++	bq->adapter_limit_ua = 1500000;
++	device_property_read_u32(&client->dev,
++				"ti,adapter-input-current-limit-microamp",
++				&bq->adapter_limit_ua);
++	bq->vindpm_uv = 4520000;
++	device_property_read_u32(&client->dev, "ti,usb-vindpm-microvolt", &bq->vindpm_uv);
++	if (bq->adapter_limit_ua < 500000 || bq->adapter_limit_ua > 1500000 ||
++	    bq->vindpm_uv < 4200000 || bq->vindpm_uv > 4760000 ||
++	    (bq->vindpm_uv - 4200000) % 80000)
++		return dev_err_probe(&client->dev, -EINVAL, "invalid input DPM policy\n");
++	bq->input_request_ua = bq->adapter_limit_ua;
++	bq->opportunistic_usb = device_property_read_bool(&client->dev,
++							"ti,opportunistic-usb-input");
++	bq->cradle_max_ua = 2500000;
++	bq->in_vindpm_uv = 4520000;
++	device_property_read_u32(&client->dev, "ti,cradle-input-current-limit-microamp",
++				&bq->cradle_max_ua);
++	device_property_read_u32(&client->dev, "ti,in-vindpm-microvolt",
++				&bq->in_vindpm_uv);
++	if ((bq->cradle_max_ua != 1500000 && bq->cradle_max_ua != 2500000) ||
++	    bq->in_vindpm_uv < 4200000 || bq->in_vindpm_uv > 4760000 ||
++	    (bq->in_vindpm_uv - 4200000) % 80000)
++		return dev_err_probe(&client->dev, -EINVAL, "invalid IN input policy\n");
++	bq->cradle_request_ua = bq->cradle_max_ua;
++	bq->cradle_det = devm_gpiod_get_optional(&client->dev, "cradle-detect", GPIOD_IN);
++	if (IS_ERR(bq->cradle_det))
++		return dev_err_probe(&client->dev, PTR_ERR(bq->cradle_det),
++				     "cradle detection unavailable\n");
++	bq->cold_degc = 5;
++	bq->warm_degc = 45;
++	bq->hot_degc = 55;
++	mutex_init(&bq->lock);
++	INIT_DELAYED_WORK(&bq->watchdog_work, bq24160_watchdog_work);
++	INIT_DELAYED_WORK(&bq->status_work, bq24160_status_work);
++
++	bq->psy_desc.name = "bq24160-charger";
++	bq->psy_desc.type = POWER_SUPPLY_TYPE_USB;
++	bq->psy_desc.properties = bq24160_props;
++	bq->psy_desc.num_properties = ARRAY_SIZE(bq24160_props);
++	bq->psy_desc.get_property = bq24160_get_property;
++	bq->psy_desc.set_property = bq24160_set_property;
++	bq->psy_desc.property_is_writeable = bq24160_property_is_writeable;
++	bq->psy_desc.external_power_changed = bq24160_external_power_changed;
++	bq->psy_desc.usb_types = BIT(POWER_SUPPLY_USB_TYPE_UNKNOWN) |
++				 BIT(POWER_SUPPLY_USB_TYPE_SDP) |
++				 BIT(POWER_SUPPLY_USB_TYPE_CDP) |
++				 BIT(POWER_SUPPLY_USB_TYPE_DCP);
++	psy_cfg.drv_data = bq;
++	psy_cfg.fwnode = dev_fwnode(&client->dev);
++	bq->psy = devm_power_supply_register(&client->dev, &bq->psy_desc, &psy_cfg);
++	if (IS_ERR(bq->psy))
++		return PTR_ERR(bq->psy);
++
++	if (bq->cradle_det) {
++		cradle_desc = devm_kmemdup(&client->dev, &bq->psy_desc,
++					  sizeof(*cradle_desc), GFP_KERNEL);
++		if (!cradle_desc)
++			return -ENOMEM;
++		cradle_desc->name = "bq24160-cradle";
++		cradle_desc->type = POWER_SUPPLY_TYPE_MAINS;
++		/* USB_TYPE is the last property and has no meaning for the IN input. */
++		cradle_desc->num_properties--;
++		cradle_desc->usb_types = 0;
++		bq->cradle_psy = devm_power_supply_register(&client->dev, cradle_desc, &psy_cfg);
++		if (IS_ERR(bq->cradle_psy))
++			return dev_err_probe(&client->dev, PTR_ERR(bq->cradle_psy),
++					     "failed to register cradle supply\n");
++	}
++
++	/* The USB and cradle voltage-regulation loops have separate thresholds. */
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_DPM,
++				 BQ24160_DPM_USB_MASK | BQ24160_DPM_IN_MASK,
++				 ((bq->vindpm_uv - 4200000) / 80000) << 3 |
++				 (bq->in_vindpm_uv - 4200000) / 80000);
++	if (ret)
++		return dev_err_probe(&client->dev, ret, "failed to set USB DPM\n");
++
++	/* Sony's USB sink setup explicitly selects USB and releases OTG lock. */
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_STATUS,
++				 BQ24160_STATUS_SUPPLY_SEL_USB,
++				 BQ24160_STATUS_SUPPLY_SEL_USB);
++	if (ret)
++		return dev_err_probe(&client->dev, ret, "failed to select USB input\n");
++	ret = regmap_update_bits(bq->regmap, BQ24160_REG_BR_STATUS,
++				 BQ24160_BR_STATUS_OTG_LOCK, 0);
++	if (ret)
++		return dev_err_probe(&client->dev, ret, "failed to release OTG lock\n");
++
++	regulator_cfg.dev = &client->dev;
++	regulator_cfg.driver_data = bq;
++	regulator_cfg.of_node = client->dev.of_node;
++	rdev = devm_regulator_register(&client->dev,
++				       &bq24160_otg_guard_desc, &regulator_cfg);
++	if (IS_ERR(rdev))
++		return dev_err_probe(&client->dev, PTR_ERR(rdev),
++				     "failed to register OTG guard\n");
++
++	if (client->irq > 0) {
++		ret = devm_request_threaded_irq(&client->dev, client->irq, NULL,
++						bq24160_irq_thread, IRQF_ONESHOT | IRQF_TRIGGER_RISING |
++						IRQF_TRIGGER_FALLING, dev_name(&client->dev), bq);
++		if (ret)
++			return dev_err_probe(&client->dev, ret, "failed to request IRQ\n");
++	}
++	/*
++	 * The charger's status IRQ also reports IN insertion/removal. Sample the
++	 * cradle GPIO there and at every watchdog tick; no second IRQ is needed.
++	 */
++	device_init_wakeup(&client->dev, true);
++	i2c_set_clientdata(client, bq);
++	/* Immediately adopt valid boot charging, then maintain its watchdog. */
++	schedule_delayed_work(&bq->watchdog_work, 0);
++	schedule_delayed_work(&bq->status_work, msecs_to_jiffies(BQ24160_STATUS_MS));
++	return 0;
++}
++
++static void bq24160_remove(struct i2c_client *client)
++{
++	struct bq24160 *bq = i2c_get_clientdata(client);
++
++	cancel_delayed_work_sync(&bq->watchdog_work);
++	cancel_delayed_work_sync(&bq->status_work);
++	bq24160_disable(bq);
++}
++
++/*
++ * Active charging holds the device wakeup source so the watchdog worker can
++ * run.  If suspend reaches this callback, charging is already inactive; keep
++ * CE disabled while leaving the USB power path available.
++ */
++static int bq24160_suspend(struct device *dev)
++{
++	struct bq24160 *bq = i2c_get_clientdata(to_i2c_client(dev));
++
++	cancel_delayed_work_sync(&bq->watchdog_work);
++	cancel_delayed_work_sync(&bq->status_work);
++	mutex_lock(&bq->lock);
++	bq24160_disable(bq);
++	mutex_unlock(&bq->lock);
++	return 0;
++}
++
++static int bq24160_resume(struct device *dev)
++{
++	struct bq24160 *bq = i2c_get_clientdata(to_i2c_client(dev));
++
++	schedule_delayed_work(&bq->watchdog_work, 0);
++	schedule_delayed_work(&bq->status_work, msecs_to_jiffies(BQ24160_STATUS_MS));
++	return 0;
++}
++
++static DEFINE_SIMPLE_DEV_PM_OPS(bq24160_pm_ops, bq24160_suspend, bq24160_resume);
++
++static const struct of_device_id bq24160_of_match[] = {
++	{ .compatible = "ti,bq24160" },
++	{}
++};
++MODULE_DEVICE_TABLE(of, bq24160_of_match);
++
++static struct i2c_driver bq24160_driver = {
++	.driver = {
++		.name = "bq24160",
++		.of_match_table = bq24160_of_match,
++		.pm = pm_sleep_ptr(&bq24160_pm_ops),
++	},
++	.probe = bq24160_probe,
++	.remove = bq24160_remove,
++};
++module_i2c_driver(bq24160_driver);
++
++MODULE_AUTHOR("Xperia Hikari Linux Project");
++MODULE_DESCRIPTION("TI BQ24160 power-path charger driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/power/supply/bq27xxx_battery.c b/drivers/power/supply/bq27xxx_battery.c
+index 01c9ec1116fa09146fa61796dce171ba6d32d483..22a3ff8c3a648673fc2db37fc48884443c61adbd 100644
+--- a/drivers/power/supply/bq27xxx_battery.c
++++ b/drivers/power/supply/bq27xxx_battery.c
+@@ -53,12 +53,18 @@
+ #include <linux/power_supply.h>
+ #include <linux/slab.h>
+ #include <linux/of.h>
++#include <linux/property.h>
+ 
+ #include <linux/power/bq27xxx_battery.h>
+ 
+ #define BQ27XXX_MANUFACTURER	"Texas Instruments"
+ 
+ /* BQ27XXX Flags */
++#define BQ27520_FLAG_BAT_DET	BIT(3)
++#define BQ27520_CTRL_BAT_INSERT	0x000d
++#define BQ27520_CTRL_INITCOMP	BIT(7)
++#define BQ27520_CTRL_QEN	BIT(0)
++
+ #define BQ27XXX_FLAG_DSC	BIT(0)
+ #define BQ27XXX_FLAG_SOCF	BIT(1) /* State-of-Charge threshold final */
+ #define BQ27XXX_FLAG_SOC1	BIT(2) /* State-of-Charge threshold 1 */
+@@ -1912,6 +1918,52 @@ static int bq27xxx_battery_current_and_status(
+ 	return 0;
+ }
+ 
++/*
++ * Boards without hardware battery insertion detection must tell the gauge
++ * when their permanently connected battery is present. Without BAT_INSERT,
++ * a powered gauge can report an uninitialised 100%/FC at an empty voltage.
++ * Do not reset, unseal or modify the battery's learned data.
++ */
++static int bq27520_battery_insert(struct bq27xxx_device_info *di, int flags)
++{
++	int ret, status, i;
++
++	if (flags < 0 || (flags & BQ27520_FLAG_BAT_DET) ||
++	    di->chip != BQ27520G1 ||
++	    !device_property_read_bool(di->dev, "ti,host-battery-insertion"))
++		return flags;
++
++	ret = bq27xxx_write(di, BQ27XXX_REG_CTRL,
++			    BQ27520_CTRL_BAT_INSERT, false);
++	if (ret < 0)
++		return ret;
++
++	/* Wait for gauging to start before publishing any state of charge. */
++	for (i = 0; i < 50; i++) {
++		msleep(100);
++		ret = bq27xxx_write(di, BQ27XXX_REG_CTRL, 0, false);
++		if (ret < 0)
++			return ret;
++		usleep_range(1000, 2000);
++		status = bq27xxx_read(di, BQ27XXX_REG_CTRL, false);
++		if (status < 0)
++			return status;
++		if ((status & (BQ27520_CTRL_INITCOMP | BQ27520_CTRL_QEN)) ==
++		    (BQ27520_CTRL_INITCOMP | BQ27520_CTRL_QEN)) {
++			flags = bq27xxx_read(di, BQ27XXX_REG_FLAGS, false);
++			if (flags < 0)
++				return flags;
++			if (flags & BQ27520_FLAG_BAT_DET) {
++				dev_info(di->dev, "host battery insertion complete\n");
++				return flags;
++			}
++		}
++	}
++
++	dev_warn_ratelimited(di->dev, "battery insertion did not initialise gauge\n");
++	return -ETIMEDOUT;
++}
++
+ static void bq27xxx_battery_update_unlocked(struct bq27xxx_device_info *di)
+ {
+ 	union power_supply_propval status = di->last_status;
+@@ -1919,6 +1971,7 @@ static void bq27xxx_battery_update_unlocked(struct bq27xxx_device_info *di)
+ 	bool has_singe_flag = di->opts & BQ27XXX_O_ZERO;
+ 
+ 	cache.flags = bq27xxx_read(di, BQ27XXX_REG_FLAGS, has_singe_flag);
++	cache.flags = bq27520_battery_insert(di, cache.flags);
+ 	if (di->chip == BQ27000 && (cache.flags & 0xff) == 0xff)
+ 		cache.flags = -ENODEV; /* bq27000 hdq read error */
+ 	if (cache.flags >= 0) {
+-- 
+2.53.0
+
