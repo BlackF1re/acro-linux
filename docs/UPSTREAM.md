@@ -16,7 +16,7 @@ MSM8660-specific calibration/topology described by the Sony BSP. It is not an
 accepted upstream change. Its temperature/hwmon path is hardware-verified, but
 its trip/IRQ policy is not yet accepted or physically exercised. MSM8660 cpufreq is
 not papered over with `cpufreq-dt`: upstream still lacks the required Scorpion
-SCPLL/L2/regulator/RPM coordination, so that support remains research work.
+SCPLL/L2/regulator/RPM coordination, the local integration now provides this support, with physical acceptance tracked separately.
 
 Before submission, shared changes must be split by subsystem, validated
 against current bindings and maintainers' trees, and checked for newer public

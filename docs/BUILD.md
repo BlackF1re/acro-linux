@@ -74,7 +74,7 @@ scripts/materialize-hikari-kernel.sh /path/to/new/linux-hikari
 KERNEL_SRC=/path/to/new/linux-hikari scripts/build-hikari-debian-kernel.sh
 ```
 
-`kernel/patches/post-series` imports the complete source integration commit
+`kernel/patches/post-series` carries a subsystem split of the complete source integration commit
 `f7a6e62ff206edff9cee8c04226e85f1102a9a85` after the baseline Hikari
 corrections. Its original author and message are preserved in the mail patch.
 The original commit has a verified SSH ED25519 signature, fingerprint
@@ -107,3 +107,11 @@ reversible runtime Pixman recovery option.
 
 BOOT and production SD bundles are not changed by source publication.
 Historical test worktrees remain local references, not release branches.
+
+## Maintenance patch audit
+
+See [PATCH-AUDIT.md](PATCH-AUDIT.md). The original integration export is
+archived; patches 0080–0085 preserve its exact tree. Patch 0086 only quiets
+startup diagnostics. Root access, diagnostic packages, BOOT and GPU hardware
+sequencing are retained. No maintenance kernel has been deployed as part of
+this source cleanup.

@@ -26,6 +26,6 @@ Until `series` contains the exported current worktree, the materializer will
 fail rather than silently construct an incomplete Hikari kernel.
 
 `post-series` is applied after the materializer's baseline corrections and
-before installing the canonical DTS. It contains the 2026-10-04 complete
-hardware integration exported from the signed kernel commit. Keep this order:
+before installing the canonical DTS. It contains the 2026-10-04 hardware integration, split by subsystem from
+the signed kernel commit, followed by the logging-only cleanup. Keep this order:
 the integration depends on those corrections and must not precede them.

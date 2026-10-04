@@ -1,0 +1,68 @@
+commit	subject	classification	dependent_patch
+b05c80f8e51d677289042c6d2544a8ecdda1ed8d	clk: qcom: gdsc: add LEGACY_FOOTSWITCH support for MSM8x60	DEPENDENCY	clk: qcom: gdsc: add RPM_ALWAYS_ON flag
+c498efce13fabf159cf82f999083d27fe1c376ed	clk: qcom: gdsc: add RPM_ALWAYS_ON flag	CHANGES_FINAL_TREE	-
+6c0a0d9ba2a02ca3cc4191cdbd2725f389bba721	dt-bindings: interconnect: qcom: add msm8660 NoC	DEPENDENCY	interconnect: qcom: add MSM8x60 NoC driver
+7d9020ef1bde62bb72b140a906740d7915118e98	interconnect: qcom: add MSM8x60 NoC driver	CHANGES_FINAL_TREE	-
+b18a637361ceaeac5a19b5489ab2ef3ceeaf7d1c	dt-bindings: clock: qcom: add mmcc-msm8660 clock IDs	CHANGES_FINAL_TREE	-
+802a4a8ba228557a8fa4358dd3de8ebdaec0e71f	dt-bindings: reset: qcom: add mmcc-msm8660 reset IDs	CHANGES_FINAL_TREE	-
+dcd9f5cf90c3198abefda7f939e5b19ef9dfa9ee	clk: qcom: add MSM8x60 MMCC driver	DEPENDENCY	fix: defer MSM8x60 MMCC until RPM is ready
+2e7e5087ce8276081a512ad56fa41801729bb55f	fix: defer MSM8x60 MMCC until RPM is ready	DEPENDENCY	clk: qcom: reproduce the MSM8x60 MDP footswitch sequence
+a9b2e770d7597deda75206fa46b3801cf22eea29	feat: add Hikari DRM display pipeline	DEPENDENCY	fix: use MDP4 clock DT ABI names
+b597681d31b0aef5976a3f10ad973058045b8cf0	fix: defer MSM8x60 PLL2 configuration to consumers	DEPENDENCY	clk: qcom: reproduce the MSM8x60 MDP footswitch sequence
+47c6ab922906a34b7b88c52ef3556f503b333d50	fix: use MDP4 clock DT ABI names	DEPENDENCY	feat: integrate hardware support and MSM8260 DVFS
+687ea68475a37e88135c542bdb560bb9b12e2a7b	fix: correct Hikari DSI clock and PHY setup	DEPENDENCY	fix: correct Hikari display component graph
+a4a4bb6dc2bf4916a018f2e0b6e97e69b37a35bb	feat: add Hikari BQ24160 charging support	DEPENDENCY	power: supply: bq24160: consolidate Hikari charger policy
+2c501550ea96cb274e3cbed90b7167410244730d	power: supply: bq24160: consolidate Hikari charger policy	DEPENDENCY	feat: integrate hardware support and MSM8260 DVFS
+ba1ebfcfde76301953eecb812c2f7a212192d697	fix: correct Hikari display component graph	DEPENDENCY	drm/msm/dsi: start the MSM8x60 45nm PLL
+e54afda7362101883e2a6d1dc8bc5dbae169f426	drm/msm/dsi: select MSM8x60 V2 host configuration	CHANGES_FINAL_TREE	-
+408fed9afea26011846daa16aa461a9aad11ed15	clk: qcom: fix MSM8x60 DSI slave AHB halt bit	CHANGES_FINAL_TREE	-
+b4a84c84b0c656dd2e9980f0eb578686fa45f387	drm/panel: send complete Hikari MDV22 commands	CHANGES_FINAL_TREE	-
+3e7e3818021282703436ef3ac8e816b24d26528d	drm/msm/dsi: correct MSM8x60 link clock topology	DEPENDENCY	clk: qcom: select the Hikari rounded pixel rate
+6a4248ce2bda87bdf2239dd3b01a217186ba1eb8	drm/msm/mdp4: make voltage rail optional	CHANGES_FINAL_TREE	-
+30fe9c47ba349f054bf8792c2a237185a932ffe7	drm/msm/dsi: quiesce MSM8x60 clocks before gating	DEPENDENCY	drm/msm/dsi: complete MSM8x60 boot-state quiesce
+8ccb0fc0ad8733f134a67a641c38fa26b5623a67	phy: qcom-usb-hs: avoid redundant fixed-rail voltage request	CHANGES_FINAL_TREE	-
+7e9f7a7e91dce1ab8b852897200231f862c46798	drm/msm/dsi: complete MSM8x60 boot-state quiesce	DEPENDENCY	drm/msm/dsi: quiesce MSM8x60 boot state once
+c2d46740c7e0ff78e6023511ba7909fcb4f4f8a5	drm/msm/dsi: quiesce MSM8x60 boot state once	CHANGES_FINAL_TREE	-
+6456a1d66a659d52fcb6b62f34803c64391233b7	dt-bindings: display: msm: allow MDP4 power domain	CHANGES_FINAL_TREE	-
+dc81fe7a3586e2776a07c680ac6cbb8f6a0ca1ac	arm: dts: qcom: power Hikari MDP4 before access	DEPENDENCY	drm/msm/mdp4: fail safely on MSM8x60 clock errors
+8407a23047b17eb94af58e625f186f09a92b516e	clk: qcom: reproduce the MSM8x60 MDP footswitch sequence	DEPENDENCY	clk: qcom: keep MSM8x60 MDP reset clocks enabled
+e6261e1e9f065c9b83e6241d436ed4be8a505acd	drm/msm/mdp4: fail safely on MSM8x60 clock errors	CHANGES_FINAL_TREE	-
+201e4bd2c0eafb6abffb53ff727a3a78ed27c354	clk: qcom: keep MSM8x60 MDP reset clocks enabled	CHANGES_FINAL_TREE	-
+cc15c88218901c2b94256bed28e5a229929da5f9	clk: qcom: access MSM8x60 MMCC through secure IO	CHANGES_FINAL_TREE	-
+57282b15842f028f03ef45a388f5b994b1f3f9bf	firmware: qcom: avoid modern SCM probes on MSM8x60	DEPENDENCY	fix: match MSM8x60 secure MMCC access ABI
+ceecb3744f876c844b25fb6a858129ce21dd91c9	fix: match MSM8x60 secure MMCC access ABI	CHANGES_FINAL_TREE	-
+e6dc572b950c86c2a69a37947eb80cd9c477b16e	clk: qcom: fix MSM8x60 TV halt status map	CHANGES_FINAL_TREE	-
+34800414c7d53f979c1064b68c1a353037ea4dc2	dt-bindings: iommu: qcom: add MSM8660 compatible	CHANGES_FINAL_TREE	-
+4788b90e2daac372b1e96bf080ba685b8ca9f63c	drm/msm/mdp4: separate DSI video vblank from commit IRQ	CHANGES_FINAL_TREE	-
+9a270203de2a2fa8fc1c490116163b57acb32730	clk: qcom: select the Hikari rounded pixel rate	CHANGES_FINAL_TREE	-
+d29264dade0dbaa8df67670847753230f9d405c9	drm/msm/dsi: enable the MSM8x60 core clock	CHANGES_FINAL_TREE	-
+b848ecdec5dfb9b60273f98d8ba6be224c98333a	drm/msm/dsi: start the MSM8x60 45nm PLL	DEPENDENCY	drm/msm/dsi: match Hikari PHY start order
+1cc188e191de9179155f65931df378d371bc7d54	clk: qcom: alias the MSM8x60 MDP LUT clock	DEPENDENCY	clk: qcom: model the MSM8x60 MDP LUT clock safely
+5fe6bb9eb7ff74c32a901651800e46d7730988a3	clk: qcom: model the MSM8x60 MDP LUT clock safely	CHANGES_FINAL_TREE	-
+3766923847566a0560d62b1bab7eb731918a701d	clk: qcom: select the MSM8x60 DSI PLL parent	CHANGES_FINAL_TREE	-
+a95707950959eb7e4d56e7299ac08993db26fadc	clk: qcom: skip unreliable MSM8x60 DSI core halt poll	CHANGES_FINAL_TREE	-
+6bc1daa5c1473c19c7fadbeb6f8a68f0198df042	drm: panel: fix Hikari MDV22 enable order	DEPENDENCY	drm: msm: finalize Hikari MDV22 signalling
+fd41bc4deaaf309f4126c8b0bc23f5348a278898	drm/msm/dsi: use the V2 controller for command DMA	CHANGES_FINAL_TREE	-
+770604e9d015d27d02f94f44e42fd9b80e6ee3be	clk: qcom: use pixel RCG ops for MSM8x60 DSI	DEPENDENCY	clk: qcom: route MSM8x60 DSI through its pixel RCG
+35cd4fa8b25e65e6e4b68017aab89dd73583c0e5	drm/msm/dsi: tolerate missed MSM8x60 command DMA IRQ	DEPENDENCY	drm/msm/dsi: match Hikari command trigger semantics
+affe8938f57092f7cb663d07784f4225a372779c	drm/msm/dsi: match Hikari command trigger semantics	DEPENDENCY	drm/msm/dsi: accept idle MSM8x60 command DMA timeout
+885b9d649d5c5aebcfd6eb3b524e3a08f44b47a2	drm/msm/dsi: accept idle MSM8x60 command DMA timeout	CHANGES_FINAL_TREE	-
+3570a320d9095b83e945c8497225b32be11d622a	clk: qcom: route MSM8x60 DSI through its pixel RCG	CHANGES_FINAL_TREE	-
+13798a9ef70f3202e8c5e7f11264c7f56b2c1e4b	clk: qcom: skip unreliable MSM8x60 DSI pixel halt status	CHANGES_FINAL_TREE	-
+ead74e6e19cc919c4213b775d9412136a8ea5163	drm/msm/dsi: match Hikari video host timing	DEPENDENCY	drm/msm/dsi: match Hikari PHY start order
+82ede89e668b202396ee9ae69760eb1125e95058	drm/msm/dsi: match Hikari PHY start order	CHANGES_FINAL_TREE	-
+5024fb95cfb3065d6853d1589909d19c8b9df972	drm/msm/mdp4: vote scanout memory bandwidth	CHANGES_FINAL_TREE	-
+17a7f5e334dcad6e521b53fd3bb25e1acc8c9119	drm/msm: support contiguous physical scanout without IOMMU	CHANGES_FINAL_TREE	-
+dc31c0e8b7a2ced8451f29eabfb3598f173aa37b	mfd: qcom-pm8xxx: add PM8901 support	CHANGES_FINAL_TREE	-
+acf1dc599616c983c5a08fc1c65f9a1a9afd2311	dt-bindings: power: supply: add BQ24160 OTG guard	CHANGES_FINAL_TREE	-
+958e2d9711fb9655499de9224c1f1fb5a72756ee	pinctrl: qcom: map PM8901 MPP interrupts	CHANGES_FINAL_TREE	-
+64d8d840f7396a5550c27caa5ca968dd35c5faff	pinctrl: qcom: ssbi-mpp: honor GPIO output state	CHANGES_FINAL_TREE	-
+4fc96398f3881fc38587095e5a6109216130fcbd	pinctrl: qcom: ssbi-mpp: use the PM8901 register base	CHANGES_FINAL_TREE	-
+f88e9e4d6a1ab2e2d3f8f95329c3cf8ac78b17c2	watchdog: qcom: stop watchdog on reboot	CHANGES_FINAL_TREE	-
+aca9ca1161c51ae7d0df1f15a4e4855a4e381192	thermal: qcom: add MSM8660 TSENS support	CHANGES_FINAL_TREE	-
+44971b48bc15aa12dcad98ac932da0c4e1082134	mmc: mmci: read Qualcomm PIO FIFO address window	CHANGES_FINAL_TREE	-
+a44270201bdacede25fb5e07300d0d8725ffc059	clk: qcom: correct MSM8x60 MMCC branch mappings	CHANGES_FINAL_TREE	-
+dc80295a832f1336e8cc995b347b27c4a31da21c	drm: msm: finalize Hikari MDV22 signalling	CHANGES_FINAL_TREE	-
+09c3a676a97986619fcc6a90fd85fa680b996a16	leds: as3676: expose Hikari LEDs and ambient light	CHANGES_FINAL_TREE	-
+4617beee930fb037f6101d9ddcca84c196a2c63e	iio: add Hikari AK8972 and APDS9702 sensors	CHANGES_FINAL_TREE	-
+3e0ffa3136152b33aaf5d6c5379785bb8b3193e2	feat: integrate hardware support and MSM8260 DVFS	CHANGES_FINAL_TREE	-

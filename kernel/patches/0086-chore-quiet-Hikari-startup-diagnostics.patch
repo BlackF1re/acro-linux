@@ -1,0 +1,186 @@
+From e74b5bda2e49b0c4d5d8ca6c09c2ab632b417948 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Sun, 4 Oct 2026 22:17:05 +0700
+Subject: [PATCH] chore: quiet Hikari startup diagnostics without changing
+ hardware sequencing
+
+---
+ drivers/clk/qcom/mmcc-msm8660.c                | 10 +++++-----
+ drivers/cpufreq/qcom-msm8660-cpufreq.c         | 10 +++++-----
+ drivers/firmware/qcom/qcom_scm.c               |  2 +-
+ drivers/gpu/drm/msm/adreno/a2xx_gpu.c          |  6 +++---
+ drivers/gpu/drm/msm/dsi/dsi_host.c             |  2 +-
+ drivers/regulator/qcom-msm8660-saw-regulator.c |  2 +-
+ 6 files changed, 16 insertions(+), 16 deletions(-)
+
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+index fda2dabda2e9bb4c22bfef549004099329609d3b..f2e6fd28712728c2ac03ebc4333629415da2c5bc 100644
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -2816,7 +2816,7 @@ static int mmcc_msm8660_init_hw(struct device *dev, struct regmap *regmap)
+ 	ret = regmap_update_bits(regmap, AHB_EN_REG, 0x6c040203, 0x00000003);
+ 	if (ret)
+ 		return ret;
+-	dev_info(dev, "secure MMCC AHB control initialized\n");
++	dev_dbg(dev, "secure MMCC AHB control initialized\n");
+ 
+ 	/*
+ 	 * AHB_EN2_REG contains additional control bits including
+@@ -2847,7 +2847,7 @@ static int mmcc_msm8660_init_hw(struct device *dev, struct regmap *regmap)
+ 	ret = regmap_write(regmap, SAXI_EN_REG, 0x000001d8);
+ 	if (ret)
+ 		return ret;
+-	dev_info(dev, "secure MMCC AXI control initialized\n");
++	dev_dbg(dev, "secure MMCC AXI control initialized\n");
+ 
+ 	/* Deassert all MM resets */
+ 	regmap_write(regmap, SW_RESET_ALL_REG, 0);
+@@ -2982,7 +2982,7 @@ static int mmcc_msm8660_unhalt_fabric_ports(struct device *dev)
+ 	if (rc)
+ 		dev_err(dev, "MMSS fabric unhalt failed: %d\n", rc);
+ 	else
+-		dev_info(dev, "MMSS fabric: unhalted all master ports (0-13)\n");
++		dev_dbg(dev, "MMSS fabric: unhalted all master ports (0-13)\n");
+ 
+ 	put_device(&rpm_pdev->dev);
+ 
+@@ -3141,7 +3141,7 @@ static int mmcc_msm8660_init_mdp_footswitch(struct device *dev,
+ 		goto err_disable;
+ 	}
+ 
+-	dev_info(dev,
++	dev_dbg(dev,
+ 		 "MDP footswitch: clock-assisted AXI/AHB/core reset completed (GFS=%#x)\n",
+ 		 val);
+ 	return 0;
+@@ -3168,7 +3168,7 @@ static int mmcc_msm8660_probe(struct platform_device *pdev)
+ 	if (IS_ERR(regmap))
+ 		return PTR_ERR(regmap);
+ 
+-	dev_info(&pdev->dev, "secure MMCC initialization begin\n");
++	dev_dbg(&pdev->dev, "secure MMCC initialization begin\n");
+ 
+ 	/* Initialize MMCC hardware before registering clocks */
+ 	ret = mmcc_msm8660_init_hw(&pdev->dev, regmap);
+diff --git a/drivers/cpufreq/qcom-msm8660-cpufreq.c b/drivers/cpufreq/qcom-msm8660-cpufreq.c
+index aed6c8164a91d6ff0dd7effebaf84abc3611df22..0834032a5afda5c8c0bd6641217e9d58f2f6edc4 100644
+--- a/drivers/cpufreq/qcom-msm8660-cpufreq.c
++++ b/drivers/cpufreq/qcom-msm8660-cpufreq.c
+@@ -730,7 +730,7 @@ static int validate_fuse(struct msm8660_cpufreq *d)
+         if (pvs == 0x7)
+                 pvs = (fuse >> 13) & 0x7;
+ 
+-        dev_info(d->dev, "QFPROM fuse=%#010x speed-bin=%u PVS=%u\n",
++        dev_dbg(d->dev, "QFPROM fuse=%#010x speed-bin=%u PVS=%u\n",
+                  fuse, speed_bin, pvs);
+ 
+         if (speed_bin != 1 || pvs != 1) {
+@@ -751,7 +751,7 @@ static int validate_scpll(struct msm8660_cpufreq *d,
+         cfg = readl_relaxed(pll + PLL_CFG);
+         status = readl_relaxed(pll + PLL_STATUS);
+ 
+-        dev_info(d->dev, "%s CAL=%#010x CFG=%#010x STATUS=%#010x L=%#x\n",
++        dev_dbg(d->dev, "%s CAL=%#010x CFG=%#010x STATUS=%#010x L=%#x\n",
+                  name, cal, cfg, status, pll_lval(pll));
+ 
+         if (((cal >> 24) & 0xff) < SCPLL_CAL_MAX_L ||
+@@ -818,7 +818,7 @@ static int validate_boot_state(struct msm8660_cpufreq *d,
+         c1 = cpu_hw_rate(d, 1);
+         l2 = l2_hw_rate(d);
+ 
+-        dev_info(d->dev,
++        dev_dbg(d->dev,
+                  "boot clocks: CPU0=%u CPU1=%u L2=%u kHz L2src=%u\n",
+                  c0, c1, l2, l2sel & CORE_SRC_MASK);
+ 
+@@ -953,7 +953,7 @@ static int adopt_boot_state(struct msm8660_cpufreq *d,
+         d->dig_uv = dig_uv;
+         d->bw_level = bw;
+ 
+-        dev_info(d->dev,
++        dev_dbg(d->dev,
+                  "adopted: CPU0=%u CPU1=%u L2=%u kHz MEM=%u DIG=%u ICC=%u MB/s\n",
+                  opps[d->cpu_idx[0]].khz, opps[d->cpu_idx[1]].khz,
+                  l2_levels[d->l2_idx].khz, d->mem_uv, d->dig_uv,
+@@ -1107,7 +1107,7 @@ static int msm8660_probe(struct platform_device *pdev)
+          * Reboot is the rollback; make accidental rmmod impossible.
+          */
+ 
+-        dev_info(&pdev->dev,
++        dev_dbg(&pdev->dev,
+                  "ACTIVE: dual-core cpufreq 192-1512 MHz, nominal PVS, governors enabled\n");
+ 
+         return 0;
+diff --git a/drivers/firmware/qcom/qcom_scm.c b/drivers/firmware/qcom/qcom_scm.c
+index 24a0f17c138ff819a4b765361304cd20c5356a35..46cef39b3ab6a9d6162f2913bbea965be3b4b6b4 100644
+--- a/drivers/firmware/qcom/qcom_scm.c
++++ b/drivers/firmware/qcom/qcom_scm.c
+@@ -2821,7 +2821,7 @@ static int qcom_scm_probe(struct platform_device *pdev)
+ 	legacy_minimal = of_device_is_compatible(pdev->dev.of_node,
+ 						 "qcom,scm-msm8660");
+ 	if (legacy_minimal)
+-		dev_info(&pdev->dev, "MSM8x60 legacy SCM provider probe begin\n");
++		dev_dbg(&pdev->dev, "MSM8x60 legacy SCM provider probe begin\n");
+ 	ret = qcom_scm_find_dload_address(&pdev->dev, &scm->dload_mode_addr);
+ 	if (ret < 0)
+ 		return dev_err_probe(&pdev->dev, ret,
+diff --git a/drivers/gpu/drm/msm/adreno/a2xx_gpu.c b/drivers/gpu/drm/msm/adreno/a2xx_gpu.c
+index 41e0516e849cdd4c72bfa6e91c1c793e69f8ce70..b15da718ccc792f9603e89aa1bb582fb0aabb72f 100644
+--- a/drivers/gpu/drm/msm/adreno/a2xx_gpu.c
++++ b/drivers/gpu/drm/msm/adreno/a2xx_gpu.c
+@@ -10,7 +10,7 @@ extern bool hang_debug;
+ static void a2xx_dump(struct msm_gpu *gpu);
+ static bool a2xx_idle(struct msm_gpu *gpu);
+ 
+-/* Diagnostic KGSL lifecycle compatibility, A220 only.
++/* KGSL-derived lifecycle compatibility, A220 only.
+  * OpenSEMC c4784b04: build_regrestore_cmds and adreno_gpummu_setstate.
+  * Keep DRM VM/fences and application shaders/descriptors owned by Mesa.
+  */
+@@ -49,7 +49,7 @@ static void a220_legacy_shadow_init(struct msm_gpu *gpu)
+  OUT_PKT3(ring, CP_INVALIDATE_STATE, 1);
+  OUT_RING(ring, 0x7fff);
+  /* KGSL's initial context register / ALU / fetch constant shadow banks.
+-  * Hardware shadowing is global for this single-ring diagnostic.  Mesa
++  * Hardware shadowing is global for this single-ring A220 path.  Mesa
+   * still provides the context restore IB and all draw-specific values.
+   */
+  OUT_PKT3(ring, CP_LOAD_CONSTANT_CONTEXT, 1 + 2 * ARRAY_SIZE(a220_shadow_ranges));
+@@ -396,7 +396,7 @@ static int a2xx_hw_init(struct msm_gpu *gpu)
+   adreno_flush(gpu, gpu->rb[0], REG_AXXX_CP_RB_WPTR);
+   if (!a2xx_idle(gpu))
+    return -EINVAL;
+-  dev_info(gpu->dev->dev, "A220 KGSL lifecycle compat v1: shadow=%llx, CP-ordered MMU, GPR/context rearm\n",
++  dev_dbg(gpu->dev->dev, "A220 KGSL lifecycle compat: shadow=%llx, CP-ordered MMU, GPR/context rearm\n",
+     a2xx_gpu->legacy_shadow_iova);
+  }
+  return 0;
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
+index 32b1ff27d0ca74606a2e4c36d5084c7f42fd0091..6c655ef6d63c3e3a2e9798bbed6dcecb82369eef 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -217,7 +217,7 @@ dsi_get_config(struct msm_dsi_host *msm_host)
+ 	 * from the SoC-specific compatible instead of rejecting the controller.
+ 	 */
+ 	if (of_device_is_compatible(dev->of_node, "qcom,msm8660-dsi-ctrl")) {
+-		dev_info(dev, "using MSM8x60 DSI V2 configuration\n");
++		dev_dbg(dev, "using MSM8x60 DSI V2 configuration\n");
+ 		return msm_dsi_cfg_get(MSM_DSI_VER_MAJOR_V2,
+ 				       MSM_DSI_V2_VER_MINOR_8064);
+ 	}
+diff --git a/drivers/regulator/qcom-msm8660-saw-regulator.c b/drivers/regulator/qcom-msm8660-saw-regulator.c
+index b6b86477f22e22bc07bad8a3b433e30887a9ea14..fd5ebaf8cb88515691aaf95b2d13fb3416fe5317 100644
+--- a/drivers/regulator/qcom-msm8660-saw-regulator.c
++++ b/drivers/regulator/qcom-msm8660-saw-regulator.c
+@@ -341,7 +341,7 @@ static int msm8660_saw_probe(struct platform_device *pdev)
+ 
+ 	platform_set_drvdata(pdev, saw);
+ 
+-	dev_info(&pdev->dev,
++	dev_dbg(&pdev->dev,
+ 		 "MSM8660 SAW CPU%u regulator registered\n", cpu);
+ 
+ 
+-- 
+2.53.0
+

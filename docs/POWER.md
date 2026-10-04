@@ -1,40 +1,29 @@
 # Power management
 
-USB sink charging is physically verified; detailed policy and remaining tests
-are in [CHARGING.md](CHARGING.md). OTG power works with real peripherals.
+## Current implementation
 
-The running SYSTEM image exposes the BQ27520 fuel-gauge temperature, PM8058
-XOADC channels and the MSM8660 on-die TSENS channel. Patch `0077` implements
-the latter through the normal thermal framework using Sony's exact GCC
-registers, SPI 178 interrupt and primary/backup QFPROM calibration bytes. On
-2026-09-24 the physical device produced twelve stable samples at 42--43 C;
-`sensors` reported the same value through the standard `soc_thermal` hwmon
-device, systemd had no failed units, pstore was empty and the earlier TSENS
-timeout/oops did not recur. This is `PARTIAL`: the sensor path is verified, but
-cooling devices, protective trips and throttling still depend on correct
-MSM8660 cpufreq support. Full DT schema checking also still needs the host
-`yamllint` and `ruamel.yaml` packages.
+The native charging/gauge policy is described in [CHARGING.md](CHARGING.md).
+The source integration includes Scorpion CPU DVFS, shared L2 coordination,
+RPM/interconnect votes and per-core SAW regulators (patches 0082/0083).
+It validates speed-bin/PVS and boot clock state before taking ownership.
+These safety guards must remain even when verbose register dumps are silenced.
 
-The separate Fuji/Hikari board NTC on PM8058 MPP10 is also represented through
-`generic-adc-thermal`, channel 7 and Sony's exact voltage/temperature table.
-On 2026-09-24 a physical CPU busy-loop raised on-die TSENS from 39 to 42 C while
-the NTC voltage fell monotonically from about 1.217 to 1.185 V, as expected for
-the thermistor.  After reboot `msm-board-thermal` appeared through both thermal
-sysfs and lm-sensors at 21.1 C.  This verifies the native measurement path, not
-yet thermal trips or cooling control.
+The latest resolved build configuration enables the CPU and SAW drivers.
+The connected SYSTEM at the 2026-10-04 cleanup audit exposes no cpufreq
+policies. Do not claim full DVFS validation of that running image.
 
-There is no upstream MSM8660 Scorpion CPU-clock/cpufreq provider. Enabling a
-governor in the configuration cannot safely create frequency scaling: a native
-implementation must coordinate both CPU SCPLLs, the shared L2 clock, voltage
-rails and RPM/interconnect bandwidth described by the Sony BSP. This remains a
-separate `RESEARCHING` driver task; `cpufreq-dt` is not an acceptable shortcut.
+MSM8660 TSENS and the PM8058 board NTC use standard thermal/IIO consumers.
+Their source and measurement evidence remains in [SOURCES.md](SOURCES.md)
+and the hardware inventory. Protective trips/throttling need acceptance.
 
-System suspend/resume, wake sources, cpuidle, cpufreq, thermal throttling,
-cradle charging and long-duration idle consumption are not yet verified.
-Active BQ24160 charging deliberately holds a wake source because its watchdog
-requires service. This is a correctness constraint until a proven lower-power
-design exists.
+## Sleep and recovery
 
-A release needs repeated suspend/resume, wake-by-button/USB/modem as
-applicable, charging completion and unplug/replug tests, and external-meter
-idle/active measurements without unexpected wakeups.
+Only s2idle is currently advertised. Prior platform/suspend tests caused
+Wi-Fi/USB and display underrun regressions. Reliable suspend/resume and
+cpuidle are not established; do not enable automatic suspend without a new
+acceptance test. The current `sleep.target`/`suspend.target` unit state alone
+is not proof of a mask or of working resume.
+
+Retain watchdog, pstore/ramoops and error logging. BOOT remains immutable;
+experimental SYSTEM kernels reside in separate microSD directories.
+Historical suspend experiments remain under research, not production hooks.

@@ -1,0 +1,250 @@
+From cfa814e8b9f769a3a253a76755e6c2da3e680cd2 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Sun, 4 Oct 2026 21:30:39 +0700
+Subject: [PATCH] input: map Hikari navigation strip through touch overlays
+
+Split without semantic changes from the signed Hikari integration.
+
+Original-commit: f7a6e62ff206edff9cee8c04226e85f1102a9a85
+---
+ drivers/input/rmi4/rmi_2d_sensor.c  | 59 +++++++++++++++++++++++++++++
+ drivers/input/rmi4/rmi_2d_sensor.h  |  3 ++
+ drivers/input/rmi4/rmi_f11.c        |  2 +-
+ drivers/input/rmi4/rmi_f12.c        |  2 +-
+ drivers/input/touch-overlay.c       | 22 +++++++++--
+ include/linux/input/touch-overlay.h |  4 ++
+ 6 files changed, 87 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/input/rmi4/rmi_2d_sensor.c b/drivers/input/rmi4/rmi_2d_sensor.c
+index ea3eb87a89af539503909454537460595002ffbf..82579d7b5adb996e7d8ed17839ac57576f8fa90f 100644
+--- a/drivers/input/rmi4/rmi_2d_sensor.c
++++ b/drivers/input/rmi4/rmi_2d_sensor.c
+@@ -10,6 +10,7 @@
+ #include <linux/of.h>
+ #include <linux/input.h>
+ #include <linux/input/mt.h>
++#include <linux/input/touch-overlay.h>
+ #include <linux/rmi.h>
+ #include "rmi_driver.h"
+ #include "rmi_2d_sensor.h"
+@@ -50,6 +51,13 @@ void rmi_2d_sensor_abs_process(struct rmi_2d_sensor *sensor,
+ 	obj->x += axis_align->offset_x;
+ 	obj->y += axis_align->offset_y;
+ 
++	/* Overlay buttons may lie beyond the visible screen's clipping limit. */
++	if (!list_empty(&sensor->overlay_list)) {
++		sensor->tracking_pos[slot].x = obj->x;
++		sensor->tracking_pos[slot].y = obj->y;
++		return;
++	}
++
+ 	obj->x =  max(axis_align->clip_x_low, obj->x);
+ 	obj->y =  max(axis_align->clip_y_low, obj->y);
+ 
+@@ -71,6 +79,36 @@ void rmi_2d_sensor_abs_report(struct rmi_2d_sensor *sensor,
+ 	struct rmi_2d_axis_alignment *axis_align = &sensor->axis_align;
+ 	struct input_dev *input = sensor->input;
+ 	int wide, major, minor;
++	int mt_slot = sensor->kernel_tracking ? sensor->tracking_slots[slot] : slot;
++
++	if (mt_slot < 0 || mt_slot >= input->mt->num_slots)
++		return;
++
++	if (obj->type == RMI_2D_OBJECT_NONE &&
++	    !list_empty(&sensor->overlay_list)) {
++		struct input_mt_slot *s = &input->mt->slots[mt_slot];
++		unsigned int previous_frame = s->frame;
++
++		input_mt_slot(input, mt_slot);
++		input_mt_report_slot_state(input, obj->mt_tool, false);
++		/* Explicit inactive RMI slots must remain unused for key release. */
++		s->frame = previous_frame;
++		return;
++	}
++
++	if (obj->type != RMI_2D_OBJECT_NONE &&
++	    !list_empty(&sensor->overlay_list)) {
++		struct input_mt_pos pos = sensor->tracking_pos[slot];
++
++		if (touch_overlay_process_contact(&sensor->overlay_list,
++						  input, &pos, mt_slot)) {
++			/* End a previous screen contact if it slid onto a button. */
++			input_mt_slot(input, mt_slot);
++			input_mt_report_slot_state(input, obj->mt_tool, false);
++			return;
++		}
++		sensor->tracking_pos[slot] = pos;
++	}
+ 
+ 	if (sensor->kernel_tracking)
+ 		input_mt_slot(input, sensor->tracking_slots[slot]);
+@@ -157,6 +195,14 @@ static void rmi_2d_sensor_set_input_params(struct rmi_2d_sensor *sensor)
+ 
+ 		max_x = sensor->max_x;
+ 		max_y = sensor->max_y;
++		if (touch_overlay_mapped_touchscreen(&sensor->overlay_list)) {
++			u16 overlay_x = max_x, overlay_y = max_y;
++
++			touch_overlay_get_touchscreen_abs(&sensor->overlay_list,
++						  &overlay_x, &overlay_y);
++			max_x = overlay_x;
++			max_y = overlay_y;
++		}
+ 		if (sensor->axis_align.swap_axes)
+ 			swap(max_x, max_y);
+ 		input_set_abs_params(input, ABS_MT_POSITION_X, 0, max_x, 0, 0);
+@@ -211,17 +257,30 @@ int rmi_2d_sensor_configure_input(struct rmi_function *fn,
+ {
+ 	struct rmi_device *rmi_dev = fn->rmi_dev;
+ 	struct rmi_driver_data *drv_data = dev_get_drvdata(&rmi_dev->dev);
++	int ret;
+ 
+ 	if (!drv_data->input)
+ 		return -ENODEV;
+ 
+ 	sensor->input = drv_data->input;
++	INIT_LIST_HEAD(&sensor->overlay_list);
++	ret = touch_overlay_map_fwnode(&sensor->overlay_list, sensor->input,
++				       dev_fwnode(&fn->dev));
++	if (ret)
++		return ret;
+ 	rmi_2d_sensor_set_input_params(sensor);
+ 
+ 	return 0;
+ }
+ EXPORT_SYMBOL_GPL(rmi_2d_sensor_configure_input);
+ 
++void rmi_2d_sensor_sync_frame(struct rmi_2d_sensor *sensor)
++{
++	touch_overlay_sync_frame(&sensor->overlay_list, sensor->input);
++	input_mt_sync_frame(sensor->input);
++}
++EXPORT_SYMBOL_GPL(rmi_2d_sensor_sync_frame);
++
+ #ifdef CONFIG_OF
+ int rmi_2d_sensor_of_probe(struct device *dev,
+ 			struct rmi_2d_sensor_platform_data *pdata)
+diff --git a/drivers/input/rmi4/rmi_2d_sensor.h b/drivers/input/rmi4/rmi_2d_sensor.h
+index f9d9c1dd5eb071e122fac3f4e9a9bd20b99ff196..5a848dcf8eb9e253f63dd935db5df081887820ff 100644
+--- a/drivers/input/rmi4/rmi_2d_sensor.h
++++ b/drivers/input/rmi4/rmi_2d_sensor.h
+@@ -8,6 +8,7 @@
+ #define _RMI_2D_SENSOR_H
+ 
+ #include <linux/rmi.h>
++#include <linux/list.h>
+ #include <linux/types.h>
+ 
+ enum rmi_2d_sensor_object_type {
+@@ -44,6 +45,7 @@ struct rmi_2d_sensor_abs_object {
+  * @input_phys - buffer for the absolute phys name for this sensor.
+  */
+ struct rmi_2d_sensor {
++	struct list_head overlay_list;
+ 	struct rmi_2d_axis_alignment axis_align;
+ 	struct input_mt_pos *tracking_pos;
+ 	int *tracking_slots;
+@@ -86,4 +88,5 @@ void rmi_2d_sensor_rel_report(struct rmi_2d_sensor *sensor, int x, int y);
+ 
+ int rmi_2d_sensor_configure_input(struct rmi_function *fn,
+ 					struct rmi_2d_sensor *sensor);
++void rmi_2d_sensor_sync_frame(struct rmi_2d_sensor *sensor);
+ #endif /* _RMI_2D_SENSOR_H */
+diff --git a/drivers/input/rmi4/rmi_f11.c b/drivers/input/rmi4/rmi_f11.c
+index 9ade74b36edb01186e15081dffc713e769160e55..f0c1e30f3ab69a1b4bb949b81142e6f4e1cdba71 100644
+--- a/drivers/input/rmi4/rmi_f11.c
++++ b/drivers/input/rmi4/rmi_f11.c
+@@ -640,7 +640,7 @@ static void rmi_f11_finger_handler(struct f11_data *f11,
+ 			rmi_2d_sensor_abs_report(sensor, &sensor->objs[i], i);
+ 		}
+ 
+-		input_mt_sync_frame(sensor->input);
++		rmi_2d_sensor_sync_frame(sensor);
+ 	} else if (sensor->report_rel) {
+ 		if ((abs_size + sensor->nbr_fingers * RMI_F11_REL_BYTES) > size)
+ 			rel_fingers = (size - abs_size) / RMI_F11_REL_BYTES;
+diff --git a/drivers/input/rmi4/rmi_f12.c b/drivers/input/rmi4/rmi_f12.c
+index 841884d967a3dd234aa4aed4957a51f16a6f2d48..81df4e673de052733b922d8e54deb70abbdcb597 100644
+--- a/drivers/input/rmi4/rmi_f12.c
++++ b/drivers/input/rmi4/rmi_f12.c
+@@ -282,7 +282,7 @@ static irqreturn_t rmi_f12_attention(int irq, void *ctx)
+ 		rmi_f12_process_objects(f12, &sensor->data_pkt[f12->data1_offset],
+ 					valid_bytes);
+ 
+-	input_mt_sync_frame(sensor->input);
++	rmi_2d_sensor_sync_frame(sensor);
+ 
+ 	return IRQ_HANDLED;
+ }
+diff --git a/drivers/input/touch-overlay.c b/drivers/input/touch-overlay.c
+index b9fd82c4829d30dcaa67d7c7dafd6f2e7269385f..266ae6f8420b2adbc1b5e1f177aabbee6bdd76d5 100644
+--- a/drivers/input/touch-overlay.c
++++ b/drivers/input/touch-overlay.c
+@@ -61,16 +61,18 @@ static int touch_overlay_get_segment(struct fwnode_handle *segment_node,
+ }
+ 
+ /**
+- * touch_overlay_map - map overlay objects from the device tree and set
++ * touch_overlay_map_fwnode - map overlay objects from a firmware node and set
+  * key capabilities if buttons are defined.
+  * @list: pointer to the list that will hold the segments
+  * @input: pointer to the already allocated input_dev
++ * @fwnode: firmware node describing the sensor, possibly a function child
+  *
+  * Returns 0 on success and error number otherwise.
+  *
+  * If buttons are defined, key capabilities are set accordingly.
+  */
+-int touch_overlay_map(struct list_head *list, struct input_dev *input)
++int touch_overlay_map_fwnode(struct list_head *list, struct input_dev *input,
++			     struct fwnode_handle *fwnode)
+ {
+ 	struct fwnode_handle *fw_segment;
+ 	struct device *dev = input->dev.parent;
+@@ -78,7 +80,7 @@ int touch_overlay_map(struct list_head *list, struct input_dev *input)
+ 	int error;
+ 
+ 	struct fwnode_handle *overlay __free(fwnode_handle) =
+-		device_get_named_child_node(dev, "touch-overlay");
++		fwnode_get_named_child_node(fwnode, "touch-overlay");
+ 	if (!overlay)
+ 		return 0;
+ 
+@@ -98,6 +100,20 @@ int touch_overlay_map(struct list_head *list, struct input_dev *input)
+ 
+ 	return 0;
+ }
++EXPORT_SYMBOL(touch_overlay_map_fwnode);
++
++/**
++ * touch_overlay_map - map overlays from the input device parent's firmware node
++ * @list: list that will hold the segments
++ * @input: allocated input device
++ *
++ * Return: zero on success, or a negative error code.
++ */
++int touch_overlay_map(struct list_head *list, struct input_dev *input)
++{
++	return touch_overlay_map_fwnode(list, input,
++					dev_fwnode(input->dev.parent));
++}
+ EXPORT_SYMBOL(touch_overlay_map);
+ 
+ /**
+diff --git a/include/linux/input/touch-overlay.h b/include/linux/input/touch-overlay.h
+index 0253e554d3cd4507a81e4db55ee2d08e9cf3bd2e..15a901385d23fb1d8a3e047672677a42041f1793 100644
+--- a/include/linux/input/touch-overlay.h
++++ b/include/linux/input/touch-overlay.h
+@@ -9,6 +9,10 @@
+ #include <linux/types.h>
+ 
+ struct input_dev;
++struct fwnode_handle;
++
++int touch_overlay_map_fwnode(struct list_head *list, struct input_dev *input,
++			     struct fwnode_handle *fwnode);
+ 
+ int touch_overlay_map(struct list_head *list, struct input_dev *input);
+ 
+-- 
+2.53.0

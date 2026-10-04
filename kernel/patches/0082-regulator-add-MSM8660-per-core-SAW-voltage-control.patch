@@ -1,0 +1,415 @@
+From 39e948ae29018b79288a4931de79b23617b704fe Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Sun, 4 Oct 2026 21:30:39 +0700
+Subject: [PATCH] regulator: add MSM8660 per-core SAW voltage control
+
+Split without semantic changes from the signed Hikari integration.
+
+Original-commit: f7a6e62ff206edff9cee8c04226e85f1102a9a85
+---
+ drivers/regulator/Kconfig                     |   8 +
+ drivers/regulator/Makefile                    |   1 +
+ .../regulator/qcom-msm8660-saw-regulator.c    | 367 ++++++++++++++++++
+ 3 files changed, 376 insertions(+)
+ create mode 100644 drivers/regulator/qcom-msm8660-saw-regulator.c
+
+diff --git a/drivers/regulator/Kconfig b/drivers/regulator/Kconfig
+index 89789ac7a786c8c4c4a750cdcaa27a205762ac18..8d5058fb436754a109071842d0598b79269ee093 100644
+--- a/drivers/regulator/Kconfig
++++ b/drivers/regulator/Kconfig
+@@ -1897,3 +1897,11 @@ config REGULATOR_QCOM_LABIBB
+ 	  for LCD display panel.
+ 
+ endif
++
++
++config REGULATOR_QCOM_MSM8660_SAW
++	bool "Qualcomm MSM8660 SAW CPU regulator"
++	depends on ARCH_QCOM && OF
++	help
++	  CPU voltage regulator driver for the SAW v1 blocks used by
++	  Qualcomm MSM8260/MSM8660.
+diff --git a/drivers/regulator/Makefile b/drivers/regulator/Makefile
+index 5a764cec8df834de6f7775574e4bbd1d4dd8f6ef..c1540349018d9e35e9a2a3ee7d068433f2a73267 100644
+--- a/drivers/regulator/Makefile
++++ b/drivers/regulator/Makefile
+@@ -220,3 +220,4 @@ obj-$(CONFIG_REGULATOR_WM8400) += wm8400-regulator.o
+ obj-$(CONFIG_REGULATOR_WM8994) += wm8994-regulator.o
+ 
+ ccflags-$(CONFIG_REGULATOR_DEBUG) += -DDEBUG
++obj-$(CONFIG_REGULATOR_QCOM_MSM8660_SAW) += qcom-msm8660-saw-regulator.o
+diff --git a/drivers/regulator/qcom-msm8660-saw-regulator.c b/drivers/regulator/qcom-msm8660-saw-regulator.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..b6b86477f22e22bc07bad8a3b433e30887a9ea14
+--- /dev/null
++++ b/drivers/regulator/qcom-msm8660-saw-regulator.c
+@@ -0,0 +1,367 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Qualcomm MSM8660 / MSM8260 SAW v1 CPU regulator
++ *
++ * Hikari/Fuji legacy-compatible implementation.
++ *
++ * The SAW SPM initialization deliberately does NOT touch:
++ *   VCTL     +0x08
++ *   STS      +0x0c
++ *   PMIC_CTL +0x20
++ *
++ * CPU voltage changes are performed through VCTL and verified through STS.
++ */
++
++#include <linux/cpu.h>
++#include <linux/delay.h>
++#include <linux/io.h>
++#include <linux/iopoll.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
++#include <linux/regulator/driver.h>
++#include <linux/regulator/machine.h>
++#include <linux/regulator/of_regulator.h>
++
++/* MSM8x60 SAW v1 register layout */
++#define SAW_AVS_CTL              0x04
++#define SAW_VCTL                 0x08
++#define SAW_STS                  0x0c
++#define SAW_CFG                  0x10
++#define SAW_SPM_CTL              0x14
++#define SAW_SLP_TMR_DLY          0x18
++#define SAW_WAKE_TMR_DLY         0x1c
++#define SAW_PMIC_CTL             0x20
++#define SAW_SLP_CLK_EN           0x24
++#define SAW_PRECLMP_EN           0x28
++#define SAW_POSTCLMP_EN          0x2c
++#define SAW_CLMP_EN              0x30
++#define SAW_RST_EN               0x34
++#define SAW_MPM_CFG              0x38
++
++#define SAW_STS_PMIC_STATE(v)    (((v) >> 20) & 0x3)
++#define SAW_STS_PMIC_DATA(v)     (((v) >> 10) & 0xff)
++
++#define FTSMPS_BAND2             0x80
++#define FTSMPS_BAND2_MIN_UV      700000
++#define FTSMPS_BAND2_STEP_UV     12500
++
++/* Exact historical Hikari/Fuji regulator constraints. */
++#define HIKARI_MIN_UV            800000
++#define HIKARI_MAX_UV            1325000
++#define HIKARI_STEP_UV           12500
++#define HIKARI_N_VOLTAGES \
++	(((HIKARI_MAX_UV - HIKARI_MIN_UV) / HIKARI_STEP_UV) + 1)
++
++/* Legacy driver value: PMIC internal slew rate. */
++#define REGULATOR_SLEW_RATE_UV_US 1250
++
++struct msm8660_saw {
++	struct device *dev;
++	void __iomem *base;
++	unsigned int cpu;
++	int last_uV;
++	struct mutex lock;
++
++	struct regulator_desc desc;
++	struct regulator_dev *rdev;
++};
++
++struct msm8660_vdd_req {
++	struct msm8660_saw *saw;
++	u8 vlevel;
++	u32 sts;
++};
++
++/*
++ * Exact msm_spm_data[] initialization for MSM8x60 SoC major != 1.
++ *
++ * CONFIG_MSM_AVS_HW=n on this Hikari legacy configuration, therefore
++ * AVS_CTL is zero.
++ *
++ * VCTL, STS and PMIC_CTL are intentionally excluded, matching
++ * MSM_SPM_REG_NR_INITIALIZE in the legacy driver.
++ */
++static void msm8660_saw_hw_init(struct msm8660_saw *saw)
++{
++	writel_relaxed(0x00000000, saw->base + SAW_AVS_CTL);
++	writel_relaxed(0x0000001c, saw->base + SAW_CFG);
++	writel_relaxed(0x00000068, saw->base + SAW_SPM_CTL);
++	writel_relaxed(0x0c0cffff, saw->base + SAW_SLP_TMR_DLY);
++	writel_relaxed(0x78780fff, saw->base + SAW_WAKE_TMR_DLY);
++
++	writel_relaxed(saw->cpu ? 0x13 : 0x01,
++		       saw->base + SAW_SLP_CLK_EN);
++
++	writel_relaxed(0x00000007, saw->base + SAW_PRECLMP_EN);
++	writel_relaxed(0x00000000, saw->base + SAW_POSTCLMP_EN);
++	writel_relaxed(0x00000001, saw->base + SAW_CLMP_EN);
++	writel_relaxed(0x00000000, saw->base + SAW_RST_EN);
++	writel_relaxed(0x00000000, saw->base + SAW_MPM_CFG);
++
++	/* Match the legacy mb() after flushing the shadow registers. */
++	mb();
++}
++
++static int msm8660_uv_to_vlevel(int min_uV, int max_uV,
++				int *actual_uV, u8 *vlevel)
++{
++	int uV, vprog;
++
++	if (min_uV < HIKARI_MIN_UV)
++		min_uV = HIKARI_MIN_UV;
++
++	if (min_uV > HIKARI_MAX_UV || max_uV < HIKARI_MIN_UV)
++		return -EINVAL;
++
++	uV = FTSMPS_BAND2_MIN_UV +
++	     DIV_ROUND_UP(min_uV - FTSMPS_BAND2_MIN_UV,
++			  FTSMPS_BAND2_STEP_UV) *
++	     FTSMPS_BAND2_STEP_UV;
++
++	if (uV > max_uV || uV > HIKARI_MAX_UV)
++		return -EINVAL;
++
++	vprog = (uV - FTSMPS_BAND2_MIN_UV) / FTSMPS_BAND2_STEP_UV;
++
++	if (vprog < 0 || vprog > 0x3f)
++		return -EINVAL;
++
++	*actual_uV = uV;
++	*vlevel = FTSMPS_BAND2 | vprog;
++
++	return 0;
++}
++
++/*
++ * Must execute on the CPU whose SAW controls the requested Scorpion rail.
++ */
++static long msm8660_saw_set_vdd_cpu(void *arg)
++{
++	struct msm8660_vdd_req *req = arg;
++	struct msm8660_saw *saw = req->saw;
++	u32 sts;
++	int ret;
++
++	writel_relaxed(req->vlevel, saw->base + SAW_VCTL);
++	mb();
++
++	ret = readl_poll_timeout_atomic(saw->base + SAW_STS, sts,
++				       SAW_STS_PMIC_STATE(sts) == 0,
++				       1, 50);
++	if (ret) {
++		req->sts = sts;
++		return ret;
++	}
++
++	req->sts = sts;
++
++	if (SAW_STS_PMIC_DATA(sts) != req->vlevel)
++		return -EIO;
++
++	return 0;
++}
++
++static int msm8660_saw_set_voltage(struct regulator_dev *rdev,
++				   int min_uV, int max_uV,
++				   unsigned int *selector)
++{
++	struct msm8660_saw *saw = rdev_get_drvdata(rdev);
++	struct msm8660_vdd_req req;
++	int actual_uV;
++	int old_uV;
++	u8 vlevel;
++	long ret;
++
++	ret = msm8660_uv_to_vlevel(min_uV, max_uV,
++				  &actual_uV, &vlevel);
++	if (ret)
++		return ret;
++
++	mutex_lock(&saw->lock);
++
++	old_uV = saw->last_uV;
++
++	req.saw = saw;
++	req.vlevel = vlevel;
++	req.sts = 0;
++
++	ret = work_on_cpu(saw->cpu, msm8660_saw_set_vdd_cpu, &req);
++	if (ret) {
++		dev_err(saw->dev,
++			"cpu%u set %duV vlevel=0x%02x failed: %ld "
++			"STS=%08x state=%u data=0x%02x\n",
++			saw->cpu, actual_uV, vlevel, ret, req.sts,
++			SAW_STS_PMIC_STATE(req.sts),
++			SAW_STS_PMIC_DATA(req.sts));
++		goto out;
++	}
++
++	/*
++	 * Preserve the legacy SAW regulator's stabilization delay.
++	 * For the first request last_uV is unknown, so conservatively
++	 * behave like the zero-initialized historical driver.
++	 */
++	if (actual_uV > old_uV)
++		udelay(DIV_ROUND_UP(actual_uV - max(old_uV, 0),
++				    REGULATOR_SLEW_RATE_UV_US));
++
++	saw->last_uV = actual_uV;
++
++	if (selector)
++		*selector = (actual_uV - HIKARI_MIN_UV) / HIKARI_STEP_UV;
++out:
++	mutex_unlock(&saw->lock);
++	return ret;
++}
++
++static int msm8660_saw_get_voltage(struct regulator_dev *rdev)
++{
++	struct msm8660_saw *saw = rdev_get_drvdata(rdev);
++
++	/*
++	 * Bootloader VCTL is not trustworthy as the actual current voltage;
++	 * don't fabricate a voltage until this driver has successfully
++	 * programmed one itself.
++	 */
++	if (!saw->last_uV)
++		return -ENODATA;
++
++	return saw->last_uV;
++}
++
++static int msm8660_saw_list_voltage(struct regulator_dev *rdev,
++				    unsigned int selector)
++{
++	if (selector >= HIKARI_N_VOLTAGES)
++		return 0;
++
++	return HIKARI_MIN_UV + selector * HIKARI_STEP_UV;
++}
++
++static int msm8660_saw_map_voltage(struct regulator_dev *rdev,
++				   int min_uV, int max_uV)
++{
++	int uV;
++	int sel;
++
++	if (min_uV < HIKARI_MIN_UV)
++		min_uV = HIKARI_MIN_UV;
++
++	sel = DIV_ROUND_UP(min_uV - HIKARI_MIN_UV, HIKARI_STEP_UV);
++	if (sel < 0 || sel >= HIKARI_N_VOLTAGES)
++		return -EINVAL;
++
++	uV = HIKARI_MIN_UV + sel * HIKARI_STEP_UV;
++
++	if (uV > max_uV)
++		return -EINVAL;
++
++	return sel;
++}
++
++static const struct regulator_ops msm8660_saw_ops = {
++	.get_voltage = msm8660_saw_get_voltage,
++	.set_voltage = msm8660_saw_set_voltage,
++	.list_voltage = msm8660_saw_list_voltage,
++	.map_voltage = msm8660_saw_map_voltage,
++};
++
++static int msm8660_saw_probe(struct platform_device *pdev)
++{
++	struct regulator_config config = { };
++	struct regulator_init_data *init_data;
++	struct msm8660_saw *saw;
++	struct resource *res;
++	u32 cpu;
++	int ret;
++
++	ret = of_property_read_u32(pdev->dev.of_node, "qcom,cpu", &cpu);
++	if (ret)
++		return dev_err_probe(&pdev->dev, ret,
++				     "missing qcom,cpu\n");
++
++	if (cpu > 1)
++		return dev_err_probe(&pdev->dev, -EINVAL,
++				     "invalid qcom,cpu=%u\n", cpu);
++
++	saw = devm_kzalloc(&pdev->dev, sizeof(*saw), GFP_KERNEL);
++	if (!saw)
++		return -ENOMEM;
++
++	saw->dev = &pdev->dev;
++	saw->cpu = cpu;
++	mutex_init(&saw->lock);
++
++	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	saw->base = devm_ioremap_resource(&pdev->dev, res);
++	if (IS_ERR(saw->base))
++		return PTR_ERR(saw->base);
++
++	/*
++	 * First record the bootloader/current-kernel state, then perform
++	 * the exact legacy MSM8x60 SPM initialization.
++	 */
++	msm8660_saw_hw_init(saw);
++	saw->desc.name = devm_kasprintf(&pdev->dev, GFP_KERNEL,
++					"msm8660-saw-cpu%u", cpu);
++	if (!saw->desc.name)
++		return -ENOMEM;
++
++	saw->desc.id = cpu;
++	saw->desc.type = REGULATOR_VOLTAGE;
++	saw->desc.owner = THIS_MODULE;
++	saw->desc.ops = &msm8660_saw_ops;
++	saw->desc.n_voltages = HIKARI_N_VOLTAGES;
++
++	init_data = of_get_regulator_init_data(&pdev->dev,
++					       pdev->dev.of_node,
++					       &saw->desc);
++	if (!init_data)
++		return -ENOMEM;
++
++	/*
++	 * The bootloader/kernel already has a live CPU rail.  Parse the DT
++	 * voltage constraints, but do not let regulator registration itself
++	 * choose/apply a voltage.  cpufreq will explicitly adopt the boot
++	 * operating point afterwards.
++	 */
++	init_data->constraints.apply_uV = false;
++	config.dev = &pdev->dev;
++	config.driver_data = saw;
++	config.of_node = pdev->dev.of_node;
++	config.init_data = init_data;
++
++	saw->rdev = devm_regulator_register(&pdev->dev,
++					    &saw->desc, &config);
++	if (IS_ERR(saw->rdev))
++		return dev_err_probe(&pdev->dev, PTR_ERR(saw->rdev),
++				     "regulator registration failed\n");
++
++	platform_set_drvdata(pdev, saw);
++
++	dev_info(&pdev->dev,
++		 "MSM8660 SAW CPU%u regulator registered\n", cpu);
++
++
++	return 0;
++}
++
++static const struct of_device_id msm8660_saw_of_match[] = {
++	{ .compatible = "qcom,msm8660-saw-regulator" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, msm8660_saw_of_match);
++
++static struct platform_driver msm8660_saw_driver = {
++	.probe = msm8660_saw_probe,
++	.driver = {
++		.name = "qcom-msm8660-saw-regulator",
++		.of_match_table = msm8660_saw_of_match,
++	},
++};
++module_platform_driver(msm8660_saw_driver);
++
++MODULE_DESCRIPTION("Qualcomm MSM8660/MSM8260 SAW v1 CPU regulator");
++MODULE_LICENSE("GPL");
+-- 
+2.53.0

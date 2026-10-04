@@ -1,0 +1,251 @@
+From 423d878e43b858d8a6c4a9f80c52c858b94ef2a8 Mon Sep 17 00:00:00 2001
+From: BlackF1re <plevickij57@gmail.com>
+Date: Sun, 4 Oct 2026 21:30:39 +0700
+Subject: [PATCH] drm: msm: preserve KGSL-derived A220 lifecycle
+
+Split without semantic changes from the signed Hikari integration.
+
+Original-commit: f7a6e62ff206edff9cee8c04226e85f1102a9a85
+---
+ drivers/gpu/drm/msm/adreno/a2xx_gpu.c    | 146 ++++++++++++++++++++++-
+ drivers/gpu/drm/msm/adreno/a2xx_gpu.h    |   4 +
+ drivers/gpu/drm/msm/adreno/a2xx_gpummu.c |   8 ++
+ 3 files changed, 154 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/adreno/a2xx_gpu.c b/drivers/gpu/drm/msm/adreno/a2xx_gpu.c
+index df4cded9143f88b9f71167e0a63f9f19364f8a71..41e0516e849cdd4c72bfa6e91c1c793e69f8ce70 100644
+--- a/drivers/gpu/drm/msm/adreno/a2xx_gpu.c
++++ b/drivers/gpu/drm/msm/adreno/a2xx_gpu.c
+@@ -10,11 +10,120 @@ extern bool hang_debug;
+ static void a2xx_dump(struct msm_gpu *gpu);
+ static bool a2xx_idle(struct msm_gpu *gpu);
+ 
++/* Diagnostic KGSL lifecycle compatibility, A220 only.
++ * OpenSEMC c4784b04: build_regrestore_cmds and adreno_gpummu_setstate.
++ * Keep DRM VM/fences and application shaders/descriptors owned by Mesa.
++ */
++static const u32 a220_shadow_ranges[][2] = {
++	{ 0x2000, 0x2002 },
++	{ 0x2006, 0x200f },
++	{ 0x2080, 0x2082 },
++	{ 0x210c, 0x2114 },
++	{ 0x2180, 0x2184 },
++	{ 0x2300, 0x2308 },
++	{ 0x2312, 0x2312 },
++	{ 0x2324, 0x2326 },
++	{ 0x2380, 0x2383 },
++	{ 0x2100, 0x2102 },
++	{ 0x2104, 0x2109 },
++	{ 0x2200, 0x2202 },
++	{ 0x2204, 0x2206 },
++	{ 0x2208, 0x220a },
++	{ 0x2280, 0x2282 },
++	{ 0x2316, 0x2316 },
++	{ 0x2318, 0x231d },
++};
++
++static void a220_legacy_shadow_init(struct msm_gpu *gpu)
++{
++ struct a2xx_gpu *a2xx = to_a2xx_gpu(to_adreno_gpu(gpu));
++ struct msm_ringbuffer *ring = gpu->rb[0];
++ unsigned int i;
++
++ OUT_PKT3(ring, CP_WAIT_FOR_IDLE, 1);
++ OUT_RING(ring, 0);
++ OUT_PKT3(ring, CP_SET_PROTECTED_MODE, 1);
++ OUT_RING(ring, 0);
++ OUT_PKT0(ring, REG_A2XX_MH_MMU_INVALIDATE, 1);
++ OUT_RING(ring, 3);
++ OUT_PKT3(ring, CP_INVALIDATE_STATE, 1);
++ OUT_RING(ring, 0x7fff);
++ /* KGSL's initial context register / ALU / fetch constant shadow banks.
++  * Hardware shadowing is global for this single-ring diagnostic.  Mesa
++  * still provides the context restore IB and all draw-specific values.
++  */
++ OUT_PKT3(ring, CP_LOAD_CONSTANT_CONTEXT, 1 + 2 * ARRAY_SIZE(a220_shadow_ranges));
++ OUT_RING(ring, a2xx->legacy_shadow_iova + SZ_8K);
++ for (i = 0; i < ARRAY_SIZE(a220_shadow_ranges); i++) {
++  u32 reg = (4 << 16) | (a220_shadow_ranges[i][0] - 0x2000);
++  if (!i)
++   reg |= BIT(24);
++  OUT_RING(ring, reg);
++  OUT_RING(ring, a220_shadow_ranges[i][1] - a220_shadow_ranges[i][0] + 1);
++ }
++ OUT_PKT0(ring, REG_A2XX_SQ_GPR_MANAGEMENT, 1);
++ OUT_RING(ring, 0x00040400);
++ OUT_PKT3(ring, CP_WAIT_FOR_IDLE, 1);
++ OUT_RING(ring, 0);
++ OUT_PKT0(ring, REG_A2XX_TP0_CHICKEN, 1);
++ OUT_RING(ring, 0);
++ OUT_PKT3(ring, CP_LOAD_CONSTANT_CONTEXT, 3);
++ OUT_RING(ring, a2xx->legacy_shadow_iova);
++ OUT_RING(ring, BIT(24));
++ OUT_RING(ring, 2048);
++ OUT_PKT3(ring, CP_LOAD_CONSTANT_CONTEXT, 3);
++ OUT_RING(ring, a2xx->legacy_shadow_iova + 2 * SZ_8K);
++ OUT_RING(ring, BIT(24) | (1 << 16));
++ OUT_RING(ring, 192);
++ OUT_PKT3(ring, CP_SET_PROTECTED_MODE, 1);
++ OUT_RING(ring, !a2xx->protection_disabled);
++}
++
++static void a220_legacy_submit_prepare(struct msm_gpu *gpu,
++          struct msm_gem_submit *submit)
++{
++ struct msm_ringbuffer *ring = submit->ring;
++ struct a2xx_gpu *a2xx = to_a2xx_gpu(to_adreno_gpu(gpu));
++ bool changed = ring->cur_ctx_seqno != submit->queue->ctx->seqno;
++
++ /* kgsl GPUMMU setstate: idle -> TLB/TC -> base invalidate, in CP order.
++  * PTE writes are made visible before this batch can execute.
++  */
++ wmb();
++ OUT_PKT3(ring, CP_WAIT_FOR_IDLE, 1);
++ OUT_RING(ring, 0);
++ OUT_PKT3(ring, CP_SET_PROTECTED_MODE, 1);
++ OUT_RING(ring, 0);
++ OUT_PKT0(ring, REG_A2XX_MH_MMU_INVALIDATE, 1);
++ OUT_RING(ring, 3);
++ OUT_PKT3(ring, CP_INVALIDATE_STATE, 1);
++ OUT_RING(ring, 0x7fff);
++ if (changed) {
++  OUT_PKT0(ring, REG_A2XX_SQ_GPR_MANAGEMENT, 1);
++  OUT_RING(ring, 0x00040400);
++  OUT_PKT3(ring, CP_WAIT_FOR_IDLE, 1);
++  OUT_RING(ring, 0);
++  /* A20x/A220 context switch shader-space re-arm from KGSL. */
++  OUT_PKT3(ring, CP_SET_SHADER_BASES, 1);
++  OUT_RING(ring, 0x80000180);
++ }
++ OUT_PKT3(ring, CP_SET_PROTECTED_MODE, 1);
++ OUT_RING(ring, !a2xx->protection_disabled);
++ OUT_PKT0(ring, REG_AXXX_CP_SCRATCH_REG0, 1);
++ OUT_RING(ring, submit->seqno);
++ OUT_PKT3(ring, CP_MEM_WRITE, 2);
++ OUT_RING(ring, a2xx->legacy_shadow_iova + 3 * SZ_8K);
++ OUT_RING(ring, submit->seqno);
++}
++
+ static void a2xx_submit(struct msm_gpu *gpu, struct msm_gem_submit *submit)
+ {
+ 	struct msm_ringbuffer *ring = submit->ring;
+ 	unsigned int i;
+ 
++	if (adreno_is_revn(to_adreno_gpu(gpu), 220))
++		a220_legacy_submit_prepare(gpu, submit);
++
+ 	for (i = 0; i < submit->nr_cmds; i++) {
+ 		switch (submit->cmd[i].type) {
+ 		case MSM_SUBMIT_CMD_IB_TARGET_BUF:
+@@ -127,7 +236,9 @@ static int a2xx_hw_init(struct msm_gpu *gpu)
+ 	gpu_write(gpu, REG_A2XX_RBBM_PM_OVERRIDE2, 0xffffffff);
+ 
+ 	/* note: kgsl uses 0x00000001 after first reset on a22x */
+-	gpu_write(gpu, REG_A2XX_RBBM_SOFT_RESET, 0xffffffff);
++	gpu_write(gpu, REG_A2XX_RBBM_SOFT_RESET,
++		adreno_is_revn(adreno_gpu, 220) && a2xx_gpu->legacy_reset_done ? 1 : 0xffffffff);
++	a2xx_gpu->legacy_reset_done = true;
+ 	msleep(30);
+ 	gpu_write(gpu, REG_A2XX_RBBM_SOFT_RESET, 0x00000000);
+ 
+@@ -186,7 +297,8 @@ static int a2xx_hw_init(struct msm_gpu *gpu)
+ 	gpu_write(gpu, REG_A2XX_SQ_PS_PROGRAM, 0x00000000);
+ 
+ 	gpu_write(gpu, REG_A2XX_RBBM_PM_OVERRIDE1, 0); /* 0x200 for msm8960? */
+-	gpu_write(gpu, REG_A2XX_RBBM_PM_OVERRIDE2, 0); /* 0x80/0x1a0 for a22x? */
++	gpu_write(gpu, REG_A2XX_RBBM_PM_OVERRIDE2,
++		adreno_is_revn(adreno_gpu, 220) ? 0x80 : 0); /* 0x80/0x1a0 for a22x? */
+ 
+ 	/* note: gsl doesn't set this */
+ 	gpu_write(gpu, REG_A2XX_RBBM_DEBUG, 0x00080000);
+@@ -258,12 +370,36 @@ static int a2xx_hw_init(struct msm_gpu *gpu)
+ 	for (i = 1; i < len; i++)
+ 		gpu_write(gpu, REG_A2XX_CP_PFP_UCODE_DATA, ptr[i]);
+ 
+-	gpu_write(gpu, REG_AXXX_CP_QUEUE_THRESHOLDS, 0x000C0804);
++	if (!adreno_is_revn(adreno_gpu, 220))
++		gpu_write(gpu, REG_AXXX_CP_QUEUE_THRESHOLDS, 0x000C0804);
+ 
+ 	/* clear ME_HALT to start micro engine */
+ 	gpu_write(gpu, REG_AXXX_CP_ME_CNTL, 0);
+ 
+-	return a2xx_me_init(gpu) ? 0 : -EINVAL;
++	if (!a2xx_me_init(gpu))
++  return -EINVAL;
++ if (adreno_is_revn(adreno_gpu, 220)) {
++  if (!a2xx_gpu->legacy_shadow_bo) {
++   void *map = msm_gem_kernel_new(gpu->dev, SZ_64K, MSM_BO_WC,
++      gpu->vm, &a2xx_gpu->legacy_shadow_bo, &a2xx_gpu->legacy_shadow_base);
++   if (IS_ERR(map)) {
++    a2xx_gpu->legacy_shadow_bo = NULL;
++    return PTR_ERR(map);
++   }
++   memset(map, 0, SZ_64K);
++   a2xx_gpu->legacy_shadow_iova = ALIGN(a2xx_gpu->legacy_shadow_base, SZ_8K);
++  }
++  wmb();
++  gpu_write(gpu, REG_AXXX_CP_RB_WPTR_DELAY, 0);
++  gpu_write(gpu, REG_AXXX_CP_INT_ACK, 0xffffffff);
++  a220_legacy_shadow_init(gpu);
++  adreno_flush(gpu, gpu->rb[0], REG_AXXX_CP_RB_WPTR);
++  if (!a2xx_idle(gpu))
++   return -EINVAL;
++  dev_info(gpu->dev->dev, "A220 KGSL lifecycle compat v1: shadow=%llx, CP-ordered MMU, GPR/context rearm\n",
++    a2xx_gpu->legacy_shadow_iova);
++ }
++ return 0;
+ }
+ 
+ static void a2xx_recover(struct msm_gpu *gpu)
+@@ -294,6 +430,8 @@ static void a2xx_destroy(struct msm_gpu *gpu)
+ 
+ 	DBG("%s", gpu->name);
+ 
++	if (a2xx_gpu->legacy_shadow_bo)
++		msm_gem_kernel_put(a2xx_gpu->legacy_shadow_bo, gpu->vm);
+ 	adreno_gpu_cleanup(adreno_gpu);
+ 
+ 	kfree(a2xx_gpu);
+diff --git a/drivers/gpu/drm/msm/adreno/a2xx_gpu.h b/drivers/gpu/drm/msm/adreno/a2xx_gpu.h
+index 162ef98951f5fc8ede2e9ae53ab4140edc56cff8..e4c3d99b604c611f4660fa7a6c531f2320f8a815 100644
+--- a/drivers/gpu/drm/msm/adreno/a2xx_gpu.h
++++ b/drivers/gpu/drm/msm/adreno/a2xx_gpu.h
+@@ -16,6 +16,10 @@ struct a2xx_gpu {
+ 	struct adreno_gpu base;
+ 	bool pm_enabled;
+ 	bool protection_disabled;
++	bool legacy_reset_done;
++	struct drm_gem_object *legacy_shadow_bo;
++	u64 legacy_shadow_base;
++	u64 legacy_shadow_iova;
+ };
+ #define to_a2xx_gpu(x) container_of(x, struct a2xx_gpu, base)
+ 
+diff --git a/drivers/gpu/drm/msm/adreno/a2xx_gpummu.c b/drivers/gpu/drm/msm/adreno/a2xx_gpummu.c
+index e2225c5ba64783c2f710bca9d2e8737b84de3b7c..469c6a8ee36d79ac72e30ab9837a13d27c53d6ea 100644
+--- a/drivers/gpu/drm/msm/adreno/a2xx_gpummu.c
++++ b/drivers/gpu/drm/msm/adreno/a2xx_gpummu.c
+@@ -53,6 +53,10 @@ static int a2xx_gpummu_map(struct msm_mmu *mmu, uint64_t iova,
+ 	}
+ 
+ 	/* we can improve by deferring flush for multiple map() */
++	wmb(); /* PTE visibility before invalidation (KGSL setstate ordering). */
++	/* A220 invalidates through CP at the next submit, after WAIT_FOR_IDLE. */
++	if (adreno_is_revn(to_adreno_gpu(gpummu->gpu), 220))
++		return 0;
+ 	gpu_write(gpummu->gpu, REG_A2XX_MH_MMU_INVALIDATE,
+ 		A2XX_MH_MMU_INVALIDATE_INVALIDATE_ALL |
+ 		A2XX_MH_MMU_INVALIDATE_INVALIDATE_TC);
+@@ -68,6 +72,10 @@ static int a2xx_gpummu_unmap(struct msm_mmu *mmu, uint64_t iova, size_t len)
+ 	for (i = 0; i < len / GPUMMU_PAGE_SIZE; i++, idx++)
+                 gpummu->table[idx] = 0;
+ 
++	wmb(); /* PTE visibility before invalidation (KGSL setstate ordering). */
++	/* A220 invalidates through CP at the next submit, after WAIT_FOR_IDLE. */
++	if (adreno_is_revn(to_adreno_gpu(gpummu->gpu), 220))
++		return 0;
+ 	gpu_write(gpummu->gpu, REG_A2XX_MH_MMU_INVALIDATE,
+ 		A2XX_MH_MMU_INVALIDATE_INVALIDATE_ALL |
+ 		A2XX_MH_MMU_INVALIDATE_INVALIDATE_TC);
+-- 
+2.53.0

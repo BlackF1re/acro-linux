@@ -10,9 +10,9 @@ strace, lsof, tcpdump, usbutils, i2c-tools, gpiod, evtest, rsync and curl.
 Persistent services are limited to systemd/udev, NetworkManager, lightweight
 systemd-timesyncd clock synchronization, Bluetooth and SSH.
 
-Phosh owns the standard power-key inhibitor. Its system dconf default enables
-suspend, so a short power-key press suspends and the PMIC power key remains a
-wakeup source; the shell handles a long press as its power menu.
+Phosh uses the hardware GLES2 runtime. Power-key handling must not be
+confused with verified suspend/resume; see [POWER.md](POWER.md).
+Root SSH and USB console access are intentionally retained by owner request.
 
 ## Wi-Fi and SSH
 
@@ -35,8 +35,7 @@ a public key into the canonical rootfs before deployment:
 scripts/provision-hikari-ssh-key.sh ~/.ssh/id_ed25519.pub
 ```
 
-Empty-password SSH is intentionally temporary and must be disabled before a
-production release. No Wi-Fi passphrase, private SSH key, device calibration
+Empty-password root SSH is currently retained by explicit owner request. No Wi-Fi passphrase, private SSH key, device calibration
 or identifier may be committed. BCM4330 firmware/calibration is locally materialized from the
 owner's stock image with `scripts/materialize-hikari-bcm4330-firmware.sh`.
 
