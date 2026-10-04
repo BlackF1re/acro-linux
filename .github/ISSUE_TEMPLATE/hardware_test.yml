@@ -1,0 +1,24 @@
+name: Hardware acceptance result
+description: Record a physical test, including failures or incomplete evidence.
+body:
+  - type: input
+    id: function
+    attributes:
+      label: Hardware function tested
+      placeholder: e.g. USB host input, proximity IRQ, suspend/resume
+    validations:
+      required: true
+  - type: textarea
+    id: identity
+    attributes:
+      label: Exact source/runtime identity
+      description: Commits, hashes, kernel release, relevant firmware/library identity and test setup.
+    validations:
+      required: true
+  - type: textarea
+    id: test
+    attributes:
+      label: Procedure, result and limits
+      description: Actual physical action, observations, repetitions, sanitized evidence and remaining untested conditions.
+    validations:
+      required: true

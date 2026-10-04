@@ -1,0 +1,74 @@
+category	capability	component	status	detail
+Core, boot & storage	Boot and recovery	Immutable Linux BOOT → microSD → kexec	Working	Verified BOOT-to-SYSTEM transitions; experiments never replace BOOT.
+Core, boot & storage	CPU / SMP	MSM8260 · 2× ARMv7 Scorpion	Working	Both cores online; mainline Linux 7.3 Hikari port.
+Core, boot & storage	CPU hotplug	Scorpion CPU1	Partial	Offlining tested; re-onlining failed. No kexec from SMP SYSTEM.
+Core, boot & storage	CPU frequency scaling	Scorpion CPU/L2 DVFS	Implemented	Native source compiled; earlier CPU0-only 384–756 MHz test passed. Full dual-core DVFS not accepted.
+Core, boot & storage	CPU voltage / shared L2	Per-core SAW + L2 PLL coordination	Implemented	Source and safety guards retained; full runtime acceptance pending.
+Core, boot & storage	Clocks, resets and rails	GCC / MMCC / RPM / PM8058 / PM8901	Partial	Running display/GPU/USB paths exercised; all consumers and power transitions not qualified.
+Core, boot & storage	Memory interconnect	MSM8x60 NoC / RPM votes	Partial	Fabric providers bound; consumer and bandwidth policy acceptance incomplete.
+Core, boot & storage	RAM	1 GiB physical; ~907 MiB usable snapshot	Working	Correct Sony memory map; 640 MiB write/read stress passed.
+Core, boot & storage	Internal storage	16 GB eMMC · MAG2GA	Not verified	Identified on the device; native SYSTEM read/write acceptance not established.
+Core, boot & storage	microSD storage	External card / Debian rootfs	Working	Read/write rootfs and kernel bundles; sustained I/O/removal endurance pending.
+Core, boot & storage	RTC	PM8xxx RTC	Partial	Set/readback tested; powered-off retention and cold-boot restoration pending.
+Core, boot & storage	Watchdog	Qualcomm watchdog	Implemented	Reboot-stop support retained; controlled expiry/recovery test pending.
+Core, boot & storage	Persistent crash logs	ramoops / legacy RAM console	Partial	Capture path established; historical ECC and handoff compatibility require care.
+Graphics, display & controls	3D GPU / GLES2	Adreno 220 · DRM/MSM + current Freedreno	Working	KGSL-derived native KMD lifecycle; repeated varying tests and hardware Phosh. Full conformance pending.
+Graphics, display & controls	Desktop composition	GBM/EGL/GLES → phoc → Phosh	Working	Hardware GLES2 FD220; no Pixman in the observed running session.
+Graphics, display & controls	Internal display	MDP4 + MIPI-DSI + Renesas R63306	Working	Native 720×1280 scanout; some handoff/resume paths have underrun history.
+Graphics, display & controls	LCD backlight	AS3676	Working	Brightness callback and output tested; brightness restored after audits.
+Graphics, display & controls	Touchscreen / multitouch	Synaptics ClearPad TM1964-001 / RMI4	Working	Real taps, drags and simultaneous contacts tested; full-edge calibration pending.
+Graphics, display & controls	Back button	RMI navigation strip	Implemented	Native touch-overlay mapping; separate key/session acceptance pending.
+Graphics, display & controls	Home button	RMI navigation strip	Implemented	Native touch-overlay mapping; separate key/session acceptance pending.
+Graphics, display & controls	Menu button	RMI navigation strip	Implemented	Native touch-overlay mapping; separate key/session acceptance pending.
+Graphics, display & controls	Power button	PM8xxx power key	Partial	Input/wake wiring present; reliable suspend wake not established.
+Graphics, display & controls	Volume up / down	PM8058 GPIO / TLMM keys	Implemented	Both keys modelled independently; complete physical key acceptance pending.
+Graphics, display & controls	Camera focus / shutter key	Two-stage PM8058 matrix key	Implemented	Separate KEY_CAMERA_FOCUS and KEY_CAMERA mappings; camera integration pending.
+Graphics, display & controls	Notification LED	AS3676 RGB sinks	Working	Owner visually confirmed red, green and blue; endurance pending.
+Graphics, display & controls	Navigation illumination	AS3676 button backlight	Working	Owner visually confirmed the capacitive-button illumination.
+Graphics, display & controls	Haptics / vibration	PM8xxx vibrator	Not verified	Driver/configuration present; physical vibration acceptance pending.
+Graphics, display & controls	Video decoding / encoding	MSM8x60 video engine	Not verified	No native codec/media acceptance; GLES rendering is a separate capability.
+Graphics, display & controls	micro-HDMI video	MSM8x60 HDMI path	Not verified	Identified; monitor output/EDID/hotplug not accepted.
+Graphics, display & controls	HDMI audio	HDMI audio routing	Not verified	No external audio playback acceptance.
+Connectivity & telephony	Wi-Fi station	Broadcom BCM4330 / SDIO	Partial	Association, reconnect and traffic passed; later SDIO backplane failure observed on 2026-10-04.
+Connectivity & telephony	Wi-Fi Direct / P2P	BCM4330 firmware path	Not working	Unsupported legacy-firmware P2P creation is suppressed; not advertised as working.
+Connectivity & telephony	Bluetooth discovery	BCM4330 / UART serdev / BlueZ	Partial	Firmware download, HCI power and active discovery passed.
+Connectivity & telephony	Bluetooth connections / audio	BCM4330 profiles	Not verified	Pairing, payload transfer and audio profiles need separate physical tests.
+Connectivity & telephony	USB device / networking	USB 2.0 HS · ACM + NCM	Working	Serial console and USB SSH/network transport tested; suspend/endurance pending.
+Connectivity & telephony	USB OTG host	EHCI / external VBUS switch	Working	Powered enumeration and real HID input; return to device mode tested.
+Connectivity & telephony	USB overcurrent protection	NCP373 / TLMM fault input	Partial	Wiring and control implemented; fault-injection acceptance pending.
+Connectivity & telephony	NFC	NXP PN544	Implemented	Native DT/driver path configured; tag transactions not verified.
+Connectivity & telephony	FM radio	Qualcomm companion audio/FM path	Not verified	Reception, tuning, antenna and audio routing not accepted.
+Connectivity & telephony	Cellular modem / network attach	MSM8260 modem	Not verified	Android observations are not native Linux acceptance.
+Connectivity & telephony	Mobile data	Cellular packet data	Not verified	No native network/data-session acceptance.
+Connectivity & telephony	SMS	Modem messaging	Not verified	No native send/receive acceptance.
+Connectivity & telephony	Voice calls	Modem + audio routing	Not verified	No native bidirectional call/audio acceptance.
+Connectivity & telephony	SIM detection / access	GPIO switch + modem SIM path	Implemented	Insertion switch modelled; SIM access/PIN/network integration not verified.
+Connectivity & telephony	GNSS / GPS	Location subsystem; exact path unresolved	Not verified	No native satellite/fix acceptance; exact integration remains unknown.
+Cameras & audio	Rear camera	Sony KMO13BS0 module	Not verified	Identified under Android; exact sensor die and native capture unresolved.
+Cameras & audio	Front camera	Sony STW01BM0 module	Not verified	Identified under Android; exact sensor die and native capture unresolved.
+Cameras & audio	Autofocus	Rear camera actuator/path	Not verified	No native focus-control acceptance.
+Cameras & audio	Camera flash / torch	TI LM3560	Not verified	Identified; safe native flash/torch operation not accepted.
+Cameras & audio	Speaker	Qualcomm Timpani audio path	Not verified	No native playback acceptance.
+Cameras & audio	Earpiece / call receiver	Phone audio routing	Not verified	No native receiver playback/call acceptance.
+Cameras & audio	Microphones / capture	Phone microphone paths	Not verified	All physical microphone routes need capture and routing tests.
+Cameras & audio	3.5 mm headset audio / mic	Headset audio routing	Not verified	Jack detection works separately; playback/capture and mic bias pending.
+Cameras & audio	Headset insertion	TLMM61 input switch	Working	Repeated physical insert/remove events and debounce tested.
+Cameras & audio	Headset remote buttons	PM8058 XOADC accessory input	Partial	ADC reads; mic-bias and button classification pending.
+Sensors — individually	Accelerometer	Bosch BMA250	Working	Per-axis motion/orientation responses tested; full calibration pending.
+Sensors — individually	Gyroscope	InvenSense MPU3050	Working	Per-axis motion responses tested; full calibration/power policy pending.
+Sensors — individually	Magnetometer / compass	AKM8972 via AK8975-compatible driver	Working	Per-axis orientation responses and raw reads tested; calibration pending.
+Sensors — individually	Proximity	Avago APDS9702	Working	Physical near/far transitions and IRQ delivery tested.
+Sensors — individually	Ambient light	AS3676 photodiode ADC	Partial	On-demand readings work; continuous mode remains disabled after display-loss correlation.
+Sensors — individually	SoC die temperature	MSM8660 TSENS	Partial	Plausible live temperatures; protective trips/IRQ/throttling not accepted.
+Sensors — individually	Board temperature	PM8058 XOADC / MSM NTC	Partial	Raw readings and thermal response observed; complete protection policy pending.
+Sensors — individually	Battery temperature	PM8058 XOADC / pack NTC	Partial	Native readings/mapping present; controlled temperature-policy acceptance pending.
+Sensors — individually	Battery identification	PM8058 XOADC battery-ID channel	Partial	Raw channel reads; battery-family/state-transition acceptance pending.
+Sensors — individually	Charge-current monitor	PM8058 XOADC current channel	Partial	Raw channel reads; calibrated current/state-transition acceptance pending.
+Power & sleep	Battery voltage / current / SOC	TI BQ27520 G1 gauge	Partial	Native readings and G1 handling; full low-to-full/SOC calibration pending.
+Power & sleep	USB charging	TI BQ24160	Working	Sustained real charging and upper-charge taper observed; full-cycle endurance pending.
+Power & sleep	Adaptive USB current	BQ24160 input/DPM policy	Partial	500/800/900/1500 mA probing observed; source-dependent, not a guaranteed draw rate.
+Power & sleep	Cradle / dock charging	BQ24160 IN / GPIO126	Implemented	Separate input and adaptive policy; available cradle failed even in Android, so physical acceptance blocked.
+Power & sleep	Thermal protection	TSENS / battery policy / CPU cooling	Partial	Safety checks present; protective trip/throttle acceptance incomplete.
+Power & sleep	CPU idle states	Scorpion / platform idle	Not verified	No accepted low-power residency/wakeup measurement.
+Power & sleep	Suspend / resume	System sleep and power domains	Not working	Previous tests lost display/USB; reliable suspend/resume not established.
+Power & sleep	Wake sources	Power, RTC, USB, keys, radio/input IRQs	Partial	Several wake-capable nodes modelled; each wake source requires a successful sleep/wake test.

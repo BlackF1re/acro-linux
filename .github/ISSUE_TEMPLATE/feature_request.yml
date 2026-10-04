@@ -1,0 +1,14 @@
+name: Feature or support request
+description: Propose a focused native Linux capability.
+body:
+  - type: textarea
+    id: function
+    attributes:
+      label: Capability and current limitation
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Relevant hardware/source evidence and acceptance criterion
+      description: Identify known sources and the physical function that would demonstrate success.

@@ -1,0 +1,23 @@
+name: Bug report
+description: A reproducible software or device failure.
+labels: [bug]
+body:
+  - type: textarea
+    id: identity
+    attributes:
+      label: Device and stack identity
+      description: Device model, repo revision, kernel release, Mesa/runtime and boot environment. No private identifiers.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction and observed result
+      description: Exact commands/actions, expected result, actual result and whether a GPU draw/function really executed.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence and recovery
+      description: Relevant logs, hashes, screenshots, previous good revision and current recovery/device state.

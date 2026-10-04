@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Build and recovery documentation
+    url: https://github.com/BlackF1re/acro-linux/blob/main/docs/BUILD.md
+    about: Start here before changing boot or kernel images.
+  - name: Sensitive security reports
+    url: https://github.com/BlackF1re/acro-linux/blob/main/SECURITY.md
+    about: Do not disclose sensitive findings or credentials in a public issue.
