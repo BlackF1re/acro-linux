@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Keep the physically tested A220 source, independently of Debian package updates.
+MESA_REMOTE=https://gitlab.freedesktop.org/mesa/mesa.git
+MESA_COMMIT=7bcaafa20c99ea1dd6c7ba8105da0be4b8044871
+MESA_PREFIX=/opt/hikari-mesa-a220

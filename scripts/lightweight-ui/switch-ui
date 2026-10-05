@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+case "${1:-}" in
+ phosh-pixman)
+  systemctl stop hikari-lightweight.service || true
+  systemctl start phosh.service
+  chvt 7
+  ;;
+ sxmo-dwm|dwm)
+  cp /opt/hikari-lightweight/hikari-lightweight.service /run/systemd/system/hikari-lightweight.service
+  systemctl daemon-reload
+  systemctl stop phosh.service
+  if ! systemctl start hikari-lightweight.service; then
+   systemctl start phosh.service
+   exit 1
+  fi
+  ;;
+ *) echo 'Usage: hikari-switch-ui phosh-pixman|sxmo-dwm' >&2; exit 2 ;;
+esac

@@ -2,6 +2,6 @@
 # Reproducible input policy for the native Hikari userspace.
 DEBIAN_SUITE=trixie
 DEBIAN_ARCH=armhf
-DEBIAN_MIRROR_DEFAULT=https://mirror.yandex.ru/debian
+DEBIAN_MIRROR_DEFAULT=https://deb.debian.org/debian
 DEBIAN_MIRROR=${DEBIAN_MIRROR:-$DEBIAN_MIRROR_DEFAULT}
 DEBIAN_VARIANT=minbase

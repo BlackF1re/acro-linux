@@ -1,0 +1,171 @@
+#!/busybox sh
+BB=/busybox
+$BB mknod /dev/mem c 1 1 2>/dev/null || :
+$BB devmem 0x7fffff80 32 0x494e4954 2>/dev/null || :
+$BB devmem 0x7fffff84 32 0xa2200012 2>/dev/null || :
+$BB mount -t proc proc /proc
+$BB mount -t sysfs sysfs /sys
+$BB mount -t devtmpfs devtmpfs /dev 2>/dev/null || :
+$BB mknod /dev/console c 5 1 2>/dev/null || :
+$BB mknod /dev/null c 1 3 2>/dev/null || :
+$BB mknod /dev/zero c 1 5 2>/dev/null || :
+$BB mknod /dev/kmsg c 1 11 2>/dev/null || :
+$BB mount -t tmpfs -o mode=1777 tmpfs /tmp
+exec >/tmp/init.log 2>&1
+printf 'HIKARI_KGSL_KERNEL_INIT_OK native-atags-0012 kernel=%s\n' "$($BB uname -r)"
+printf 'HIKARI_KGSL_KERNEL_INIT_OK native-atags-0012 kernel=%s\n' "$($BB uname -r)" > /tmp/init-marker
+$BB dd if=/dev/zero of=/tmp/marker-block bs=512 count=1
+$BB dd if=/tmp/init-marker of=/tmp/marker-block bs=1 conv=notrunc
+ROOT_UUID='827314cf-0ffa-4fea-a7f5-9df1c6a3d579'
+target=''
+for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+ while read major minor blocks name; do
+  case "$major:$minor" in *[!0-9:]*|:) continue ;; esac
+  [ "$major" = 179 ] || continue
+  node="/dev/probe-mmc-$minor"
+  [ -b "$node" ] || $BB mknod "$node" b "$major" "$minor"
+  if $BB blkid "$node" 2>/dev/null | $BB grep -q "$ROOT_UUID"; then target=$node; break; fi
+ done < /proc/partitions
+ [ -n "$target" ] && break
+ $BB sleep 1
+done
+$BB mdev -s
+$BB mkdir -p /system /run /tmp/results
+$BB mount -t tmpfs tmpfs /run
+$BB hostname hikari-kgsl
+# Native legacy gadget; independent rescue console, no systemd or rootfs writes.
+usb=/sys/class/android_usb/android0
+if [ -e "$usb/enable" ]; then
+ echo 0 > "$usb/enable"
+ echo tty > /sys/class/android_usb/f_acm/acm_transports
+ echo 0525 > "$usb/idVendor"
+ echo a4a7 > "$usb/idProduct"
+ echo Hikari > "$usb/iManufacturer"
+ echo KGSL-control > "$usb/iProduct"
+ echo acm > "$usb/functions"
+ echo 1 > "$usb/enable"
+ $BB sleep 1
+ $BB mdev -s
+ (while :; do $BB sh -i </dev/ttyGS0 >/dev/ttyGS0 2>&1; $BB sleep 1; done) &
+fi
+echo HIKARI_ROOTFS_GUI_PHOC8 > /tmp/results/gate.log
+$BB uname -a >> /tmp/results/gate.log
+($BB sleep 360; $BB reboot -f) &
+(while :; do
+ $BB dd if=/dev/zero of=/tmp/progress-block bs=512 count=256 2>/dev/null
+ $BB cat /tmp/results/gate.log /proc/uptime /proc/mounts | $BB dd of=/tmp/progress-block bs=1 conv=notrunc 2>/dev/null
+ $BB dd if=/tmp/progress-block of="$target" bs=512 seek=61873664 count=256 conv=notrunc,fsync 2>/dev/null
+ $BB sleep 3
+done) &
+logger=$!
+/usr/bin/fuse2fs -o ro,allow_other "$target" /system >> /tmp/results/gate.log 2>&1
+rc=$?
+echo FUSE2FS_MOUNT_EXIT=$rc >> /tmp/results/gate.log
+if [ "$rc" = 0 ]; then
+ for d in dev proc sys run; do $BB mount --bind /$d /system/$d; done
+ $BB chroot /system /bin/true >> /tmp/results/gate.log 2>&1
+ echo TRUE_EXIT=$? >> /tmp/results/gate.log
+ $BB chroot /system /bin/sh -c 'echo DEBIAN_SHELL_OK' >> /tmp/results/gate.log 2>&1
+ echo SHELL_EXIT=$? >> /tmp/results/gate.log
+ $BB chroot /system /usr/bin/id >> /tmp/results/gate.log 2>&1
+ echo ID_EXIT=$? >> /tmp/results/gate.log
+ $BB chroot /system /usr/bin/env -i PATH=/usr/bin:/bin /bin/sh -c 'echo DEBIAN_ENV_OK; python3 --version' >> /tmp/results/gate.log 2>&1
+ echo ENV_EXIT=$? >> /tmp/results/gate.log
+fi
+kill "$logger" 2>/dev/null || :
+if [ "$rc" = 0 ]; then
+ $BB mkdir -p /run/user/1000 /run/hikari-kgsl /run/kgsl-gui /tmp/results/GPU-X11 /dev/pts
+ $BB chown 1000:1000 /run/user/1000
+ $BB chmod 700 /run/user/1000
+ $BB mount -t devpts -o mode=0620,gid=5 devpts /dev/pts
+ $BB mount --bind /dev/pts /system/dev/pts
+ $BB chmod 666 /dev/ptmx /dev/null /dev/zero /dev/urandom /dev/random
+ $BB mount --bind /tmp /system/tmp
+ $BB cp -a /opt/hikari/. /run/hikari-kgsl/
+ $BB cp /lib/arm-linux-gnueabihf/libudev.so.1 /run/hikari-kgsl/lib/
+ echo /firmware-hotplug > /proc/sys/kernel/hotplug
+ echo 0 > /sys/class/graphics/fb0/blank
+ $BB cat /proc/bus/input/devices > /tmp/results/input-devices
+ touchdev=$($BB awk '/Name=.*[Ss]ynaptics|Name=.*[Tt]ouch|Name=.*clearpad/ { found=1 } found && /Handlers=/ { for(i=1;i<=NF;i++) if($i~/^event/) {print "/dev/input/"$i;exit} }' /proc/bus/input/devices)
+ $BB mkdir -p /run/udev/data
+ echo 'E:ID_INPUT=1' > /run/udev/data/c13:66
+ echo 'E:ID_INPUT_TOUCHSCREEN=1' >> /run/udev/data/c13:66
+ $BB cat > /run/kgsl-gui/xorg.conf <<CONF
+Section "ServerFlags"
+ Option "AutoAddGPU" "false"
+ Option "AutoAddDevices" "false"
+EndSection
+Section "Module"
+ Disable "glx"
+ Disable "dri"
+ Disable "dri2"
+EndSection
+Section "Device"
+ Identifier "fb"
+ Driver "fbdev"
+ Option "fbdev" "/dev/fb0"
+ Option "ShadowFB" "true"
+EndSection
+Section "Screen"
+ Identifier "screen"
+ Device "fb"
+ DefaultDepth 24
+EndSection
+Section "InputDevice"
+ Identifier "touch"
+ Driver "libinput"
+ Option "Device" "$touchdev"
+ Option "CorePointer" "true"
+EndSection
+Section "ServerLayout"
+ Identifier "layout"
+ Screen "screen"
+ InputDevice "touch" "CorePointer"
+EndSection
+CONF
+ $BB chroot /system /usr/bin/env LD_PRELOAD=/run/hikari-kgsl/fbdev-legacy-subsystem.so /run/hikari-kgsl/strace -f -e trace=open,openat,ioctl,readlink -o /tmp/results/Xorg.strace /usr/lib/xorg/Xorg :0 vt1 -ac -nolisten tcp -config /run/kgsl-gui/xorg.conf -logfile /tmp/results/Xorg.log > /tmp/results/Xorg.stdout 2>&1 &
+ xpid=$!
+ xready=0
+ for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  DISPLAY=:0 $BB chroot /system /usr/bin/xdpyinfo > /tmp/results/xdpyinfo 2>&1 && { xready=1; break; }
+  $BB sleep 2
+ done
+ echo XORG_READY=$xready >> /tmp/results/gate.log
+ export DISPLAY=:0 XDG_RUNTIME_DIR=/run/user/1000 HOME=/home/phosh
+ $BB chroot /system /usr/bin/setpriv --reuid=1000 --regid=1000 --clear-groups /usr/bin/dwm > /tmp/results/dwm.log 2>&1 &
+ $BB chroot /system /usr/bin/setpriv --reuid=1000 --regid=1000 --clear-groups /usr/bin/xterm -fa 'DejaVu Sans Mono' -fs 18 -e /bin/sh > /tmp/results/xterm.log 2>&1 &
+ $BB chroot /system /usr/bin/setpriv --reuid=1000 --regid=1000 --clear-groups /usr/bin/xvkbd -geometry 720x300+0+980 > /tmp/results/xvkbd.log 2>&1 &
+ $BB sleep 3
+ $BB chmod 666 /dev/kgsl-3d0 /dev/dri/card0
+ $BB chroot /system /usr/bin/setpriv --reuid=1000 --regid=1000 --clear-groups /usr/bin/env DISPLAY=:0 XDG_RUNTIME_DIR=/run/user/1000 WLR_BACKENDS=x11 WLR_RENDERER=gles2 WLR_X11_OUTPUTS=1 LD_LIBRARY_PATH=/run/hikari-kgsl/lib:/run/hikari-kgsl/libdrm LIBGL_DRIVERS_PATH=/run/hikari-kgsl/dri GBM_DRIVERS_PATH=/run/hikari-kgsl/dri GBM_BACKENDS_PATH=/run/hikari-kgsl/dri /usr/bin/timeout 25 /usr/bin/dbus-run-session -- /usr/bin/phoc -v -E /usr/libexec/phosh > /tmp/results/Phoc.log 2>&1 &
+ ppid=$!
+ $BB sleep 5
+ for proc in /proc/[0-9]*; do
+  if $BB grep -q 'phoc' "$proc/comm"; then $BB cat "$proc/maps" > /tmp/results/Phoc.maps; fi
+ done
+ wait "$ppid"
+ echo PHOC_EXIT=$? >> /tmp/results/gate.log
+ $BB dd if=/dev/fb0 of=/tmp/results/framebuffer.raw bs=4096 count=920
+ $BB cat /sys/class/graphics/fb0/virtual_size /sys/class/graphics/fb0/stride > /tmp/results/fb-info 2>&1
+ $BB ps > /tmp/results/processes
+ $BB cp /tmp/probe-maps.txt /tmp/results/GPU-X11.maps
+ $BB cp /run/kgsl-gui/xorg.conf /tmp/results/xorg.conf
+ kill "$xpid" 2>/dev/null || :
+fi
+$BB cp /tmp/init.log /tmp/results/init.log
+$BB cat /proc/mounts > /tmp/results/mounts
+$BB dmesg > /tmp/results/dmesg
+$BB cat /tmp/results/gate.log /tmp/results/dmesg > /tmp/gate-log
+$BB dd if=/dev/zero of=/tmp/log-block bs=512 count=256
+$BB head -c 131072 /tmp/gate-log | $BB dd of=/tmp/log-block bs=1 conv=notrunc
+$BB dd if=/tmp/log-block of="$target" bs=512 seek=61873664 count=256 conv=notrunc,fsync
+$BB tar cf - -C /tmp results | $BB gzip -1 > /tmp/results.tar.gz
+size=$($BB stat -c %s /tmp/results.tar.gz)
+$BB dd if=/dev/zero of=/tmp/header bs=512 count=1
+printf 'HIKARI_KGSL_RESULT_ARCHIVE %s\n' "$size" >/tmp/header-line
+$BB dd if=/tmp/header-line of=/tmp/header bs=1 conv=notrunc
+$BB dd if=/tmp/header of="$target" bs=512 seek=851968 count=1 conv=notrunc,fsync
+$BB dd if=/tmp/results.tar.gz of="$target" bs=512 seek=851969 conv=notrunc,fsync
+$BB sync
+$BB sleep 3
+$BB reboot -f

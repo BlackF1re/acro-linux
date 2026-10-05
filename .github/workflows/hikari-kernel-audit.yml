@@ -14,6 +14,7 @@ on:
       - tools/**
       - tests/**
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -117,12 +118,29 @@ jobs:
           ./scripts/check-hikari-pstore.sh \
             --config "$BUILD_DIR/.config" \
             --dtb "$BUILD_DIR/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb"
+      - name: Package matching modules and host initramfs tool
+        run: |
+          set -euxo pipefail
+          build="$RUNNER_TEMP/hikari-build/linux-hikari-current"
+          make -C "$RUNNER_TEMP/linux-hikari" O="$build" ARCH=arm \
+            CROSS_COMPILE="$CROSS_COMPILE" usr_gen_init_cpio
+          release=$(make -s -C "$RUNNER_TEMP/linux-hikari" O="$build" ARCH=arm kernelrelease)
+          make -C "$RUNNER_TEMP/linux-hikari" O="$build" ARCH=arm \
+            CROSS_COMPILE="$CROSS_COMPILE" INSTALL_MOD_PATH="$RUNNER_TEMP/modules" \
+            INSTALL_MOD_STRIP=1 modules_install
+          rm -f "$RUNNER_TEMP/modules/lib/modules/$release/build" \
+            "$RUNNER_TEMP/modules/lib/modules/$release/source"
+          tar -C "$RUNNER_TEMP/modules" -czf "$build/modules.tar.gz" lib/modules
+          printf '%s\n' "$release" > "$build/kernel-release"
       - name: Upload SYSTEM build evidence
         uses: actions/upload-artifact@v7
         with:
           name: hikari-system-kernel-${{ github.sha }}
           path: |
             ${{ runner.temp }}/hikari-build/linux-hikari-current/.config
+            ${{ runner.temp }}/hikari-build/linux-hikari-current/kernel-release
+            ${{ runner.temp }}/hikari-build/linux-hikari-current/modules.tar.gz
+            ${{ runner.temp }}/hikari-build/linux-hikari-current/usr/gen_init_cpio
             ${{ runner.temp }}/hikari-build/linux-hikari-current/System.map
             ${{ runner.temp }}/hikari-build/linux-hikari-current/arch/arm/boot/zImage
             ${{ runner.temp }}/hikari-build/linux-hikari-current/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb

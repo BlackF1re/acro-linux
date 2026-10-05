@@ -1,0 +1,38 @@
+#!/busybox sh
+BB=/busybox
+$BB mknod /dev/mem c 1 1 2>/dev/null || :
+$BB devmem 0x7fffff80 32 0x494e4954 2>/dev/null || :
+$BB devmem 0x7fffff84 32 0xa2200011 2>/dev/null || :
+$BB mount -t proc proc /proc
+$BB mount -t sysfs sysfs /sys
+$BB mount -t devtmpfs devtmpfs /dev 2>/dev/null || :
+$BB mknod /dev/console c 5 1 2>/dev/null || :
+$BB mknod /dev/null c 1 3 2>/dev/null || :
+$BB mknod /dev/zero c 1 5 2>/dev/null || :
+$BB mknod /dev/kmsg c 1 11 2>/dev/null || :
+exec >/tmp/init.log 2>&1
+printf 'HIKARI_KGSL_KERNEL_INIT_OK native-atags-0011 kernel=%s\n' "$($BB uname -r)"
+printf 'HIKARI_KGSL_KERNEL_INIT_OK native-atags-0011 kernel=%s\n' "$($BB uname -r)" > /tmp/init-marker
+$BB dd if=/dev/zero of=/tmp/marker-block bs=512 count=1
+$BB dd if=/tmp/init-marker of=/tmp/marker-block bs=1 conv=notrunc
+ROOT_UUID='827314cf-0ffa-4fea-a7f5-9df1c6a3d579'
+target=''
+for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+ while read major minor blocks name; do
+  case "$major:$minor" in *[!0-9:]*|:) continue ;; esac
+  [ "$major" = 179 ] || continue
+  node="/dev/probe-mmc-$minor"
+  [ -b "$node" ] || $BB mknod "$node" b "$major" "$minor"
+  if $BB blkid "$node" 2>/dev/null | $BB grep -q "$ROOT_UUID"; then target=$node; break; fi
+ done < /proc/partitions
+ [ -n "$target" ] && break
+ $BB sleep 1
+done
+if [ -n "$target" ]; then
+ # Partition-relative 512-byte sectors, verified filefrag -b512.
+ $BB dd if=/tmp/marker-block of="$target" bs=512 seek=61873664 count=1 conv=notrunc,fsync
+ $BB sync
+fi
+$BB sleep 5
+$BB reboot -f
+while :; do $BB sleep 60; done

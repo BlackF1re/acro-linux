@@ -1,0 +1,80 @@
+#!/busybox sh
+BB=/busybox
+$BB mknod /dev/mem c 1 1 2>/dev/null || :
+$BB devmem 0x7fffff80 32 0x494e4954 2>/dev/null || :
+$BB devmem 0x7fffff84 32 0xa2200012 2>/dev/null || :
+$BB mount -t proc proc /proc
+$BB mount -t sysfs sysfs /sys
+$BB mount -t devtmpfs devtmpfs /dev 2>/dev/null || :
+$BB mknod /dev/console c 5 1 2>/dev/null || :
+$BB mknod /dev/null c 1 3 2>/dev/null || :
+$BB mknod /dev/zero c 1 5 2>/dev/null || :
+$BB mknod /dev/kmsg c 1 11 2>/dev/null || :
+exec >/tmp/init.log 2>&1
+printf 'HIKARI_KGSL_KERNEL_INIT_OK native-atags-0012 kernel=%s\n' "$($BB uname -r)"
+printf 'HIKARI_KGSL_KERNEL_INIT_OK native-atags-0012 kernel=%s\n' "$($BB uname -r)" > /tmp/init-marker
+$BB dd if=/dev/zero of=/tmp/marker-block bs=512 count=1
+$BB dd if=/tmp/init-marker of=/tmp/marker-block bs=1 conv=notrunc
+ROOT_UUID='827314cf-0ffa-4fea-a7f5-9df1c6a3d579'
+target=''
+for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+ while read major minor blocks name; do
+  case "$major:$minor" in *[!0-9:]*|:) continue ;; esac
+  [ "$major" = 179 ] || continue
+  node="/dev/probe-mmc-$minor"
+  [ -b "$node" ] || $BB mknod "$node" b "$major" "$minor"
+  if $BB blkid "$node" 2>/dev/null | $BB grep -q "$ROOT_UUID"; then target=$node; break; fi
+ done < /proc/partitions
+ [ -n "$target" ] && break
+ $BB sleep 1
+done
+$BB mdev -s
+$BB mkdir -p /system /run /tmp/results
+$BB mount -t tmpfs tmpfs /run
+$BB hostname hikari-kgsl
+echo HIKARI_ROOTFS_GATE > /tmp/results/gate.log
+$BB uname -a >> /tmp/results/gate.log
+($BB sleep 90; $BB reboot -f) &
+(while :; do
+ $BB dd if=/dev/zero of=/tmp/progress-block bs=512 count=256 2>/dev/null
+ $BB cat /tmp/results/gate.log | $BB dd of=/tmp/progress-block bs=1 conv=notrunc 2>/dev/null
+ $BB dd if=/tmp/progress-block of="$target" bs=512 seek=61873664 count=256 conv=notrunc,fsync 2>/dev/null
+ $BB sleep 3
+done) &
+logger=$!
+$BB mount -t ext4 -o ro,noload "$target" /system >> /tmp/results/gate.log 2>&1
+rc=$?
+echo NATIVE_EXT4_MOUNT_EXIT=$rc >> /tmp/results/gate.log
+if [ "$rc" != 0 ]; then
+ /usr/bin/fuse2fs -o ro,allow_other "$target" /system >> /tmp/results/gate.log 2>&1
+ rc=$?
+ echo FUSE2FS_MOUNT_EXIT=$rc >> /tmp/results/gate.log
+fi
+if [ "$rc" = 0 ]; then
+ for d in dev proc sys run; do $BB mount --bind /$d /system/$d; done
+ $BB chroot /system /bin/true >> /tmp/results/gate.log 2>&1
+ echo TRUE_EXIT=$? >> /tmp/results/gate.log
+ $BB chroot /system /bin/sh -c 'echo DEBIAN_SHELL_OK' >> /tmp/results/gate.log 2>&1
+ echo SHELL_EXIT=$? >> /tmp/results/gate.log
+ $BB chroot /system /usr/bin/id >> /tmp/results/gate.log 2>&1
+ echo ID_EXIT=$? >> /tmp/results/gate.log
+ $BB chroot /system /usr/bin/env -i PATH=/usr/bin:/bin /bin/sh -c 'echo DEBIAN_ENV_OK; python3 --version' >> /tmp/results/gate.log 2>&1
+ echo ENV_EXIT=$? >> /tmp/results/gate.log
+fi
+kill "$logger" 2>/dev/null || :
+$BB cat /proc/mounts > /tmp/results/mounts
+$BB dmesg > /tmp/results/dmesg
+$BB cat /tmp/results/gate.log /tmp/results/dmesg > /tmp/gate-log
+$BB dd if=/dev/zero of=/tmp/log-block bs=512 count=256
+$BB head -c 131072 /tmp/gate-log | $BB dd of=/tmp/log-block bs=1 conv=notrunc
+$BB dd if=/tmp/log-block of="$target" bs=512 seek=61873664 count=256 conv=notrunc,fsync
+$BB tar cf - -C /tmp results | $BB gzip -1 > /tmp/results.tar.gz
+size=$($BB stat -c %s /tmp/results.tar.gz)
+$BB dd if=/dev/zero of=/tmp/header bs=512 count=1
+printf 'HIKARI_KGSL_RESULT_ARCHIVE %s\n' "$size" >/tmp/header-line
+$BB dd if=/tmp/header-line of=/tmp/header bs=1 conv=notrunc
+$BB dd if=/tmp/header of="$target" bs=512 seek=851968 count=1 conv=notrunc,fsync
+$BB dd if=/tmp/results.tar.gz of="$target" bs=512 seek=851969 conv=notrunc,fsync
+$BB sync
+$BB sleep 3
+$BB reboot -f

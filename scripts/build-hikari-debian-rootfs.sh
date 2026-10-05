@@ -7,14 +7,15 @@ set -euo pipefail
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck source=../debian/source.lock
 source "$repo_root/debian/source.lock"
-rootfs=${ROOTFS_DIR:-/home/paul/xperia/build/hikari-rootfs-current}
+hikari_build_root=$(realpath -m -- "${HIKARI_BUILD_ROOT:-/home/paul/xperia/build}")
+rootfs=$(realpath -m -- "${ROOTFS_DIR:-$hikari_build_root/hikari-rootfs-current}")
 qemu_arm=${QEMU_ARM:-/usr/bin/qemu-arm}
 keyring=${DEBIAN_KEYRING:-/usr/share/keyrings/debian-archive-keyring.gpg}
 packages=$(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$repo_root/debian/packages.txt" | paste -sd, -)
 wgetrc="$repo_root/debian/wgetrc"
 stock_system_root=${HIKARI_STOCK_SYSTEM_ROOT:-"$repo_root/../../private/hikari-stock-system"}
 
-[[ $rootfs == /home/paul/xperia/build/* ]] || { echo 'ROOTFS_DIR must remain below /home/paul/xperia/build' >&2; exit 1; }
+case "$rootfs" in "$hikari_build_root"/*) ;; *) echo "ROOTFS_DIR must remain below HIKARI_BUILD_ROOT" >&2; exit 1;; esac
 command -v debootstrap >/dev/null
 test -x "$qemu_arm" || { echo "missing static qemu-arm: $qemu_arm" >&2; exit 1; }
 test -s "$keyring" || { echo "missing Debian archive keyring: $keyring" >&2; exit 1; }
@@ -67,6 +68,26 @@ if [[ ! -e "$rootfs/.hikari-debootstrap-complete" ]]; then
 		fi
 	fi
 	sudo touch "$rootfs/.hikari-debootstrap-complete"
+fi
+
+# Pin the major release by codename; never follow testing, unstable or a moving
+# stable alias. Verify signed Release metadata using Debian's archive keyring.
+sudo mkdir -p "$rootfs/etc/apt/sources.list.d" "$rootfs/usr/share/hikari"
+sudo install -m 0644 "$repo_root/debian/apt-sources.list" "$rootfs/etc/apt/sources.list"
+# Do not start target daemons in the build chroot.
+policy="$rootfs/usr/sbin/policy-rc.d"
+if [[ ! -e $policy ]]; then
+    printf '#!/bin/sh\nexit 101\n' | sudo tee "$policy" >/dev/null
+    sudo chmod 0755 "$policy"
+    created_policy=1
+else
+    created_policy=0
+fi
+if [[ ${UPDATE_DEBIAN_PACKAGES:-0} == 1 ]]; then
+    sudo install -m 0755 "$qemu_arm" "$rootfs/usr/bin/qemu-arm-static"
+    sudo chroot "$rootfs" /usr/bin/qemu-arm-static /usr/bin/apt-get update
+    sudo env DEBIAN_FRONTEND=noninteractive chroot "$rootfs" \
+        /usr/bin/qemu-arm-static /usr/bin/apt-get -y --no-remove full-upgrade
 fi
 
 # Converge an already-created canonical rootfs when the explicit package
@@ -172,17 +193,26 @@ sudo ln -sfn /lib/systemd/system/ssh.service \
 	"$rootfs/etc/systemd/system/multi-user.target.wants/ssh.service"
 sudo ln -sfn /lib/systemd/system/systemd-timesyncd.service \
 	"$rootfs/etc/systemd/system/sysinit.target.wants/systemd-timesyncd.service"
-if sudo chroot "$rootfs" getent passwd phosh >/dev/null; then
-	sudo chroot "$rootfs" usermod -aG video,render,input phosh
+if ! sudo chroot "$rootfs" getent passwd phosh >/dev/null; then
+    if sudo chroot "$rootfs" getent passwd 1000 >/dev/null; then
+        echo 'UID 1000 belongs to another user; refusing implicit replacement' >&2
+        exit 1
+    fi
+    sudo chroot "$rootfs" useradd -m -u 1000 -s /bin/bash phosh
 fi
+sudo chroot "$rootfs" usermod -aG video,render,input phosh
 printf 'hikari\n' | sudo tee "$rootfs/etc/hostname" >/dev/null
 printf '127.0.0.1 localhost\n127.0.1.1 hikari\n' | sudo tee "$rootfs/etc/hosts" >/dev/null
-printf 'deb %s %s main\n' "$DEBIAN_MIRROR_DEFAULT" "$DEBIAN_SUITE" | \
-	sudo tee "$rootfs/etc/apt/sources.list" >/dev/null
+
 
 # Bring-up only: permit console and SSH access as root with an empty password.
 # This must be replaced with normal authentication before production use.
 sudo sed -i 's#^root:[^:]*:#root::#' "$rootfs/etc/shadow"
+sudo chroot "$rootfs" dpkg-query -W -f='${binary:Package}\t${Version}\t${Architecture}\n' | \
+    LC_ALL=C sort | sudo tee "$rootfs/usr/share/hikari/packages.tsv" >/dev/null
+sudo find "$rootfs/var/lib/apt/lists" -name '*InRelease' -type f -exec sha256sum {} + | \
+    sudo tee "$rootfs/usr/share/hikari/debian-inrelease-sha256.txt" >/dev/null
+if [[ $created_policy == 1 ]]; then sudo rm -f "$policy"; fi
 sudo rm -f "$rootfs/usr/bin/qemu-arm-static"
 sudo find "$rootfs/var/cache/apt" "$rootfs/var/lib/apt/lists" \
 	-mindepth 1 -delete

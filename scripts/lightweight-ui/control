@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+case "${1:-}" in
+ phosh) exec /opt/hikari-lightweight/switch-ui phosh-pixman ;;
+ brightness)
+  case "${2:-}" in 16|-16) ;; *) exit 2 ;; esac
+  dir=/sys/class/backlight/as3676-backlight
+  val=$(cat "$dir/brightness"); max=$(cat "$dir/max_brightness")
+  val=$((val + $2)); [ "$val" -ge 8 ] || val=8
+  [ "$val" -le "$max" ] || val=$max
+  echo "$val" > "$dir/brightness"
+  ;;
+ *) exit 2 ;;
+esac

@@ -1,0 +1,19 @@
+[Unit]
+Description=Hikari CPU-only Xorg and dwm diagnostic session
+After=systemd-logind.service
+Conflicts=phosh.service
+OnFailure=phosh.service
+OnSuccess=phosh.service
+[Service]
+Type=simple
+ExecStart=/opt/hikari-lightweight/start.sh
+Restart=no
+KillMode=control-group
+TimeoutStopSec=10
+StandardOutput=journal
+StandardError=journal
+StandardInput=tty
+TTYPath=/dev/tty8
+TTYReset=yes
+TTYVHangup=yes
+Environment=LIBGL_ALWAYS_SOFTWARE=1

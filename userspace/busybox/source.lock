@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+BUSYBOX_REMOTE=https://git.busybox.net/busybox
+BUSYBOX_COMMIT=74ac096e895acd6b02976bb010e9b3511234e899

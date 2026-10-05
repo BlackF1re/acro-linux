@@ -1,0 +1,91 @@
+#!/busybox sh
+BB=/busybox
+$BB mknod /dev/mem c 1 1 2>/dev/null || :
+$BB devmem 0x7fffff80 32 0x494e4954 2>/dev/null || :
+$BB devmem 0x7fffff84 32 0xa2200013 2>/dev/null || :
+$BB mount -t proc proc /proc
+$BB mount -t sysfs sysfs /sys
+$BB mount -t devtmpfs devtmpfs /dev 2>/dev/null || :
+$BB mknod /dev/console c 5 1 2>/dev/null || :
+$BB mknod /dev/null c 1 3 2>/dev/null || :
+$BB mknod /dev/zero c 1 5 2>/dev/null || :
+$BB mknod /dev/kmsg c 1 11 2>/dev/null || :
+exec >/tmp/init.log 2>&1
+printf 'HIKARI_KGSL_KERNEL_INIT_OK native-atags-0013 kernel=%s\n' "$($BB uname -r)"
+printf 'HIKARI_KGSL_KERNEL_INIT_OK native-atags-0013 kernel=%s\n' "$($BB uname -r)" > /tmp/init-marker
+$BB dd if=/dev/zero of=/tmp/marker-block bs=512 count=1
+$BB dd if=/tmp/init-marker of=/tmp/marker-block bs=1 conv=notrunc
+ROOT_UUID='827314cf-0ffa-4fea-a7f5-9df1c6a3d579'
+target=''
+for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+ while read major minor blocks name; do
+  case "$major:$minor" in *[!0-9:]*|:) continue ;; esac
+  [ "$major" = 179 ] || continue
+  node="/dev/probe-mmc-$minor"
+  [ -b "$node" ] || $BB mknod "$node" b "$major" "$minor"
+  if $BB blkid "$node" 2>/dev/null | $BB grep -q "$ROOT_UUID"; then target=$node; break; fi
+ done < /proc/partitions
+ [ -n "$target" ] && break
+ $BB sleep 1
+done
+$BB mdev -s
+$BB mkdir -p /tmp/results/S0
+$BB uname -a > /tmp/results/identity.txt
+$BB ls -l /dev/kgsl* /dev/dri/* >> /tmp/results/identity.txt
+$BB sha256sum /opt/hikari/dri/kgsl_dri.so /opt/hikari/lib/* /opt/hikari/libdrm/* /lib/firmware/* >> /tmp/results/identity.txt
+echo /firmware-hotplug > /proc/sys/kernel/hotplug
+export LD_LIBRARY_PATH=/opt/hikari/lib:/opt/hikari/libdrm:/lib/arm-linux-gnueabihf
+export LIBGL_DRIVERS_PATH=/opt/hikari/dri
+export GBM_DRIVERS_PATH=/opt/hikari/dri
+export GBM_BACKENDS_PATH=/opt/hikari/dri
+export EGL_PLATFORM=drm
+persist_progress() {
+ {
+  echo HIKARI_KGSL_S0_IN_PROGRESS
+  $BB uname -a
+  $BB cat /proc/uptime
+  $BB cat /tmp/results/S0.log /tmp/results/S0-device.strace /tmp/fw.log 2>/dev/null
+  $BB ps
+  for proc in /proc/[0-9]*; do
+   [ -r "$proc/comm" ] || continue
+   comm=$($BB cat "$proc/comm")
+   case "$comm" in probe|strace|timeout)
+    echo TASK $proc $comm
+    $BB cat "$proc/wchan" "$proc/stack" 2>/dev/null
+    $BB ls -l "$proc/fd" 2>/dev/null
+   ;; esac
+  done
+  $BB dmesg | $BB tail -n 100
+ } > /tmp/progress
+ $BB dd if=/dev/zero of=/tmp/progress-block bs=512 count=256
+ $BB head -c 131072 /tmp/progress | $BB dd of=/tmp/progress-block bs=1 conv=notrunc
+ [ -z "$target" ] || $BB dd if=/tmp/progress-block of="$target" bs=512 seek=61873664 count=256 conv=notrunc,fsync
+}
+persist_progress
+($BB sleep 150; $BB sync; $BB reboot -f) &
+resetter=$!
+for run in 1 2 3; do
+ $BB mkdir -p /tmp/results/transition-$run
+ $BB timeout 40 /opt/hikari/strace -f -e trace=open,openat,ioctl -o /tmp/results/transition-$run.strace /opt/hikari/probe transition /tmp/results/transition-$run/ > /tmp/results/transition-$run.log 2>&1
+ echo $? > /tmp/results/transition-$run.exit
+ $BB cp /tmp/probe-maps.txt /tmp/results/transition-$run.maps 2>/dev/null || :
+done
+kill "$resetter" 2>/dev/null || :
+$BB dmesg > /tmp/results/dmesg.txt
+ $BB cat /tmp/results/transition-*.log /tmp/results/identity.txt /tmp/results/dmesg.txt > /tmp/gpu-log
+$BB dd if=/dev/zero of=/tmp/log-block bs=512 count=256
+$BB head -c 131072 /tmp/gpu-log | $BB dd of=/tmp/log-block bs=1 conv=notrunc
+[ -z "$target" ] || $BB dd if=/tmp/log-block of="$target" bs=512 seek=61873664 count=256 conv=notrunc,fsync
+$BB tar cf - -C /tmp results | $BB gzip > /tmp/results.tar.gz
+size=$($BB stat -c %s /tmp/results.tar.gz)
+$BB dd if=/dev/zero of=/tmp/header bs=512 count=1
+printf 'HIKARI_KGSL_RESULT_ARCHIVE %s\n' "$size" > /tmp/header-line
+$BB dd if=/tmp/header-line of=/tmp/header bs=1 conv=notrunc
+if [ -n "$target" ] && [ "$size" -lt 33553920 ]; then
+ $BB dd if=/tmp/header of="$target" bs=512 seek=851968 count=1 conv=notrunc,fsync
+ $BB dd if=/tmp/results.tar.gz of="$target" bs=512 seek=851969 conv=notrunc,fsync
+ $BB sync
+fi
+$BB sleep 3
+$BB reboot -f
+while :; do $BB sleep 60; done

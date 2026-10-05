@@ -78,3 +78,6 @@ CONFIG_DEBUG_INFO_NONE=y
 # CONFIG_FW_LOADER_DEBUG is not set
 # CONFIG_USB_GADGET_DEBUG_FILES is not set
 # CONFIG_RCU_TRACE is not set
+
+# Sony/CAF-style MSM8x60 Scorpion standalone power collapse.
+CONFIG_ARM_QCOM_MSM8660_CPUIDLE=y

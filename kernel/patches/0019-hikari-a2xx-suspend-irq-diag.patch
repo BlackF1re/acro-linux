@@ -1,0 +1,105 @@
+From 752d4a1434527459acabd9bbef1c1e45485de228 Mon Sep 17 00:00:00 2001
+From: Hikari Diagnostic <hikari-diagnostic@localhost>
+Date: Mon, 5 Oct 2026 22:00:19 +0700
+Subject: [PATCH] drm/msm/adreno: diagnose A2xx suspend IRQ storm
+
+---
+ drivers/gpu/drm/msm/adreno/a2xx_gpu.c      |  3 ++
+ drivers/gpu/drm/msm/adreno/adreno_device.c | 40 ++++++++++++++++++++--
+ 2 files changed, 41 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/adreno/a2xx_gpu.c b/drivers/gpu/drm/msm/adreno/a2xx_gpu.c
+index b15da718c..3785488ba 100644
+--- a/drivers/gpu/drm/msm/adreno/a2xx_gpu.c
++++ b/drivers/gpu/drm/msm/adreno/a2xx_gpu.c
+@@ -487,6 +487,9 @@ static irqreturn_t a2xx_irq(struct msm_gpu *gpu)
+ 		dev_warn(gpu->dev->dev, "RBBM_INT: %08X\n", status);
+ 
+ 		gpu_write(gpu, REG_A2XX_RBBM_INT_ACK, status);
++		disable_irq_nosync(gpu->irq);
++		dev_warn(gpu->dev->dev,
++			 "HIKARI: gpu-irq disabled after RBBM_INT\n");
+ 	}
+ 
+ 	msm_gpu_retire(gpu);
+diff --git a/drivers/gpu/drm/msm/adreno/adreno_device.c b/drivers/gpu/drm/msm/adreno/adreno_device.c
+index 7f20320ef..c15254264 100644
+--- a/drivers/gpu/drm/msm/adreno/adreno_device.c
++++ b/drivers/gpu/drm/msm/adreno/adreno_device.c
+@@ -365,11 +365,14 @@ static void resume_scheduler(struct msm_gpu *gpu)
+ static int adreno_system_suspend(struct device *dev)
+ {
+ 	struct msm_gpu *gpu = dev_to_gpu(dev);
++	bool gate_irq;
+ 	int remaining, ret;
+ 
+ 	if (!gpu)
+ 		return 0;
+ 
++	gate_irq = adreno_is_a2xx(to_adreno_gpu(gpu));
++
+ 	suspend_scheduler(gpu);
+ 
+ 	remaining = wait_event_timeout(gpu->retire_event,
+@@ -381,10 +384,21 @@ static int adreno_system_suspend(struct device *dev)
+ 		goto out;
+ 	}
+ 
++	/*
++	 * Hikari MSM8660 diagnostic:
++	 * keep the A2xx IRQ masked while its power/clock state is torn down
++	 * and until hardware has been reinitialized on system resume.
++	 */
++	if (gate_irq)
++		disable_irq(gpu->irq);
++
+ 	ret = pm_runtime_force_suspend(dev);
+ out:
+-	if (ret)
++	if (ret) {
++		if (gate_irq)
++			enable_irq(gpu->irq);
+ 		resume_scheduler(gpu);
++	}
+ 
+ 	return ret;
+ }
+@@ -392,12 +406,34 @@ static int adreno_system_suspend(struct device *dev)
+ static int adreno_system_resume(struct device *dev)
+ {
+ 	struct msm_gpu *gpu = dev_to_gpu(dev);
++	bool gate_irq;
++	int ret;
+ 
+ 	if (!gpu)
+ 		return 0;
+ 
++	gate_irq = adreno_is_a2xx(to_adreno_gpu(gpu));
++
++	ret = pm_runtime_force_resume(dev);
++
++	/*
++	 * A2xx comes back with needs_hw_init set.  Reinitialize it while
++	 * the physical GPU IRQ is still masked so stale RBBM state cannot
++	 * turn into an interrupt storm before the first userspace submit.
++	 */
++	if (!ret && gate_irq) {
++		mutex_lock(&gpu->lock);
++		ret = msm_gpu_hw_init(gpu);
++		mutex_unlock(&gpu->lock);
++	}
++
++	/*
++	 * Hikari diagnostic: leave the A2xx physical IRQ masked after
++	 * system resume.  The platform PM test does not require GPU use.
++	 */
+ 	resume_scheduler(gpu);
+-	return pm_runtime_force_resume(dev);
++
++	return ret;
+ }
+ 
+ static const struct dev_pm_ops adreno_pm_ops = {
+-- 
+2.53.0
+

@@ -1,0 +1,4 @@
+# Debian 13 stable only. Codename pinning prevents an automatic major upgrade.
+deb https://deb.debian.org/debian trixie main
+deb https://deb.debian.org/debian trixie-updates main
+deb https://security.debian.org/debian-security trixie-security main

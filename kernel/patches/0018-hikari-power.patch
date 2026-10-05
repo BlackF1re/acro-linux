@@ -1,0 +1,507 @@
+From abf4d90035285e2100344ae61ab48d8101b8cc4c Mon Sep 17 00:00:00 2001
+From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 19:02:36 +0700
+Subject: [PATCH] power: msm8660: add Sony-style standalone power collapse
+
+---
+ arch/arm/mach-qcom/Makefile                   |   1 +
+ arch/arm/mach-qcom/msm8660-sleep.S            |  47 +++
+ drivers/cpuidle/Kconfig.arm                   |  12 +
+ drivers/cpuidle/Makefile                      |   1 +
+ drivers/cpuidle/cpuidle-qcom-msm8660.c        | 268 ++++++++++++++++++
+ .../regulator/qcom-msm8660-saw-regulator.c    |  74 +++++
+ include/linux/regulator/qcom-msm8660-saw.h    |  10 +
+ 7 files changed, 413 insertions(+)
+ create mode 100644 arch/arm/mach-qcom/msm8660-sleep.S
+ create mode 100644 drivers/cpuidle/cpuidle-qcom-msm8660.c
+ create mode 100644 include/linux/regulator/qcom-msm8660-saw.h
+
+diff --git a/arch/arm/mach-qcom/Makefile b/arch/arm/mach-qcom/Makefile
+index b839201c9..bc5bd2884 100644
+--- a/arch/arm/mach-qcom/Makefile
++++ b/arch/arm/mach-qcom/Makefile
+@@ -1,2 +1,3 @@
+ # SPDX-License-Identifier: GPL-2.0-only
+ obj-$(CONFIG_SMP)	+= platsmp.o
++obj-$(CONFIG_ARM_QCOM_MSM8660_CPUIDLE) += msm8660-sleep.o
+diff --git a/arch/arm/mach-qcom/msm8660-sleep.S b/arch/arm/mach-qcom/msm8660-sleep.S
+new file mode 100644
+index 000000000..dd4a87b12
+--- /dev/null
++++ b/arch/arm/mach-qcom/msm8660-sleep.S
+@@ -0,0 +1,47 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * MSM8x60 Scorpion power-collapse resume glue.
++ *
++ * Sony/CAF restored Scorpion L2CR1 while still running with the MMU off,
++ * before restoring the generic ARMv7 MMU context.  Generic cpu_suspend()
++ * does not know about this Qualcomm-specific register, so restore it here
++ * and then continue through the normal ARM cpu_resume_arm path.
++ */
++
++#include <linux/linkage.h>
++#include <asm/assembler.h>
++
++	.arm
++
++	.pushsection ".idmap.text", "ax"
++	.align 5
++
++SYM_CODE_START(msm8660_cpu_resume_arm)
++	ARM_BE8(setend be)
++
++	/* MPIDR[0] selects Scorpion CPU0/CPU1 on MSM8x60. */
++	mrc	p15, 0, r0, c0, c0, 5
++	and	r0, r0, #1
++
++	/*
++	 * adr_l is PC-relative.  Since this code executes at its physical
++	 * address with the MMU off, it obtains the physical address of the
++	 * saved array as required.
++	 */
++	adr_l	r1, msm8660_l2cr1_save
++	ldr	r1, [r1, r0, lsl #2]
++
++	/* Scorpion L2 cache control register 1. */
++	mcr	p15, 3, r1, c15, c0, 3
++	isb
++
++	b	cpu_resume_arm
++SYM_CODE_END(msm8660_cpu_resume_arm)
++
++	.popsection
++
++	.data
++	.align 3
++SYM_DATA_START(msm8660_l2cr1_save)
++	.space	8
++SYM_DATA_END(msm8660_l2cr1_save)
+diff --git a/drivers/cpuidle/Kconfig.arm b/drivers/cpuidle/Kconfig.arm
+index b88b01aa5..452e31d1c 100644
+--- a/drivers/cpuidle/Kconfig.arm
++++ b/drivers/cpuidle/Kconfig.arm
+@@ -130,3 +130,15 @@ config ARM_QCOM_SPM_CPUIDLE
+ 	  The Subsystem Power Manager (SPM) controls low power modes for the
+ 	  CPU and L2 cores. It interface with various system drivers to put
+ 	  the cores in low power modes.
++
++config ARM_QCOM_MSM8660_CPUIDLE
++	bool "CPU Idle Driver for MSM8260/MSM8660 Scorpion"
++	depends on ARCH_QCOM && !ARM64 && MMU
++	depends on CPU_IDLE
++	depends on QCOM_SCM=y
++	depends on REGULATOR_QCOM_MSM8660_SAW=y
++	select ARM_CPU_SUSPEND
++	select CPU_IDLE_MULTIPLE_DRIVERS
++	help
++	  Sony/CAF-compatible standalone CPU power collapse for MSM8260/MSM8660
++	  Scorpion cores using SAW v1 and the legacy TrustZone warm-boot ABI.
+diff --git a/drivers/cpuidle/Makefile b/drivers/cpuidle/Makefile
+index 88cbc2a7a..722c3e711 100644
+--- a/drivers/cpuidle/Makefile
++++ b/drivers/cpuidle/Makefile
+@@ -46,3 +46,4 @@ obj-$(CONFIG_RISCV_SBI_CPUIDLE)		+= cpuidle-riscv-sbi.o
+ ###############################################################################
+ # S390 drivers
+ obj-$(CONFIG_S390_CPUIDLE)		+= cpuidle-s390.o
++obj-$(CONFIG_ARM_QCOM_MSM8660_CPUIDLE) += cpuidle-qcom-msm8660.o
+diff --git a/drivers/cpuidle/cpuidle-qcom-msm8660.c b/drivers/cpuidle/cpuidle-qcom-msm8660.c
+new file mode 100644
+index 000000000..6b8f471ea
+--- /dev/null
++++ b/drivers/cpuidle/cpuidle-qcom-msm8660.c
+@@ -0,0 +1,268 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Sony/CAF-style MSM8260/MSM8660 Scorpion CPU idle.
++ *
++ * The first deep state implemented here is standalone power collapse:
++ *
++ *   cpu_pm_enter()
++ *     -> SAW POWER_COLLAPSE, RPM bypassed
++ *     -> save Scorpion L2CR1
++ *     -> cpu_suspend()
++ *     -> full cache flush
++ *     -> disable I/D cache
++ *     -> WFI / core power collapse
++ *     -> TrustZone warm boot
++ *     -> restore L2CR1 with MMU off
++ *     -> generic cpu_resume_arm
++ *     -> SAW CLOCK_GATING
++ *   cpu_pm_exit()
++ *
++ * This corresponds to Sony's standalone power-collapse path, not the
++ * unrelated retention experiment.
++ */
++
++#include <linux/bitops.h>
++#include <linux/cpu.h>
++#include <linux/cpu_pm.h>
++#include <linux/cpuidle.h>
++#include <linux/cpumask.h>
++#include <linux/firmware/qcom/qcom_scm.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
++#include <linux/regulator/qcom-msm8660-saw.h>
++#include <linux/smp.h>
++
++#include <asm/cacheflush.h>
++#include <asm/proc-fns.h>
++#include <asm/suspend.h>
++
++#define MSM8660_NR_CPUS	2
++
++extern void msm8660_cpu_resume_arm(void);
++extern u32 msm8660_l2cr1_save[MSM8660_NR_CPUS];
++
++static struct cpuidle_driver msm8660_idle_drivers[MSM8660_NR_CPUS];
++
++static void msm8660_save_l2cr1(unsigned int cpu)
++{
++	u32 value;
++
++	/* Scorpion-specific L2 cache control register 1. */
++	asm volatile("mrc p15, 3, %0, c15, c0, 3"
++		     : "=r" (value));
++
++	WRITE_ONCE(msm8660_l2cr1_save[cpu], value);
++
++	/*
++	 * Warm resume reads this with the MMU and caches off.  Push the
++	 * Scorpion-specific state through every cache level to main memory.
++	 */
++	sync_cache_w(&msm8660_l2cr1_save[cpu]);
++}
++
++/*
++ * cpu_suspend() has already saved the generic ARM context when this runs.
++ *
++ * The historical Scorpion collapse code flushed the complete cache
++ * hierarchy, disabled D/I cache in SCTLR and executed WFI.  If an
++ * interrupt was already pending, WFI returned instead of collapsing;
++ * in that case restore SCTLR and report an aborted collapse.
++ */
++static int msm8660_collapse_finisher(unsigned long unused)
++{
++	u32 sctlr;
++	u32 disabled;
++
++	(void)unused;
++
++	asm volatile("mrc p15, 0, %0, c1, c0, 0"
++		     : "=r" (sctlr));
++
++	disabled = sctlr & ~(BIT(2) | BIT(12));
++
++	/*
++	 * This also pushes msm8660_l2cr1_save[] to the memory visible to
++	 * the MMU-off warm-resume trampoline.
++	 */
++	flush_cache_all();
++
++	asm volatile(
++		"mcr p15, 0, %0, c1, c0, 0\n\t"
++		"dsb\n\t"
++		"wfi\n\t"
++		"mcr p15, 0, %1, c1, c0, 0\n\t"
++		"isb\n\t"
++		:
++		: "r" (disabled), "r" (sctlr)
++		: "memory");
++
++	/* WFI returned without the core actually collapsing. */
++	return -1;
++}
++
++static int msm8660_cpu_spc(void *unused)
++{
++	unsigned int cpu = raw_smp_processor_id();
++	int ret;
++	int restore_ret;
++
++	(void)unused;
++
++	if (cpu >= MSM8660_NR_CPUS)
++		return -EINVAL;
++
++	ret = msm8660_saw_set_power_collapse(cpu, true);
++	if (ret)
++		return ret;
++
++	/*
++	 * Sony saved L2CR1 as part of the architectural collapse context.
++	 * Generic ARMv7 cpu_suspend() saves everything else we need.
++	 */
++	msm8660_save_l2cr1(cpu);
++
++	ret = cpu_suspend(0, msm8660_collapse_finisher);
++
++	/*
++	 * We arrive here both after a successful warm resume (ret == 0) and
++	 * after an aborted WFI.  Never leave SAW armed for collapse.
++	 */
++	restore_ret = msm8660_saw_set_power_collapse(cpu, false);
++	if (!ret && restore_ret)
++		ret = restore_ret;
++
++	return ret;
++}
++
++static __cpuidle int msm8660_enter_idle(struct cpuidle_device *dev,
++				       struct cpuidle_driver *drv,
++				       int index)
++{
++	/*
++	 * State 0 is handled as ordinary WFI by the CPU_PM helper itself.
++	 * Standalone power collapse has been validated on both CPUs and is
++	 * available to the cpuidle governor as a normal deep idle state.
++	 */
++	return CPU_PM_CPU_IDLE_ENTER_PARAM(msm8660_cpu_spc, index, NULL);
++}
++
++static const struct cpuidle_driver msm8660_idle_template = {
++	.name = "msm8660-saw",
++	.owner = THIS_MODULE,
++	.states = {
++		{
++			.enter = msm8660_enter_idle,
++			.exit_latency = 1,
++			.target_residency = 1,
++			.name = "WFI",
++			.desc = "ARM WFI",
++		},
++		{
++			.enter = msm8660_enter_idle,
++			.exit_latency = 100,
++			.target_residency = 500,
++			.name = "SPC",
++			.desc = "standalone power collapse",
++		},
++	},
++	.state_count = 2,
++	.safe_state_index = 0,
++};
++
++static int msm8660_cpuidle_probe(struct platform_device *pdev)
++{
++	bool registered[MSM8660_NR_CPUS] = { };
++	int cpu;
++	int ret;
++	int i;
++
++	if (!qcom_scm_is_available())
++		return -EPROBE_DEFER;
++
++	/*
++	 * Do not partially register cpuidle while one of the two SAWs is still
++	 * probing.  Deferred probing will bring us back once both are ready.
++	 */
++	for_each_present_cpu(cpu) {
++		if (cpu >= MSM8660_NR_CPUS)
++			return dev_err_probe(&pdev->dev, -EINVAL,
++					     "unexpected CPU%u\n", cpu);
++
++		if (!msm8660_saw_cpu_ready(cpu))
++			return -EPROBE_DEFER;
++	}
++
++	/*
++	 * Sony's MSM8x60 boot mode is TrustZone-controlled.  Mainline's
++	 * legacy SCM implementation uses the same warm-boot flag encoding.
++	 */
++	ret = qcom_scm_set_warm_boot_addr(msm8660_cpu_resume_arm);
++	if (ret)
++		return dev_err_probe(&pdev->dev, ret,
++				     "failed to program warm boot address\n");
++
++	for_each_present_cpu(cpu) {
++		msm8660_idle_drivers[cpu] = msm8660_idle_template;
++		msm8660_idle_drivers[cpu].cpumask =
++			(struct cpumask *)cpumask_of(cpu);
++
++		ret = cpuidle_register(&msm8660_idle_drivers[cpu], NULL);
++		if (ret) {
++			dev_err(&pdev->dev,
++				"failed to register CPU%u cpuidle: %d\n",
++				cpu, ret);
++			goto unregister;
++		}
++
++		registered[cpu] = true;
++	}
++
++	dev_info(&pdev->dev,
++		 "MSM8660 Sony-style standalone power collapse registered\n");
++
++	return 0;
++
++unregister:
++	for (i = 0; i < MSM8660_NR_CPUS; i++)
++		if (registered[i])
++			cpuidle_unregister(&msm8660_idle_drivers[i]);
++
++	return ret;
++}
++
++static struct platform_driver msm8660_cpuidle_driver = {
++	.probe = msm8660_cpuidle_probe,
++	.driver = {
++		.name = "qcom-msm8660-cpuidle",
++		.suppress_bind_attrs = true,
++	},
++};
++
++static int __init msm8660_cpuidle_init(void)
++{
++	struct platform_device *pdev;
++	int ret;
++
++	/* The voltage/SAW data in this driver is specifically Fuji/Hikari. */
++	if (!of_machine_is_compatible("sony,hikari"))
++		return 0;
++
++	ret = platform_driver_register(&msm8660_cpuidle_driver);
++	if (ret)
++		return ret;
++
++	pdev = platform_device_register_simple("qcom-msm8660-cpuidle",
++					       -1, NULL, 0);
++	if (IS_ERR(pdev)) {
++		ret = PTR_ERR(pdev);
++		platform_driver_unregister(&msm8660_cpuidle_driver);
++		return ret;
++	}
++
++	return 0;
++}
++device_initcall(msm8660_cpuidle_init);
++
++MODULE_DESCRIPTION("Sony-style MSM8660 Scorpion CPU idle");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/regulator/qcom-msm8660-saw-regulator.c b/drivers/regulator/qcom-msm8660-saw-regulator.c
+index fd5ebaf8c..053ce0fb2 100644
+--- a/drivers/regulator/qcom-msm8660-saw-regulator.c
++++ b/drivers/regulator/qcom-msm8660-saw-regulator.c
+@@ -23,6 +23,8 @@
+ #include <linux/regulator/driver.h>
+ #include <linux/regulator/machine.h>
+ #include <linux/regulator/of_regulator.h>
++#include <linux/regulator/qcom-msm8660-saw.h>
++#include <linux/smp.h>
+ 
+ /* MSM8x60 SAW v1 register layout */
+ #define SAW_AVS_CTL              0x04
+@@ -74,6 +76,12 @@ struct msm8660_vdd_req {
+ 	u32 sts;
+ };
+ 
++#define NR_SCORPION_CPUS		2
++#define HIKARI_COLLAPSE_MID_VLEVEL	0x89
++#define HIKARI_COLLAPSE_VLEVEL		0x20
++
++static struct msm8660_saw *msm8660_saw_cpus[NR_SCORPION_CPUS];
++
+ /*
+  * Exact msm_spm_data[] initialization for MSM8x60 SoC major != 1.
+  *
+@@ -104,6 +112,71 @@ static void msm8660_saw_hw_init(struct msm8660_saw *saw)
+ 	mb();
+ }
+ 
++bool msm8660_saw_cpu_ready(unsigned int cpu)
++{
++	if (cpu >= NR_SCORPION_CPUS)
++		return false;
++
++	return READ_ONCE(msm8660_saw_cpus[cpu]) != NULL;
++}
++
++/*
++ * Program the exact MSM8x60/Fuji standalone power-collapse SAW sequence.
++ *
++ * notify_rpm=false in the historical standalone path, hence RPM bypass=1.
++ * The awake voltage is taken from live SAW status because modern cpufreq
++ * changes it dynamically rather than leaving the historical 0xa0 constant.
++ *
++ * This must run on the CPU controlled by this SAW.
++ */
++int msm8660_saw_set_power_collapse(unsigned int cpu, bool enable)
++{
++	struct msm8660_saw *saw;
++	u32 spm_ctl;
++	u32 pmic_ctl;
++	u32 sts;
++	u8 awake_vlevel;
++
++	if (cpu >= NR_SCORPION_CPUS || cpu != raw_smp_processor_id())
++		return -EINVAL;
++
++	saw = READ_ONCE(msm8660_saw_cpus[cpu]);
++	if (!saw)
++		return -ENODEV;
++
++	spm_ctl = readl_relaxed(saw->base + SAW_SPM_CTL);
++	pmic_ctl = readl_relaxed(saw->base + SAW_PMIC_CTL);
++
++	/* Clear mode and RPM-bypass fields, then select RPM bypass. */
++	spm_ctl &= ~0x0f;
++	spm_ctl |= 0x08;
++
++	if (enable) {
++		sts = readl_relaxed(saw->base + SAW_STS);
++		if (SAW_STS_PMIC_STATE(sts) != 0)
++			return -EBUSY;
++
++		awake_vlevel = SAW_STS_PMIC_DATA(sts);
++
++		/* Historical MSM_SPM_MODE_POWER_COLLAPSE encoding. */
++		spm_ctl |= 0x02;
++		pmic_ctl = (HIKARI_COLLAPSE_MID_VLEVEL << 16) |
++			   (awake_vlevel << 8) |
++			   HIKARI_COLLAPSE_VLEVEL;
++	}
++
++	/*
++	 * Match the historical msm_spm_set_low_power_mode() flush order:
++	 * SPM_CTL, PMIC_CTL, RST_EN, then a full memory barrier.
++	 */
++	writel_relaxed(spm_ctl, saw->base + SAW_SPM_CTL);
++	writel_relaxed(pmic_ctl, saw->base + SAW_PMIC_CTL);
++	writel_relaxed(enable ? 1 : 0, saw->base + SAW_RST_EN);
++	mb();
++
++	return 0;
++}
++
+ static int msm8660_uv_to_vlevel(int min_uV, int max_uV,
+ 				int *actual_uV, u8 *vlevel)
+ {
+@@ -340,6 +413,7 @@ static int msm8660_saw_probe(struct platform_device *pdev)
+ 				     "regulator registration failed\n");
+ 
+ 	platform_set_drvdata(pdev, saw);
++	WRITE_ONCE(msm8660_saw_cpus[cpu], saw);
+ 
+ 	dev_dbg(&pdev->dev,
+ 		 "MSM8660 SAW CPU%u regulator registered\n", cpu);
+diff --git a/include/linux/regulator/qcom-msm8660-saw.h b/include/linux/regulator/qcom-msm8660-saw.h
+new file mode 100644
+index 000000000..0bea855a2
+--- /dev/null
++++ b/include/linux/regulator/qcom-msm8660-saw.h
+@@ -0,0 +1,10 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#ifndef __LINUX_REGULATOR_QCOM_MSM8660_SAW_H
++#define __LINUX_REGULATOR_QCOM_MSM8660_SAW_H
++
++#include <linux/types.h>
++
++bool msm8660_saw_cpu_ready(unsigned int cpu);
++int msm8660_saw_set_power_collapse(unsigned int cpu, bool enable);
++
++#endif
+-- 
+2.53.0
+

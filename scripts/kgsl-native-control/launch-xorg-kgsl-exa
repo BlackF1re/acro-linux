@@ -1,0 +1,26 @@
+#!/busybox sh
+BB=/busybox
+$BB killall Xorg
+$BB sleep 2
+$BB chroot /system /usr/bin/env LD_LIBRARY_PATH=/run/hikari-kgsl/libdrm LD_PRELOAD=/run/hikari-kgsl/fbdev-legacy-subsystem.so /usr/lib/xorg/Xorg :0 vt1 -noreset -ac -nolisten tcp -modulepath /run/kgsl-ddx,/usr/lib/xorg/modules -config /run/kgsl-gui/xorg-ddx.conf -logfile /tmp/results/GPU-DDX/Xorg.log > /tmp/results/GPU-DDX/Xorg.stdout 2>&1 &
+xpid=$!
+ready=0
+for n in 1 2 3 4 5 6 7 8 9 10; do
+ if $BB chroot /system /usr/bin/env DISPLAY=:0 /usr/bin/xdpyinfo >/tmp/results/GPU-DDX/xdpyinfo 2>&1; then ready=1; break; fi
+ $BB sleep 1
+done
+if [ "$ready" != 1 ]; then
+ $BB kill "$xpid"
+ $BB sh /run/restart-gui
+ echo FALLBACK > /tmp/results/GPU-DDX/status
+ exit
+fi
+export DISPLAY=:0 HOME=/run/kgsl-home XDG_CACHE_HOME=/run/kgsl-home/.cache XDG_RUNTIME_DIR=/run/user/1000
+$BB chroot /system /usr/bin/setpriv --reuid=1000 --regid=1000 --clear-groups /usr/bin/icewm >/tmp/results/GPU-DDX/icewm.log 2>&1 &
+$BB chroot /system /usr/bin/setpriv --reuid=1000 --regid=1000 --clear-groups /usr/bin/xterm -fa 'DejaVu Sans Mono' -fs 16 -geometry 42x22+0+45 -e /bin/sh -i >/tmp/results/GPU-DDX/xterm.log 2>&1 &
+$BB chroot /system /usr/bin/setpriv --reuid=1000 --regid=1000 --clear-groups /usr/bin/xvkbd -geometry 720x320+0+960 >/tmp/results/GPU-DDX/xvkbd.log 2>&1 &
+$BB cat /proc/$xpid/maps > /tmp/results/GPU-DDX/maps
+$BB sleep 12
+$BB chroot /system /usr/bin/env DISPLAY=:0 /usr/bin/xdpyinfo >/dev/null 2>&1 || { $BB sh /run/restart-gui; echo FALLBACK > /tmp/results/GPU-DDX/status; exit; }
+echo XORG_DDX_RUNNING > /tmp/results/GPU-DDX/status
+$BB dmesg > /tmp/results/GPU-DDX/dmesg
