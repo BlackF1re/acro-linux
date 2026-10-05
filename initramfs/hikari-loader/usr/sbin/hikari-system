@@ -3,34 +3,122 @@
 # Validate and explicitly enter the SMP system stored on microSD.
 set -eu
 
+fail()
+{
+	echo "hikari-system: $*" >&2
+	exit 1
+}
+
 /usr/sbin/hikari-mount-system
+
 boot_dir=/boot/hikari-next
+boot_path=/system$boot_dir
 cmdline='console=tty0 driver_async_probe=mdp4,msm_dsi hikari.root=LABEL=HIKARI_ROOT rootfstype=ext4 rootwait rw'
 
-for file in zImage qcom-msm8260-sony-hikari.dtb hikari-root.cpio.gz kernel-release SHA256SUMS; do
-	[ -s "/system$boot_dir/$file" ] || {
-		echo "missing SYSTEM boot input: $file" >&2
-		exit 1
-	}
-done
-(cd "/system$boot_dir" && sha256sum -c SHA256SUMS)
+echo 'Checking SYSTEM bundle...'
 
-echo 'Loading verified microSD kernel: SYSTEM'
+for file in \
+	zImage \
+	qcom-msm8260-sony-hikari.dtb \
+	hikari-root.cpio.gz \
+	kernel-release \
+	modules.tar.gz \
+	SHA256SUMS
+do
+	[ -s "$boot_path/$file" ] ||
+		fail "missing SYSTEM boot input: $file"
+done
+
+release=$(cat "$boot_path/kernel-release")
+
+case "$release" in
+	''|*[!A-Za-z0-9._+-]*)
+		fail "invalid kernel release: $release"
+		;;
+esac
+
+[ -d "/system/lib/modules/$release" ] ||
+	fail "missing installed modules for $release"
+
+expected_manifest='zImage
+qcom-msm8260-sony-hikari.dtb
+hikari-root.cpio.gz
+kernel-release
+modules.tar.gz'
+
+actual_manifest=$(
+	awk 'NF == 2 { print $2 }' "$boot_path/SHA256SUMS"
+)
+
+[ "$actual_manifest" = "$expected_manifest" ] ||
+	fail 'unexpected SHA256SUMS contents'
+
+(
+	cd "$boot_path"
+	sha256sum -c SHA256SUMS
+) || fail 'SYSTEM checksum verification failed'
+
+module_members=$(tar -tzf "$boot_path/modules.tar.gz") ||
+	fail 'cannot read modules archive'
+
+printf '%s\n' "$module_members" |
+	grep -qx "lib/modules/$release/" ||
+	fail 'modules archive does not match kernel release'
+
+[ -x /system/usr/sbin/kexec ] ||
+	fail 'SYSTEM kexec is missing'
+
+echo "Verified SYSTEM: $release"
+
+# Give chroot/kexec a clean /proc. Remove leftovers from a previous failed
+# launcher invocation instead of stacking another bind mount.
 mkdir -p /system/proc
+
+while mountpoint -q /system/proc; do
+	umount /system/proc ||
+		fail 'cannot remove stale /system/proc mount'
+done
+
 mount --bind /proc /system/proc
+
+proc_bound=1
+
 cleanup()
 {
-	mountpoint -q /system/proc && umount /system/proc || true
+	if [ "${proc_bound:-0}" -eq 1 ] && mountpoint -q /system/proc; then
+		umount /system/proc || true
+	fi
+	proc_bound=0
 }
+
 trap cleanup EXIT HUP INT TERM
+
 chroot /system /usr/sbin/kexec --load "$boot_dir/zImage" \
 	--dtb="$boot_dir/qcom-msm8260-sony-hikari.dtb" \
-	--initrd="$boot_dir/hikari-root.cpio.gz" --append="$cmdline"
+	--initrd="$boot_dir/hikari-root.cpio.gz" \
+	--append="$cmdline" ||
+	fail 'kexec --load failed'
+
 cleanup
 trap - EXIT HUP INT TERM
+
 sync
-# Keep ext4 clean across kexec.  The final kexec binary and libraries remain
-# readable, while the new kernel receives a consistent filesystem.
-mount -o remount,ro /system
+
+# The new kernel should receive a clean ext4 filesystem.
+mount -o remount,ro /system ||
+	fail 'cannot remount HIKARI_ROOT read-only'
+
 echo 'Entering SYSTEM'
-exec chroot /system /usr/sbin/kexec -e
+
+# Successful kexec never returns. If it does return for any reason, restore
+# HIKARI_ROOT to rw so BOOT remains usable for another update/attempt.
+if chroot /system /usr/sbin/kexec -e; then
+	rc=0
+else
+	rc=$?
+fi
+
+mount -o remount,rw /system 2>/dev/null || true
+
+[ "$rc" -ne 0 ] || rc=1
+fail "kexec -e returned unexpectedly (rc=$rc)"
