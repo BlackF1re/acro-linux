@@ -1,4 +1,18 @@
+# Device-private inputs and generated Python files.
 research/private/
 __pycache__/
 *.py[cod]
+
+# Local test/build caches. Production build paths live outside this repository.
+/build/
+/out/
+/.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editor and OS debris.
+.DS_Store
+*~
+*.swp
 /hikari-htop.png

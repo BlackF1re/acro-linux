@@ -32,5 +32,6 @@ cradle charging and the remaining audio/radio/camera/HDMI functions retain
 their individual evidence limits. Prior suspend tests had display/USB resume
 regressions; do not enable automatic sleep as a cleanup action.
 
-Historical operational snapshots are under
-`research/archive/operational-docs-20261004/`; hardware research is retained.
+The maintained bring-up procedures are linked from [WORKSPACE.md](WORKSPACE.md).
+Raw experiments are retained only where they provide evidence for a current
+open acceptance item.

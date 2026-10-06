@@ -1,24 +1,18 @@
-# Current-device read-only inventory
+# Current hardware evidence
 
-Collected from the connected Sony Xperia acro S LT26w through read-only ADB,
-fastboot and offline evidence work (2026-09-01). No flash, unlock, image
-download, partition write, settings change, or filesystem modification was
-performed by the project. Owner-approved C2 work sequentially read the
-accessible eMMC user area into private backup media; later offline analysis was
-limited to confirmed p3 (`/boot`).
+This directory is for compact physical evidence that is not yet represented
+in maintained documentation. The authoritative current descriptions and
+bring-up procedures are in `docs/` and `status/hardware.yaml`.
 
-The files contain non-secret metadata only. ADB and hardware serials, Android
-ID, IMEI/IMSI/ICCID, MAC addresses, credentials, TA/radio/NV/calibration data,
-and boot-command-line values that identify this particular handset are omitted.
-Sensitive partition bytes are physically present only in the private backup;
-they were not separately inspected, parsed, interpreted, extracted, exposed,
-or committed. Some non-secret system configuration, module, and generic
-firmware files were read only to record narrow metadata, names, hashes or
-provenance; no proprietary blob was copied. Presence of an interface or bound
-legacy driver is not an acceptance test. This is evidence of a modified Android
-legacy baseline, not progress of the target native-Linux port.
+- Hardware identity and readiness: `docs/HARDWARE.md`
+- Board-source facts: `docs/SOURCES.md`
+- Boot/recovery: `docs/BOOT.md`, `docs/RECOVERY.md`
+- Display/GPU: `docs/DISPLAY.md`
+- USB and charging: `docs/USB.md`, `docs/CHARGING.md`
+- Power: `docs/POWER.md`
 
-`total/` is intentionally a flat, unstructured copy set for transport and
-review. It preserves report text but not directory topology, so relative
-Markdown links should be followed in the canonical `docs/` or structured
-`research/device/current/` locations instead.
+Keep raw captures only when they support a current unresolved acceptance item
+and cannot be replaced by a concise, sanitized result. Do not store duplicate
+reports, temporary binaries, proprietary library dumps or abandoned test
+artifacts here. Device-specific calibration and full-storage backups belong
+outside the repository.

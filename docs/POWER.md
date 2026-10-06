@@ -25,5 +25,6 @@ acceptance test. The current `sleep.target`/`suspend.target` unit state alone
 is not proof of a mask or of working resume.
 
 Retain watchdog, pstore/ramoops and error logging. BOOT remains immutable;
-experimental SYSTEM kernels reside in separate microSD directories.
-Historical suspend experiments remain under research, not production hooks.
+experimental SYSTEM kernels reside in separate microSD directories. Prior
+suspend attempts are summarized here; no experimental suspend hook is enabled
+in production.

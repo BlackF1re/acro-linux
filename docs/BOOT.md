@@ -26,16 +26,16 @@ CPU1 has been safely returned to the bootloader state.
 
 BOOT is recovery-capable, not a second copy of Debian. SYSTEM holds the normal
 package-managed userspace, kernel modules and development tools. Kernel, DT and
-module updates therefore need no p3 flash; only changes to BOOT itself do.
+module updates use the separate SYSTEM bundle path and need no p3 write.
 
 ## Fixed facts and safety
 
-- p3 is the 20 MiB Sony ELF boot partition and the only flash target permitted
-  by project tooling.
+- p3 is the 20 MiB Sony ELF boot partition. Treat it as immutable during
+  normal development; select test kernels from the microSD SYSTEM bundle path.
 - The current ELF uses kernel `0x40208000`, ramdisk `0x41800000` and the
   preserved RPM payload at `0x00020000`.
-- A verified original p3 image and fastboot recovery route must remain
-  available before any BOOT flash.
+- Keep the verified original p3 image and recovery material available. No BOOT
+  write is part of the normal development path.
 - p1, p2, p5-p11, eMMC boot0/boot1 and RPMB are never installation targets.
 - pstore/ramoops is retained for failures that remove display and USB.
 

@@ -1,1 +1,0 @@
-/system/bin/sh: cat: /proc/last_kmsg: Operation not permitted

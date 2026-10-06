@@ -3,6 +3,8 @@
 [![Kernel source checks](https://github.com/BlackF1re/acro-linux/actions/workflows/hikari-kernel-audit.yml/badge.svg)](https://github.com/BlackF1re/acro-linux/actions/workflows/hikari-kernel-audit.yml)
 [Build](docs/BUILD.md) · [Testing](docs/TESTING.md) · [Hardware](docs/HARDWARE.md) · [Recovery](docs/RECOVERY.md) · [Project status](docs/STATUS.md)
 
+Workspace and source layout: [docs/WORKSPACE.md](docs/WORKSPACE.md).
+
 A native Linux port for **Sony Xperia acro S LT26w / Hikari**: modern Debian
 armhf, the Linux 7.3 Hikari port, DRM/MSM, current Mesa/Freedreno and
 **hardware-accelerated Phosh on Adreno 220**. No Android framework or libhybris
@@ -32,7 +34,7 @@ acceptance.
 | What is only partial? | Wi-Fi, Bluetooth, RTC, thermal/power policy, several buttons and wake paths |
 | What is still missing? | Reliable suspend/resume, native audio, cellular data/SMS/calls, cameras, video codecs and HDMI |
 | How is it developed safely? | Immutable BOOT loads independent SYSTEM bundles from microSD; failed experiments return to the known recovery environment after a hardware reboot |
-| How is the kernel source kept reproducible? | A pinned upstream base plus **17 subsystem patches**, canonical DT/config records and exact prepared-tree checks |
+| How is the kernel source kept reproducible? | A pinned upstream base plus the maintained subsystem patch series, canonical DT/config records and exact prepared-tree checks |
 
 ```text
 Sony boot → immutable Linux BOOT → microSD/kexec → modern Linux SYSTEM
@@ -318,7 +320,7 @@ rewrite recovery-critical storage.
 
 | Directory | Contents |
 |---|---|
-| `kernel/` | Pinned upstream base, 17 subsystem patches, canonical DT and kernel configs |
+| `kernel/` | Pinned upstream base, maintained subsystem patch series, canonical DT and kernel configs |
 | `distro/`, `debian/`, `ui/` | Mesa/runtime integration, Debian system configuration and graphical session setup |
 | `initramfs/` | BOOT/SYSTEM early-userspace components |
 | `firmware/` | Firmware metadata/integration material subject to its original licensing |
