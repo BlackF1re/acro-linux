@@ -26,6 +26,22 @@ Reinitialize MDP4 fetch/CSC/port state and interrupt enables after noirq
 power loss, before restoring the atomic display state. Keep prepare-only
 aborts on the ordinary complete path.
 
+Keep platform suspend available with cpuidle.off=1 so automatic idle and
+explicit system sleep can be validated independently. Debug messages report
+RPMRS, clock and collapse results through dynamic debug only.
+
+Provide PM8xxx irq_mask, as in Sony, so MASK_ON_SUSPEND actually closes
+non-wake sources without clearing pending events. mask_ack alone is not
+called by the generic suspend mask path.
+
+Consume RPM polling acknowledgments in Sony order: wait for the GIC ACK
+edge, read/clear message RAM, flush the clear, then clear the consumed
+pending edge. A stale ACK must not abort the subsequent CPU WFI.
+
+Order MPU3050 auxiliary-bus suspend/resume after the gate and balance
+runtime references only for successful mux selects. Preserve asynchronous
+PM and normal autosuspend.
+
 Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
 ---
  .../interrupt-controller/qcom,msm8660-mpm.yaml     | 106 ++++
@@ -38,10 +54,13 @@ Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
  arch/arm/mach-qcom/platsmp.c                       | 109 ++++
  drivers/cpuidle/Kconfig.arm                        |  13 +
  drivers/cpuidle/Makefile                           |   1 +
- drivers/cpuidle/cpuidle-qcom-msm8660.c             | 392 ++++++++++++++
+ drivers/cpuidle/cpuidle-qcom-msm8660.c             | 405 ++++++++++++++
+ drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c           |  41 +-
+ drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.h           |   1 +
+ drivers/iio/gyro/mpu3050-i2c.c                     |  52 +-
  drivers/irqchip/irq-qcom-mpm.c                     | 304 ++++++++++-
- drivers/mfd/qcom-pm8xxx.c                          |  15 +-
- drivers/mfd/qcom_rpm.c                             | 574 ++++++++++++++++++++-
+ drivers/mfd/qcom-pm8xxx.c                          |  26 +-
+ drivers/mfd/qcom_rpm.c                             | 598 ++++++++++++++++++++-
  drivers/pinctrl/qcom/pinctrl-msm.c                 |  47 ++
  drivers/pinctrl/qcom/pinctrl-msm8660.c             |  55 ++
  drivers/regulator/qcom-msm8660-saw-regulator.c     |  92 ++++
@@ -49,7 +68,7 @@ Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
  include/linux/mfd/qcom_rpm.h                       |  61 +++
  include/linux/regulator/qcom-msm8660-saw.h         |  16 +
  include/linux/soc/qcom/msm8660-mpm.h               |  19 +
- 21 files changed, 2006 insertions(+), 12 deletions(-)
+ 24 files changed, 2138 insertions(+), 22 deletions(-)
 
 diff --git a/Documentation/devicetree/bindings/interrupt-controller/qcom,msm8660-mpm.yaml b/Documentation/devicetree/bindings/interrupt-controller/qcom,msm8660-mpm.yaml
 new file mode 100644
@@ -506,10 +525,10 @@ index 88cbc2a7aea86b9e51971105fbd7e3c46d722ee1..722c3e711405f633d0c280b544406ee8
 +obj-$(CONFIG_ARM_QCOM_MSM8660_CPUIDLE) += cpuidle-qcom-msm8660.o
 diff --git a/drivers/cpuidle/cpuidle-qcom-msm8660.c b/drivers/cpuidle/cpuidle-qcom-msm8660.c
 new file mode 100644
-index 0000000000000000000000000000000000000000..9995be79b60573d93f13cb4880ac3ea08b70aabf
+index 0000000000000000000000000000000000000000..ae6a6fa1105dd6b8cdff96dee5a8a84f134e3a20
 --- /dev/null
 +++ b/drivers/cpuidle/cpuidle-qcom-msm8660.c
-@@ -0,0 +1,392 @@
+@@ -0,0 +1,405 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Sony/CAF-style MSM8260/MSM8660 Scorpion power collapse.
@@ -552,6 +571,8 @@ index 0000000000000000000000000000000000000000..9995be79b60573d93f13cb4880ac3ea0
 +#include <asm/cacheflush.h>
 +#include <asm/proc-fns.h>
 +#include <asm/suspend.h>
++
++#include "cpuidle.h"
 +
 +#define MSM8660_NR_CPUS	2
 +
@@ -763,6 +784,7 @@ index 0000000000000000000000000000000000000000..9995be79b60573d93f13cb4880ac3ea0
 +
 +	/* Prepare the conservative Sony/Fuji sleep set before touching SAW. */
 +	ret = qcom_rpm_msm8660_rpmrs_enter_sleep_noirq(0, &sleep_limits);
++	pr_debug("MSM8660 suspend: RPMRS enter returned %d\n", ret);
 +	if (ret)
 +		return ret;
 +	rpmrs_armed = true;
@@ -771,15 +793,18 @@ index 0000000000000000000000000000000000000000..9995be79b60573d93f13cb4880ac3ea0
 +	avsdscr = msm8660_avs_disable();
 +
 +	ret = msm8660_cpufreq_power_collapse_enter(0, &clock_state);
++	pr_debug("MSM8660 suspend: collapse clocks returned %d\n", ret);
 +	if (ret)
 +		goto restore_avs;
 +
 +	ret = cpu_pm_enter();
++	pr_debug("MSM8660 suspend: CPU PM enter returned %d\n", ret);
 +	if (ret)
 +		goto restore_clocks;
 +
 +	ret = msm8660_cpu_collapse(false, MSM8660_SAW_COLLAPSE_NOTIFY_RPM,
 +				   &collapsed);
++	pr_debug("MSM8660 suspend: collapsed=%d returned %d\n", collapsed, ret);
 +	cpu_pm_exit();
 +
 +restore_clocks:
@@ -791,6 +816,7 @@ index 0000000000000000000000000000000000000000..9995be79b60573d93f13cb4880ac3ea0
 +	msm8660_avs_restore(avsdscr);
 +	if (rpmrs_armed) {
 +		restore_ret = qcom_rpm_msm8660_rpmrs_exit_sleep_noirq(collapsed);
++		pr_debug("MSM8660 suspend: RPMRS exit returned %d\n", restore_ret);
 +		if (!ret && restore_ret)
 +			ret = restore_ret;
 +	}
@@ -836,6 +862,10 @@ index 0000000000000000000000000000000000000000..9995be79b60573d93f13cb4880ac3ea0
 +		return dev_err_probe(&pdev->dev, ret,
 +				     "failed to program warm boot address\n");
 +
++	/* Disabling automatic idle must not disable platform system sleep. */
++	if (cpuidle_disabled())
++		goto register_suspend;
++
 +	for_each_present_cpu(cpu) {
 +		msm8660_idle_drivers[cpu] = msm8660_idle_template;
 +		msm8660_idle_drivers[cpu].cpumask =
@@ -852,10 +882,12 @@ index 0000000000000000000000000000000000000000..9995be79b60573d93f13cb4880ac3ea0
 +		registered[cpu] = true;
 +	}
 +
++register_suspend:
 +	suspend_set_ops(&msm8660_suspend_ops);
 +
 +	dev_info(&pdev->dev,
-+		 "MSM8660 standalone power collapse and system suspend registered\n");
++		 "MSM8660 system suspend registered (cpuidle %s)\n",
++		 cpuidle_disabled() ? "disabled" : "enabled");
 +
 +	return 0;
 +
@@ -902,6 +934,177 @@ index 0000000000000000000000000000000000000000..9995be79b60573d93f13cb4880ac3ea0
 +
 +MODULE_DESCRIPTION("Sony-style MSM8660 Scorpion CPU idle and system suspend");
 +MODULE_LICENSE("GPL");
+diff --git a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
+index c73a6f0120bc39b6cad1b0e5cb1845da70cc7342..70b73752d95972713443c2c70ff3f4f6c01e3bc9 100644
+--- a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
++++ b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
+@@ -539,9 +539,48 @@ static int mdp4_kms_init(struct drm_device *dev)
+ 	return 0;
+ }
+ 
++static int mdp4_suspend_noirq(struct device *dev)
++{
++	struct msm_drm_private *priv = dev_get_drvdata(dev);
++
++	if (priv && priv->kms)
++		to_mdp4_kms(to_mdp_kms(priv->kms))->needs_resume_init = true;
++	return 0;
++}
++
++static void mdp4_pm_complete(struct device *dev)
++{
++	struct msm_drm_private *priv = dev_get_drvdata(dev);
++	struct mdp4_kms *mdp4_kms;
++	struct mdp_kms *mdp_kms;
++	int ret;
++
++	if (!priv || !priv->kms)
++		return;
++	mdp_kms = to_mdp_kms(priv->kms);
++	mdp4_kms = to_mdp4_kms(mdp_kms);
++	if (mdp4_kms->needs_resume_init) {
++		/* Domain collapse loses fetch configuration and IRQ enables. */
++		ret = mdp4_hw_init(priv->kms);
++		if (ret)
++			goto fail;
++		ret = mdp4_enable(mdp4_kms);
++		if (ret)
++			goto fail;
++		mdp4_set_irqmask(mdp_kms, mdp_kms->cur_irq_mask, 0);
++		mdp4_disable(mdp4_kms);
++		mdp4_kms->needs_resume_init = false;
++	}
++	msm_kms_pm_complete(dev);
++	return;
++fail:
++	dev_err(dev, "MDP4 resume initialization failed: %d\n", ret);
++}
++
+ static const struct dev_pm_ops mdp4_pm_ops = {
+ 	.prepare = msm_kms_pm_prepare,
+-	.complete = msm_kms_pm_complete,
++	.suspend_noirq = mdp4_suspend_noirq,
++	.complete = mdp4_pm_complete,
+ };
+ 
+ static int mdp4_setup_interconnect(struct platform_device *pdev)
+diff --git a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.h b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.h
+index 06458d4ee48c9b809945ffcc5c09f2ccdcdf473a..8d0ddaee33cbc7a4042d174a8158c7bba75b456f 100644
+--- a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.h
++++ b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.h
+@@ -35,6 +35,7 @@ struct mdp4_kms {
+ 	struct mdp_irq error_handler;
+ 
+ 	bool rpm_enabled;
++	bool needs_resume_init;
+ 
+ 	/* empty/blank cursor bo to use when cursor is "disabled" */
+ 	struct drm_gem_object *blank_cursor_bo;
+diff --git a/drivers/iio/gyro/mpu3050-i2c.c b/drivers/iio/gyro/mpu3050-i2c.c
+index 2a5bcec7272c569fb6e95faa34a97fc8ae0e48ab..22c847ff8cec5abc50ba25d730dfa738a6c56cb4 100644
+--- a/drivers/iio/gyro/mpu3050-i2c.c
++++ b/drivers/iio/gyro/mpu3050-i2c.c
+@@ -9,6 +9,12 @@
+ 
+ #include "mpu3050.h"
+ 
++struct mpu3050_i2c_mux {
++	struct mpu3050 *mpu3050;
++	struct device_link *link;
++	bool selected;
++};
++
+ static const struct regmap_config mpu3050_i2c_regmap_config = {
+ 	.reg_bits = 8,
+ 	.val_bits = 8,
+@@ -16,17 +22,24 @@ static const struct regmap_config mpu3050_i2c_regmap_config = {
+ 
+ static int mpu3050_i2c_bypass_select(struct i2c_mux_core *mux, u32 chan_id)
+ {
+-	struct mpu3050 *mpu3050 = i2c_mux_priv(mux);
++	struct mpu3050_i2c_mux *priv = i2c_mux_priv(mux);
++	int ret;
+ 
+ 	/* Just power up the device, that is all that is needed */
+-	return pm_runtime_resume_and_get(mpu3050->dev);
++	ret = pm_runtime_resume_and_get(priv->mpu3050->dev);
++	priv->selected = ret >= 0;
++	return ret;
+ }
+ 
+ static int mpu3050_i2c_bypass_deselect(struct i2c_mux_core *mux, u32 chan_id)
+ {
+-	struct mpu3050 *mpu3050 = i2c_mux_priv(mux);
++	struct mpu3050_i2c_mux *priv = i2c_mux_priv(mux);
+ 
+-	pm_runtime_put_autosuspend(mpu3050->dev);
++	/* The mux core calls deselect even when select failed. */
++	if (priv->selected) {
++		pm_runtime_put_autosuspend(priv->mpu3050->dev);
++		priv->selected = false;
++	}
+ 	return 0;
+ }
+ 
+@@ -36,6 +49,7 @@ static int mpu3050_i2c_probe(struct i2c_client *client)
+ 	struct regmap *regmap;
+ 	const char *name;
+ 	struct mpu3050 *mpu3050;
++	struct mpu3050_i2c_mux *priv;
+ 	int ret;
+ 
+ 	if (!i2c_check_functionality(client->adapter,
+@@ -61,16 +75,31 @@ static int mpu3050_i2c_probe(struct i2c_client *client)
+ 	/* The main driver is up, now register the I2C mux */
+ 	mpu3050 = iio_priv(dev_get_drvdata(&client->dev));
+ 	mpu3050->i2cmux = i2c_mux_alloc(client->adapter, &client->dev,
+-					1, 0, I2C_MUX_LOCKED | I2C_MUX_GATE,
++					1, sizeof(*priv),
++					I2C_MUX_LOCKED | I2C_MUX_GATE,
+ 					mpu3050_i2c_bypass_select,
+ 					mpu3050_i2c_bypass_deselect);
+ 	/* Just fail the mux, there is no point in killing the driver */
+ 	if (!mpu3050->i2cmux)
+ 		dev_err(&client->dev, "failed to allocate I2C mux\n");
+ 	else {
+-		mpu3050->i2cmux->priv = mpu3050;
+-		/* Ignore failure, not critical */
+-		i2c_mux_add_adapter(mpu3050->i2cmux, 0, 0);
++		priv = i2c_mux_priv(mpu3050->i2cmux);
++		priv->mpu3050 = mpu3050;
++		ret = i2c_mux_add_adapter(mpu3050->i2cmux, 0, 0);
++		if (ret)
++			return 0;
++
++		/*
++		 * The auxiliary adapter is a child of the upstream adapter,
++		 * not the MPU3050. Its clients must resume after this gate
++		 * and suspend before it, including with asynchronous PM.
++		 */
++		priv->link = device_link_add(&mpu3050->i2cmux->adapter[0]->dev,
++					     &client->dev, DL_FLAG_STATELESS);
++		if (!priv->link) {
++			dev_err(&client->dev, "failed to link auxiliary bus power\n");
++			i2c_mux_del_adapters(mpu3050->i2cmux);
++		}
+ 	}
+ 
+ 	return 0;
+@@ -81,8 +110,13 @@ static void mpu3050_i2c_remove(struct i2c_client *client)
+ 	struct iio_dev *indio_dev = dev_get_drvdata(&client->dev);
+ 	struct mpu3050 *mpu3050 = iio_priv(indio_dev);
+ 
+-	if (mpu3050->i2cmux)
++	if (mpu3050->i2cmux) {
++		struct mpu3050_i2c_mux *priv = i2c_mux_priv(mpu3050->i2cmux);
++
++		if (priv->link)
++			device_link_del(priv->link);
+ 		i2c_mux_del_adapters(mpu3050->i2cmux);
++	}
+ 
+ 	mpu3050_common_remove(&client->dev);
+ }
 diff --git a/drivers/irqchip/irq-qcom-mpm.c b/drivers/irqchip/irq-qcom-mpm.c
 index 8c575d7ce8a179c69c76e602f058f423e9e36f24..9bac9d2efdf04b5ff9cd08a66c6c58fd0a02f608 100644
 --- a/drivers/irqchip/irq-qcom-mpm.c
@@ -1377,7 +1580,7 @@ index 8c575d7ce8a179c69c76e602f058f423e9e36f24..9bac9d2efdf04b5ff9cd08a66c6c58fd
  MODULE_DESCRIPTION("Qualcomm Technologies, Inc. MSM Power Manager");
  MODULE_LICENSE("GPL v2");
 diff --git a/drivers/mfd/qcom-pm8xxx.c b/drivers/mfd/qcom-pm8xxx.c
-index 393db42c46228288c5eb0b591793af2934e951d6..a08be5387a2d3f595a5ae53ce9758f1d4dbc2a2d 100644
+index 393db42c46228288c5eb0b591793af2934e951d6..98ae775a7e50edf60995120a554575d37631ae4b 100644
 --- a/drivers/mfd/qcom-pm8xxx.c
 +++ b/drivers/mfd/qcom-pm8xxx.c
 @@ -141,7 +141,20 @@ static int pm8xxx_irq_block_handler(struct pm_irq_chip *chip, int block)
@@ -1402,8 +1605,33 @@ index 393db42c46228288c5eb0b591793af2934e951d6..a08be5387a2d3f595a5ae53ce9758f1d
  		}
  	}
  	return 0;
+@@ -262,6 +275,16 @@ static irqreturn_t pm8821_irq_handler(int irq, void *data)
+ 	return IRQ_HANDLED;
+ }
+ 
++static void pm8xxx_irq_mask(struct irq_data *d)
++{
++	struct pm_irq_chip *chip = irq_data_get_irq_chip_data(d);
++	unsigned int pmirq = irqd_to_hwirq(d);
++	u8 config = chip->config[pmirq] | PM_IRQF_MASK_ALL;
++
++	/* Mask non-wake sources on suspend without dropping pending events. */
++	pm8xxx_config_irq(chip, pmirq / 8, config);
++}
++
+ static void pm8xxx_irq_mask_ack(struct irq_data *d)
+ {
+ 	struct pm_irq_chip *chip = irq_data_get_irq_chip_data(d);
+@@ -356,6 +379,7 @@ static int pm8xxx_irq_get_irqchip_state(struct irq_data *d,
+ 
+ static struct irq_chip pm8xxx_irq_chip = {
+ 	.name		= "pm8xxx",
++	.irq_mask	= pm8xxx_irq_mask,
+ 	.irq_mask_ack	= pm8xxx_irq_mask_ack,
+ 	.irq_unmask	= pm8xxx_irq_unmask,
+ 	.irq_set_type	= pm8xxx_irq_set_type,
 diff --git a/drivers/mfd/qcom_rpm.c b/drivers/mfd/qcom_rpm.c
-index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..cf0a8369a8d2cf9d9c58293d4e8280fd4a76f6d0 100644
+index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..a25a456022a142e6a285987972d1004d2dec29d4 100644
 --- a/drivers/mfd/qcom_rpm.c
 +++ b/drivers/mfd/qcom_rpm.c
 @@ -6,13 +6,19 @@
@@ -1471,7 +1699,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..cf0a8369a8d2cf9d9c58293d4e8280fd
  	[QCOM_RPM_CXO_CLK] =			{ 32, 12, 5, 1 },
  	[QCOM_RPM_PXO_CLK] =			{ 33, 13, 6, 1 },
  	[QCOM_RPM_PLL_4] =			{ 34, 14, 7, 1 },
-@@ -445,6 +464,378 @@ static const struct of_device_id qcom_rpm_of_match[] = {
+@@ -445,6 +464,386 @@ static const struct of_device_id qcom_rpm_of_match[] = {
  };
  MODULE_DEVICE_TABLE(of, qcom_rpm_of_match);
  
@@ -1483,6 +1711,14 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..cf0a8369a8d2cf9d9c58293d4e8280fd
 +		writel_relaxed(0,
 +			RPM_CTRL_REG(rpm, rpm->data->ack_sel_off + i));
 +	writel(0, RPM_CTRL_REG(rpm, rpm->data->ack_ctx_off));
++}
++
++static int qcom_rpm_clear_ack_noirq(struct qcom_rpm *rpm)
++{
++	qcom_rpm_clear_ack(rpm);
++	/* Flush message-RAM acknowledgment before retiring its GIC edge. */
++	readl(RPM_CTRL_REG(rpm, rpm->data->ack_ctx_off));
++	return irq_set_irqchip_state(rpm->irq_ack, IRQCHIP_STATE_PENDING, false);
 +}
 +
 +/*
@@ -1850,7 +2086,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..cf0a8369a8d2cf9d9c58293d4e8280fd
  int qcom_rpm_write(struct qcom_rpm *rpm,
  		   int state,
  		   int resource,
-@@ -465,6 +856,10 @@ int qcom_rpm_write(struct qcom_rpm *rpm,
+@@ -465,6 +864,10 @@ int qcom_rpm_write(struct qcom_rpm *rpm,
  		return -EINVAL;
  
  	mutex_lock(&rpm->lock);
@@ -1861,7 +2097,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..cf0a8369a8d2cf9d9c58293d4e8280fd
  
  	for (i = 0; i < res->size; i++)
  		writel_relaxed(buf[i], RPM_REQ_REG(rpm, res->target_id + i));
-@@ -477,6 +872,7 @@ int qcom_rpm_write(struct qcom_rpm *rpm,
+@@ -477,6 +880,7 @@ int qcom_rpm_write(struct qcom_rpm *rpm,
  
  	writel_relaxed(BIT(state), RPM_CTRL_REG(rpm, rpm->data->req_ctx_off));
  
@@ -1869,7 +2105,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..cf0a8369a8d2cf9d9c58293d4e8280fd
  	reinit_completion(&rpm->ack);
  	regmap_write(rpm->ipc_regmap, rpm->ipc_offset, BIT(rpm->ipc_bit));
  
-@@ -486,23 +882,148 @@ int qcom_rpm_write(struct qcom_rpm *rpm,
+@@ -486,23 +890,164 @@ int qcom_rpm_write(struct qcom_rpm *rpm,
  	else if (rpm->ack_status & RPM_REJECTED)
  		ret = -EIO;
  
@@ -1889,6 +2125,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..cf0a8369a8d2cf9d9c58293d4e8280fd
 +	u32 ack_sel[RPM_MAX_SEL_SIZE] = { 0 };
 +	u32 expected_ctx;
 +	u32 ack;
++	bool ack_pending;
 +	unsigned int timeout;
 +	size_t n;
 +	int ret = 0;
@@ -1933,17 +2170,19 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..cf0a8369a8d2cf9d9c58293d4e8280fd
 +	/*
 +	 * The noirq path owns the ACK handshake. Mask the interrupt handlers
 +	 * while polling message RAM, matching the old Sony msm_rpm_set_noirq()
-+	 * contract. A delayed ACK interrupt is harmless: the handler ignores
-+	 * an already-cleared ACK_CTX.
++	 * contract. Consume both message RAM and its GIC edge: leaving a
++	 * polled ACK pending would immediately abort the following WFI.
 +	 */
 +	disable_irq_nosync(rpm->irq_ack);
 +	disable_irq_nosync(rpm->irq_err);
 +
 +	ack = readl_relaxed(RPM_CTRL_REG(rpm, data->ack_ctx_off));
 +	if (ack) {
-+		if (ack & RPM_NOTIFICATION)
-+			qcom_rpm_clear_ack(rpm);
-+		else {
++		if (ack & RPM_NOTIFICATION) {
++			ret = qcom_rpm_clear_ack_noirq(rpm);
++			if (ret)
++				goto out_irqs;
++		} else {
 +			ret = -EBUSY;
 +			goto out_irqs;
 +		}
@@ -1959,6 +2198,15 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..cf0a8369a8d2cf9d9c58293d4e8280fd
 +	writel_relaxed(BIT(rpm->ipc_bit), rpm->ipc_base);
 +
 +	for (timeout = 0; timeout < RPM_NOIRQ_TIMEOUT_US; timeout++) {
++		/* Sony waits for the GIC edge, not just the earlier RAM write. */
++		ret = irq_get_irqchip_state(rpm->irq_ack, IRQCHIP_STATE_PENDING,
++					    &ack_pending);
++		if (ret)
++			goto out_irqs;
++		if (!ack_pending) {
++			udelay(1);
++			continue;
++		}
 +		ack = readl_relaxed(RPM_CTRL_REG(rpm, data->ack_ctx_off));
 +		if (!ack) {
 +			udelay(1);
@@ -1970,12 +2218,16 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..cf0a8369a8d2cf9d9c58293d4e8280fd
 +				RPM_CTRL_REG(rpm, data->ack_sel_off + i));
 +
 +		if (ack & RPM_NOTIFICATION) {
-+			qcom_rpm_clear_ack(rpm);
++			ret = qcom_rpm_clear_ack_noirq(rpm);
++			if (ret)
++				goto out_irqs;
 +			memset(ack_sel, 0, sizeof(ack_sel));
 +			continue;
 +		}
 +
-+		qcom_rpm_clear_ack(rpm);
++		ret = qcom_rpm_clear_ack_noirq(rpm);
++		if (ret)
++			goto out_irqs;
 +
 +		if ((ack & ~RPM_REJECTED) != expected_ctx) {
 +			ret = -EIO;
@@ -2023,7 +2275,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..cf0a8369a8d2cf9d9c58293d4e8280fd
  
  	if (ack & RPM_NOTIFICATION) {
  		dev_warn(rpm->dev, "ignoring notification!\n");
-@@ -532,6 +1053,7 @@ static irqreturn_t qcom_rpm_wakeup_interrupt(int irq, void *dev)
+@@ -532,6 +1077,7 @@ static irqreturn_t qcom_rpm_wakeup_interrupt(int irq, void *dev)
  static int qcom_rpm_probe(struct platform_device *pdev)
  {
  	struct device_node *syscon_np;
@@ -2031,7 +2283,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..cf0a8369a8d2cf9d9c58293d4e8280fd
  	struct qcom_rpm *rpm;
  	u32 fw_version[3];
  	int irq_wakeup;
-@@ -546,6 +1068,7 @@ static int qcom_rpm_probe(struct platform_device *pdev)
+@@ -546,6 +1092,7 @@ static int qcom_rpm_probe(struct platform_device *pdev)
  	rpm->dev = &pdev->dev;
  	mutex_init(&rpm->lock);
  	init_completion(&rpm->ack);
@@ -2039,7 +2291,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..cf0a8369a8d2cf9d9c58293d4e8280fd
  
  	/* Enable message RAM clock */
  	rpm->ramclk = devm_clk_get_enabled(&pdev->dev, "ram");
-@@ -572,6 +1095,9 @@ static int qcom_rpm_probe(struct platform_device *pdev)
+@@ -572,6 +1119,9 @@ static int qcom_rpm_probe(struct platform_device *pdev)
  	if (irq_wakeup < 0)
  		return irq_wakeup;
  
@@ -2049,7 +2301,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..cf0a8369a8d2cf9d9c58293d4e8280fd
  	rpm->data = device_get_match_data(&pdev->dev);
  	if (!rpm->data)
  		return -ENODEV;
-@@ -589,14 +1115,17 @@ static int qcom_rpm_probe(struct platform_device *pdev)
+@@ -589,14 +1139,17 @@ static int qcom_rpm_probe(struct platform_device *pdev)
  	}
  
  	rpm->ipc_regmap = syscon_node_to_regmap(syscon_np);
@@ -2070,7 +2322,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..cf0a8369a8d2cf9d9c58293d4e8280fd
  		return -EINVAL;
  	}
  
-@@ -604,9 +1133,28 @@ static int qcom_rpm_probe(struct platform_device *pdev)
+@@ -604,9 +1157,28 @@ static int qcom_rpm_probe(struct platform_device *pdev)
  					 &rpm->ipc_bit);
  	if (ret < 0) {
  		dev_err(&pdev->dev, "no bit in qcom,ipc\n");
@@ -2099,7 +2351,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..cf0a8369a8d2cf9d9c58293d4e8280fd
  	dev_set_drvdata(&pdev->dev, rpm);
  
  	fw_version[0] = readl(RPM_STATUS_REG(rpm, 0));
-@@ -671,7 +1219,14 @@ static int qcom_rpm_probe(struct platform_device *pdev)
+@@ -671,7 +1243,14 @@ static int qcom_rpm_probe(struct platform_device *pdev)
  	if (ret)
  		dev_warn(&pdev->dev, "failed to mark wakeup irq as wakeup\n");
  
@@ -2115,7 +2367,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..cf0a8369a8d2cf9d9c58293d4e8280fd
  }
  
  static struct platform_driver qcom_rpm_driver = {
-@@ -690,6 +1245,7 @@ arch_initcall(qcom_rpm_init);
+@@ -690,6 +1269,7 @@ arch_initcall(qcom_rpm_init);
  
  static void __exit qcom_rpm_exit(void)
  {
@@ -2656,70 +2908,3 @@ index 0000000000000000000000000000000000000000..d409211316c3b69c2f52773a33bb2999
 +static inline void qcom_mpm_msm8660_exit_sleep(void) { }
 +#endif
 +#endif
-
-diff --git a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
-index c73a6f012..70b73752d 100644
---- a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
-+++ b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
-@@ -539,9 +539,48 @@ static int mdp4_kms_init(struct drm_device *dev)
- 	return 0;
- }
- 
-+static int mdp4_suspend_noirq(struct device *dev)
-+{
-+	struct msm_drm_private *priv = dev_get_drvdata(dev);
-+
-+	if (priv && priv->kms)
-+		to_mdp4_kms(to_mdp_kms(priv->kms))->needs_resume_init = true;
-+	return 0;
-+}
-+
-+static void mdp4_pm_complete(struct device *dev)
-+{
-+	struct msm_drm_private *priv = dev_get_drvdata(dev);
-+	struct mdp4_kms *mdp4_kms;
-+	struct mdp_kms *mdp_kms;
-+	int ret;
-+
-+	if (!priv || !priv->kms)
-+		return;
-+	mdp_kms = to_mdp_kms(priv->kms);
-+	mdp4_kms = to_mdp4_kms(mdp_kms);
-+	if (mdp4_kms->needs_resume_init) {
-+		/* Domain collapse loses fetch configuration and IRQ enables. */
-+		ret = mdp4_hw_init(priv->kms);
-+		if (ret)
-+			goto fail;
-+		ret = mdp4_enable(mdp4_kms);
-+		if (ret)
-+			goto fail;
-+		mdp4_set_irqmask(mdp_kms, mdp_kms->cur_irq_mask, 0);
-+		mdp4_disable(mdp4_kms);
-+		mdp4_kms->needs_resume_init = false;
-+	}
-+	msm_kms_pm_complete(dev);
-+	return;
-+fail:
-+	dev_err(dev, "MDP4 resume initialization failed: %d\n", ret);
-+}
-+
- static const struct dev_pm_ops mdp4_pm_ops = {
- 	.prepare = msm_kms_pm_prepare,
--	.complete = msm_kms_pm_complete,
-+	.suspend_noirq = mdp4_suspend_noirq,
-+	.complete = mdp4_pm_complete,
- };
- 
- static int mdp4_setup_interconnect(struct platform_device *pdev)
-diff --git a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.h b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.h
-index 06458d4ee..8d0ddaee3 100644
---- a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.h
-+++ b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.h
-@@ -35,6 +35,7 @@ struct mdp4_kms {
- 	struct mdp_irq error_handler;
- 
- 	bool rpm_enabled;
-+	bool needs_resume_init;
- 
- 	/* empty/blank cursor bo to use when cursor is "disabled" */
- 	struct drm_gem_object *blank_cursor_bo;

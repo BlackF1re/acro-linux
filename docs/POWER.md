@@ -18,12 +18,13 @@ and the hardware inventory. Protective trips/throttling need acceptance.
 
 ## Sleep and recovery
 
-The `hikari-suspend-final` development branch now prepares the conservative
+The Hikari SYSTEM suspend backend prepares the conservative
 MSM8660 RPMRS sleep set before `PM_SUSPEND_MEM` collapse and uses SAW's
 RPM-notified power-collapse mode. An aborted collapse restores a conservative
 untimed sleep set; a completed collapse relies on RPM returning to its ACTIVE
-context on wake. CPU idle remains on the standalone SAW path. This code has
-not passed physical suspend/resume acceptance.
+context on wake. CPU idle remains on the standalone SAW path. Five
+conservative CPU/RPM collapse cycles with RTC wake passed on 2026-10-08;
+peripheral resume and deeper sleep levels still need acceptance.
 
 The currently running production image advertises only s2idle. Prior
 platform/suspend tests caused Wi-Fi/USB and display underrun regressions.
@@ -233,3 +234,110 @@ and checksums are in `/boot/hikari-resume-clean-20261008/results/acceptance`
 and the corresponding host build directory. The phone remains in this test
 SYSTEM with Phosh GLES2 and `pm_test=none`; immutable BOOT and the production
 `hikari-next` kernel are unchanged.
+
+System sleep registration is now independent of `cpuidle.off=1`. Both SAWs
+and SCM warm-boot routing are still required. Automatic SPC can remain
+disabled while `mem_sleep=deep` is tested explicitly. Dynamic debug reports
+RPMRS ACK/error, clock entry and actual collapse versus aborted WFI.
+This stage built locally and enabled the explicit deep-sleep tests below.
+
+Actual s2idle returned with working USB/Phosh, but its first wake IRQ was
+59 (headset detection), not RTC. A second run temporarily disabled wake on
+`gpio-keys`; it woke on PM8058 summary IRQ36 before the RTC deadline, again
+without an alarm IRQ. An awake alarm test incremented the RTC IRQ counter.
+These are successful resume tests, not proof of RTC wake from sleep.
+
+Source audit found that PM8xxx declares `IRQCHIP_MASK_ON_SUSPEND` but only
+provides `irq_mask_ack`; generic `mask_irq()` does not call that operation.
+Sony `drivers/mfd/pm8xxx-irq.c` provides both mask and mask_ack. The new stage
+adds the non-clearing mask callback for PM8058/PM8921, allowing non-wake
+sources to be masked before noirq without discarding latched events.
+Physical RTC-wake acceptance is recorded below.
+
+The PM8xxx-mask candidate booted with `cpuidle.off=1` and advertised both
+s2idle and deep sleep. An isolated 15-second RTC s2idle test completed with
+exit zero, the alarm IRQ counter increased from zero to one, and Phosh/USB
+returned (`VERIFIED_DEVICE`). GPIO-key wake was temporarily disabled for
+the test and restored afterward. BMA180 resume logged `-EACCES`; its recovery
+remains unresolved.
+
+The first explicit deep-sleep attempt returned safely but did not collapse:
+RPMRS entry, clock transition and CPU PM entry returned zero; `cpu_suspend`
+reported `collapsed=0, ret=-1`, and rollback succeeded. The wake IRQ was 25,
+`qcom_rpm_ack`. Sony's noirq RPM path clears the GIC pending ACK after
+consuming message RAM; the port had left that edge pending. This is an
+aborted-WFI result, not successful deep sleep. Logs are saved in
+`/boot/hikari-rpm-suspend-20261008/results/rtc-{freeze,mem}`; kernel SHA256
+`85fc2676f3ab98477e67ed52ed7689f5b9e2e8362495aaffe382cb0be5492ab8`.
+
+The RPM ACK stage reproduces Sony's polling order using the generic IRQ-chip
+state API. It waits for the edge as well as message RAM, then flushes the
+ACK clear and retires only that consumed pending ACK before unmasking. Normal
+interrupt-driven RPM writes are unchanged.
+
+The separate `hikari-rpm-ack-20261008` candidate passed five actual
+`mem_sleep=deep`, `pm_test=none` cycles with 15-second RTC alarms
+(`VERIFIED_DEVICE`, conservative CPU/RPM collapse). Each cycle reported
+`collapsed=1`, successful RPMRS entry/exit and an increased RTC IRQ counter.
+CPU1 returned online. Four fresh post-resume transition processes produced
+224 NEAR / zero SEVERE; S3 passed 16/16. Phosh retained GLES2/FD220 and its
+matching Mesa paths; the owner confirmed working display and touchscreen.
+
+GPIO-key wake was disabled only during the isolated RTC tests and restored
+after each test. Automatic cpuidle was disabled; default mem sleep remains
+s2idle. This does not validate headset/button wake, MPM pending replay,
+PXO OFF, lower VDD/L2 levels or suspend current. BMA250 (bma180 driver)
+intermittently fails resume with `-EACCES`, MPU3050 reports a runtime-PM
+usage underflow, and Wi-Fi reports HTAvail timeouts. A single primary MDP
+underrun can appear at display restart without persistent blue scanout.
+These peripheral failures prevent full-system suspend acceptance.
+
+Test release: `7.3.0-rc1-hikari-system-rpm-ack-20261008-gf76ca33a071e`;
+zImage SHA256:
+`f5508abfbadc2eb0651e3f0fbffbc28c1cef54d2d704af59fe5bf23bb1b2733e`.
+Prepared tree: `e6d6234a42e98cc830b663dfd8922adf40849074`.
+Logs, interrupt counters, ordered readback hashes, runtime maps and a
+screenshot are saved in `/boot/hikari-rpm-ack-20261008/results` and the
+corresponding host build directory. The phone remains in this test SYSTEM;
+immutable BOOT and the production SYSTEM bundle remain unchanged.
+
+
+The MPU3050 auxiliary-bus stage fixes a specific asynchronous-PM dependency.
+I2C adapter 3 is parented to upstream adapter 2, so the BMA250 could resume
+while its MPU3050 gate still had runtime PM disabled. The gate select then
+returned `-EACCES`. Mux core always calls deselect, even after select fails;
+that path incorrectly dropped an unacquired runtime reference. A stateless
+PM device link orders the auxiliary adapter after the MPU3050, and deselect
+now releases only a successful select's reference.
+
+A separately loaded matching module passed three further actual RTC/deep
+collapse cycles: accelerometer and gyro raw reads succeeded after every
+wake, no new sensor resume error or usage underflow occurred, and the MPU3050
+usage count returned to zero. This verifies reads and PM ordering, not motion
+calibration or trigger-buffer acceptance. The resulting source series passed fresh-boot acceptance below. Logs and module hashes are in
+`/boot/hikari-rpm-ack-20261008/results/sensor-pm`.
+
+
+Fresh-boot acceptance of `hikari-sensor-pm-20261008` passed three additional
+actual RTC/deep cycles (`VERIFIED_DEVICE`). Each reported `collapsed=1`,
+advanced the RTC alarm IRQ, returned both CPUs online and restored sensor
+raw reads with zero new sensor resume errors or PM underflows. Three fresh
+GPU transition processes gave 168 NEAR / zero SEVERE; S0 passed 4/4 and S3
+passed 16/16. Hardware Phosh remained active with the correct Mesa paths,
+and its captured frame was clean. The initial trigger registered normally.
+
+Wi-Fi delivered three of three ICMP replies after these cycles despite a
+resume HTAvail warning. That warning and broader wireless endurance still
+need investigation; it is not evidence of a completely unavailable radio.
+GPIO-key wake was restored, the RTC alarm cleared, dynamic debug disabled,
+`pm_test=none` and default sleep s2idle retained. Automatic deep sleep remains
+disabled pending other wake-source and power-current acceptance.
+
+Release: `7.3.0-rc1-hikari-system-sensor-pm-20261008-g6b3311f9f240`;
+zImage SHA256:
+`d818af7b9e15e9c8e08ab3e12a6af2887002cff6a2165a2631912dde51eaedc3`.
+Prepared tree: `cfc10da67160657fe27eae04066ecafefd8ded62`.
+Complete per-cycle logs, interrupt counters, readbacks, maps and screenshot:
+`/boot/hikari-sensor-pm-20261008/results/acceptance`, mirrored on the host.
+This test SYSTEM remains running. Immutable BOOT and the production
+`hikari-next` bundle are unchanged.

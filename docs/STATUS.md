@@ -27,7 +27,10 @@ be described as physical acceptance of the latest DVFS build.
 
 ## Remaining acceptance
 
-Suspend/resume and cpuidle remain unverified. CPU DVFS, thermal protection,
+On 2026-10-08 five conservative CPU/RPM power-collapse cycles woke through
+RTC, with working GPU Phosh, display and touchscreen. Peripheral resume
+errors, other wake sources, deep-level policy and suspend current still
+prevent full suspend/resume acceptance; see [POWER.md](POWER.md). CPU DVFS, thermal protection,
 cradle charging and the remaining audio/radio/camera/HDMI functions retain
 their individual evidence limits. Prior suspend tests had display/USB resume
 regressions; do not enable automatic sleep as a cleanup action.
