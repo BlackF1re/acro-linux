@@ -36,6 +36,7 @@ jobs:
   static:
     name: Repository checks
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
@@ -58,26 +59,24 @@ jobs:
           test ! -d initramfs/hikari-firstboot
           git diff --check
 
-  system-kernel:
-    name: Build the single SYSTEM kernel profile
+  source:
+    name: Materialize and verify pinned Linux source
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 1
-      - name: Install build dependencies
+      - name: Install source verification dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            bc binutils binutils-arm-linux-gnueabihf bison build-essential \
-            device-tree-compiler flex gcc-arm-linux-gnueabihf \
-            libc6-dev-armhf-cross libelf-dev libssl-dev python3-venv ripgrep
+          sudo apt-get install -y --no-install-recommends ripgrep
       - name: Cache materialized Linux source
         id: linux-cache
         uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/linux-hikari
-          key: hikari-linux-system-v2-${{ hashFiles('kernel/source.lock', 'kernel/patches/**', 'kernel/dts/**', 'kernel/overrides/**', 'scripts/materialize-hikari-kernel.sh', 'scripts/prepare-hikari-kernel-tree.sh', 'scripts/check-hikari-kernel-source.sh', 'scripts/apply-*.py') }}
+          key: hikari-linux-system-v3-${{ hashFiles('kernel/source.lock', 'kernel/patches/**', 'kernel/dts/**', 'kernel/overrides/**', 'scripts/materialize-hikari-kernel.sh', 'scripts/prepare-hikari-kernel-tree.sh', 'scripts/check-hikari-kernel-source.sh', 'scripts/apply-*.py') }}
       - name: Materialize pinned Linux source
         if: steps.linux-cache.outputs.cache-hit != 'true'
         run: ./scripts/materialize-hikari-kernel.sh "$RUNNER_TEMP/linux-hikari"
@@ -88,16 +87,34 @@ jobs:
           ./scripts/check-msm8660-mmcc-source.sh "$RUNNER_TEMP/linux-hikari"
           python3 scripts/check-hikari-display-source.py "$RUNNER_TEMP/linux-hikari"
           ./scripts/check-hikari-as3676-source.sh "$RUNNER_TEMP/linux-hikari"
-      - name: Install dtschema
+
+  kernel-image:
+    name: Build kernel image and DTB
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+      - name: Install kernel build dependencies
         run: |
-          python3 -m venv "$RUNNER_TEMP/dtschema"
-          "$RUNNER_TEMP/dtschema/bin/pip" install --disable-pip-version-check dtschema
-          echo "$RUNNER_TEMP/dtschema/bin" >> "$GITHUB_PATH"
-      - name: Build and schema-check SYSTEM
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc binutils binutils-arm-linux-gnueabihf bison build-essential \
+            device-tree-compiler flex gcc-arm-linux-gnueabihf \
+            libc6-dev-armhf-cross libelf-dev libssl-dev python3-venv ripgrep
+      - name: Restore materialized Linux source
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/linux-hikari
+          key: hikari-linux-system-v3-${{ hashFiles('kernel/source.lock', 'kernel/patches/**', 'kernel/dts/**', 'kernel/overrides/**', 'scripts/materialize-hikari-kernel.sh', 'scripts/prepare-hikari-kernel-tree.sh', 'scripts/check-hikari-kernel-source.sh', 'scripts/apply-*.py') }}
+          fail-on-cache-miss: true
+      - name: Build zImage and Hikari DTB
         env:
-          HIKARI_BUILD_ROOT: ${{ runner.temp }}/hikari-build
+          HIKARI_BUILD_ROOT: ${{ runner.temp }}/hikari-image
           KERNEL_SRC: ${{ runner.temp }}/linux-hikari
-          BUILD_DIR: ${{ runner.temp }}/hikari-build/linux-hikari-current
+          BUILD_DIR: ${{ runner.temp }}/hikari-image/linux-hikari-current
           KERNEL_BUILD_PROFILE: debian-smp
           PRUNE_DEFAULT_MODULES: "1"
           REQUIRE_USB_DEBUG: "1"
@@ -107,43 +124,202 @@ jobs:
           set -euxo pipefail
           KERNEL_FRAGMENT="$GITHUB_WORKSPACE/kernel/configs/hikari-boot6-display.fragment" \
           KERNEL_EXTRA_FRAGMENTS="$GITHUB_WORKSPACE/kernel/configs/hikari-debian.fragment" \
-          TARGETS='zImage modules qcom/qcom-msm8260-sony-hikari.dtb' \
+          TARGETS='zImage qcom/qcom-msm8260-sony-hikari.dtb' \
             ./scripts/build-hikari-kernel.sh
-          make -C "$KERNEL_SRC" O="$BUILD_DIR" \
-            ARCH=arm CROSS_COMPILE="$CROSS_COMPILE" CHECK_DTBS=y -j"$(nproc)" \
-            qcom/qcom-msm8260-sony-hikari.dtb
           ./scripts/check-hikari-usb-dtb.sh \
             --config "$BUILD_DIR/.config" \
             --dtb "$BUILD_DIR/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb"
           ./scripts/check-hikari-pstore.sh \
             --config "$BUILD_DIR/.config" \
             --dtb "$BUILD_DIR/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb"
-      - name: Package matching modules and host initramfs tool
+          make -s -C "$KERNEL_SRC" O="$BUILD_DIR" ARCH=arm kernelrelease > "$BUILD_DIR/kernel-release"
+      - name: Upload kernel image handoff
+        uses: actions/upload-artifact@v7
+        with:
+          name: hikari-kernel-image-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/hikari-image/linux-hikari-current/.config
+            ${{ runner.temp }}/hikari-image/linux-hikari-current/kernel-release
+            ${{ runner.temp }}/hikari-image/linux-hikari-current/System.map
+            ${{ runner.temp }}/hikari-image/linux-hikari-current/arch/arm/boot/zImage
+            ${{ runner.temp }}/hikari-image/linux-hikari-current/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
+          compression-level: 6
+
+  modules:
+    name: Build and package kernel modules
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+      - name: Install module build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc binutils binutils-arm-linux-gnueabihf bison build-essential \
+            device-tree-compiler flex gcc-arm-linux-gnueabihf \
+            libc6-dev-armhf-cross libelf-dev libssl-dev python3-venv ripgrep
+      - name: Restore materialized Linux source
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/linux-hikari
+          key: hikari-linux-system-v3-${{ hashFiles('kernel/source.lock', 'kernel/patches/**', 'kernel/dts/**', 'kernel/overrides/**', 'scripts/materialize-hikari-kernel.sh', 'scripts/prepare-hikari-kernel-tree.sh', 'scripts/check-hikari-kernel-source.sh', 'scripts/apply-*.py') }}
+          fail-on-cache-miss: true
+      - name: Build modules and host initramfs tool
+        env:
+          HIKARI_BUILD_ROOT: ${{ runner.temp }}/hikari-modules
+          KERNEL_SRC: ${{ runner.temp }}/linux-hikari
+          BUILD_DIR: ${{ runner.temp }}/hikari-modules/linux-hikari-current
+          KERNEL_BUILD_PROFILE: debian-smp
+          PRUNE_DEFAULT_MODULES: "1"
+          REQUIRE_USB_DEBUG: "1"
+          REQUIRE_DISPLAY_BRINGUP: "1"
+          REQUIRE_CHARGING: "1"
         run: |
           set -euxo pipefail
-          build="$RUNNER_TEMP/hikari-build/linux-hikari-current"
-          make -C "$RUNNER_TEMP/linux-hikari" O="$build" ARCH=arm \
+          KERNEL_FRAGMENT="$GITHUB_WORKSPACE/kernel/configs/hikari-boot6-display.fragment" \
+          KERNEL_EXTRA_FRAGMENTS="$GITHUB_WORKSPACE/kernel/configs/hikari-debian.fragment" \
+          TARGETS='vmlinux modules' \
+            ./scripts/build-hikari-kernel.sh
+          make -C "$KERNEL_SRC" O="$BUILD_DIR" ARCH=arm \
             CROSS_COMPILE="$CROSS_COMPILE" usr_gen_init_cpio
-          release=$(make -s -C "$RUNNER_TEMP/linux-hikari" O="$build" ARCH=arm kernelrelease)
-          make -C "$RUNNER_TEMP/linux-hikari" O="$build" ARCH=arm \
+          release=$(make -s -C "$KERNEL_SRC" O="$BUILD_DIR" ARCH=arm kernelrelease)
+          make -C "$KERNEL_SRC" O="$BUILD_DIR" ARCH=arm \
             CROSS_COMPILE="$CROSS_COMPILE" INSTALL_MOD_PATH="$RUNNER_TEMP/modules" \
             INSTALL_MOD_STRIP=1 modules_install
           rm -f "$RUNNER_TEMP/modules/lib/modules/$release/build" \
             "$RUNNER_TEMP/modules/lib/modules/$release/source"
-          tar -C "$RUNNER_TEMP/modules" -czf "$build/modules.tar.gz" lib/modules
-          printf '%s\n' "$release" > "$build/kernel-release"
-      - name: Upload SYSTEM build evidence
+          tar -C "$RUNNER_TEMP/modules" -czf "$BUILD_DIR/modules.tar.gz" lib/modules
+          printf '%s\n' "$release" > "$BUILD_DIR/kernel-release"
+      - name: Upload modules handoff
+        uses: actions/upload-artifact@v7
+        with:
+          name: hikari-kernel-modules-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/hikari-modules/linux-hikari-current/.config
+            ${{ runner.temp }}/hikari-modules/linux-hikari-current/kernel-release
+            ${{ runner.temp }}/hikari-modules/linux-hikari-current/modules.tar.gz
+            ${{ runner.temp }}/hikari-modules/linux-hikari-current/usr/gen_init_cpio
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
+          compression-level: 6
+
+  dt-schema:
+    name: Schema-check Hikari DTB
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+      - name: Install DT schema dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc binutils binutils-arm-linux-gnueabihf bison build-essential \
+            device-tree-compiler flex gcc-arm-linux-gnueabihf \
+            libc6-dev-armhf-cross libelf-dev libssl-dev python3-venv ripgrep
+          python3 -m venv "$RUNNER_TEMP/dtschema"
+          "$RUNNER_TEMP/dtschema/bin/pip" install --disable-pip-version-check dtschema
+          echo "$RUNNER_TEMP/dtschema/bin" >> "$GITHUB_PATH"
+      - name: Restore materialized Linux source
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/linux-hikari
+          key: hikari-linux-system-v3-${{ hashFiles('kernel/source.lock', 'kernel/patches/**', 'kernel/dts/**', 'kernel/overrides/**', 'scripts/materialize-hikari-kernel.sh', 'scripts/prepare-hikari-kernel-tree.sh', 'scripts/check-hikari-kernel-source.sh', 'scripts/apply-*.py') }}
+          fail-on-cache-miss: true
+      - name: Configure and schema-check Hikari DTB
+        env:
+          HIKARI_BUILD_ROOT: ${{ runner.temp }}/hikari-dt-schema
+          KERNEL_SRC: ${{ runner.temp }}/linux-hikari
+          BUILD_DIR: ${{ runner.temp }}/hikari-dt-schema/linux-hikari-current
+          KERNEL_BUILD_PROFILE: debian-smp
+          PRUNE_DEFAULT_MODULES: "1"
+          REQUIRE_USB_DEBUG: "1"
+          REQUIRE_DISPLAY_BRINGUP: "1"
+          REQUIRE_CHARGING: "1"
+        run: |
+          set -euxo pipefail
+          KERNEL_FRAGMENT="$GITHUB_WORKSPACE/kernel/configs/hikari-boot6-display.fragment" \
+          KERNEL_EXTRA_FRAGMENTS="$GITHUB_WORKSPACE/kernel/configs/hikari-debian.fragment" \
+          TARGETS='qcom/qcom-msm8260-sony-hikari.dtb' \
+            ./scripts/build-hikari-kernel.sh
+          make -C "$KERNEL_SRC" O="$BUILD_DIR" \
+            ARCH=arm CROSS_COMPILE="$CROSS_COMPILE" CHECK_DTBS=y -j"$(nproc)" \
+            qcom/qcom-msm8260-sony-hikari.dtb
+
+  assemble-artifact:
+    name: Assemble downloadable SYSTEM artifact
+    needs: [kernel-image, modules, dt-schema]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download parallel build handoffs
+        run: |
+          set -euxo pipefail
+          mkdir -p handoff/image handoff/modules
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "hikari-kernel-image-$GITHUB_SHA" --dir handoff/image
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "hikari-kernel-modules-$GITHUB_SHA" --dir handoff/modules
+      - name: Verify and assemble artifact
+        run: |
+          set -euxo pipefail
+          cmp handoff/image/kernel-release handoff/modules/kernel-release
+
+          # Parallel runners may expose different preinstalled Rust toolchains.
+          # Kconfig records those host versions even though Hikari does not
+          # enable Rust kernel support. Compare every real config setting while
+          # excluding only the three generated Rust version metadata entries.
+          sed -E '/^CONFIG_RUSTC_VERSION=|^CONFIG_RUSTC_LLVM_VERSION=|^CONFIG_RUSTC_LLVM_MAJOR_VERSION=/d' \
+            handoff/image/.config > handoff/image/config.normalized
+          sed -E '/^CONFIG_RUSTC_VERSION=|^CONFIG_RUSTC_LLVM_VERSION=|^CONFIG_RUSTC_LLVM_MAJOR_VERSION=/d' \
+            handoff/modules/.config > handoff/modules/config.normalized
+          cmp handoff/image/config.normalized handoff/modules/config.normalized
+
+          mkdir -p artifact
+          install -m 0644 handoff/image/.config artifact/config
+          install -m 0644 handoff/image/kernel-release artifact/kernel-release
+          install -m 0644 handoff/image/System.map artifact/System.map
+          install -m 0644 handoff/image/arch/arm/boot/zImage artifact/zImage
+          install -m 0644 \
+            handoff/image/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb \
+            artifact/qcom-msm8260-sony-hikari.dtb
+          install -m 0644 handoff/modules/modules.tar.gz artifact/modules.tar.gz
+          install -m 0755 handoff/modules/usr/gen_init_cpio artifact/gen_init_cpio
+          (
+            cd artifact
+            sha256sum config kernel-release System.map zImage \
+              qcom-msm8260-sony-hikari.dtb modules.tar.gz gen_init_cpio \
+              > SHA256SUMS
+          )
+      - name: Upload downloadable SYSTEM artifact
+        id: system-artifact
         uses: actions/upload-artifact@v7
         with:
           name: hikari-system-kernel-${{ github.sha }}
-          path: |
-            ${{ runner.temp }}/hikari-build/linux-hikari-current/.config
-            ${{ runner.temp }}/hikari-build/linux-hikari-current/kernel-release
-            ${{ runner.temp }}/hikari-build/linux-hikari-current/modules.tar.gz
-            ${{ runner.temp }}/hikari-build/linux-hikari-current/usr/gen_init_cpio
-            ${{ runner.temp }}/hikari-build/linux-hikari-current/System.map
-            ${{ runner.temp }}/hikari-build/linux-hikari-current/arch/arm/boot/zImage
-            ${{ runner.temp }}/hikari-build/linux-hikari-current/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dtb
+          path: artifact/
           if-no-files-found: error
           retention-days: 14
           compression-level: 6
+      - name: Publish download link in job summary
+        run: |
+          {
+            echo "### Hikari SYSTEM build"
+            echo
+            echo "Artifact: [hikari-system-kernel-$GITHUB_SHA](${{ steps.system-artifact.outputs.artifact-url }})"
+            echo
+            echo "Contains zImage, DTB, modules, System.map, config, gen_init_cpio and SHA256SUMS."
+          } >> "$GITHUB_STEP_SUMMARY"
