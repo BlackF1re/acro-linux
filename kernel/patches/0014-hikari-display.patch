@@ -38,8 +38,8 @@ Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
  drivers/gpu/drm/msm/msm_gem.h                 |   3 +
  drivers/gpu/drm/panel/Kconfig                 |   7 +
  drivers/gpu/drm/panel/Makefile                |   1 +
- .../panel/panel-renesas-r63306-tmd-mdv22.c    | 130 +++++++++++
- 24 files changed, 946 insertions(+), 73 deletions(-)
+ .../panel/panel-renesas-r63306-tmd-mdv22.c    | 138 +++++++++++
+ 24 files changed, 954 insertions(+), 73 deletions(-)
  create mode 100644 Documentation/devicetree/bindings/display/panel/sony,hikari-r63306-tmd-mdv22.yaml
  create mode 100644 Documentation/devicetree/bindings/mfd/qcom,msm8660-mmss-sfpb.yaml
  create mode 100644 Documentation/devicetree/bindings/phy/qcom,msm8660-dsi-phy-45nm.yaml
@@ -1589,7 +1589,7 @@ new file mode 100644
 index 0000000000000000000000000000000000000000..c6e4b90ccb8fb97fadf2a4bb1b390c4e8c9a86f7
 --- /dev/null
 +++ b/drivers/gpu/drm/panel/panel-renesas-r63306-tmd-mdv22.c
-@@ -0,0 +1,130 @@
+@@ -0,0 +1,138 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/* Sony Hikari TMD MDV22 (Renesas R63306) 720x1280 DSI panel. */
 +#include <linux/delay.h>
@@ -1655,8 +1655,6 @@ index 0000000000000000000000000000000000000000..c6e4b90ccb8fb97fadf2a4bb1b390c4e
 +{
 +	struct mdv22 *m = to_mdv22(panel);
 +
-+	mipi_dsi_dcs_enter_sleep_mode(m->dsi);
-+	msleep(80);
 +	gpiod_set_value_cansleep(m->power, 0);
 +	msleep(50);
 +	gpiod_set_value_cansleep(m->reset, 0);
@@ -1667,7 +1665,17 @@ index 0000000000000000000000000000000000000000..c6e4b90ccb8fb97fadf2a4bb1b390c4e
 +static int mdv22_enable(struct drm_panel *panel)
 +{ return 0; }
 +static int mdv22_disable(struct drm_panel *panel)
-+{ return 0; }
++{
++	struct mdv22 *m = to_mdv22(panel);
++	int ret;
++
++	/* Send Sony's sleep command while the upstream video source is active. */
++	ret = mipi_dsi_dcs_enter_sleep_mode(m->dsi);
++	if (ret < 0)
++		return ret;
++	msleep(80);
++	return 0;
++}
 +static const struct drm_display_mode mdv22_mode = { .clock=69673,.hdisplay=720,.hsync_start=848,.hsync_end=851,.htotal=896,.vdisplay=1280,.vsync_start=1289,.vsync_end=1293,.vtotal=1296,.width_mm=53,.height_mm=95,.type=DRM_MODE_TYPE_DRIVER|DRM_MODE_TYPE_PREFERRED };
 +static int mdv22_modes(struct drm_panel *panel, struct drm_connector *c) { struct drm_display_mode *m=drm_mode_duplicate(c->dev,&mdv22_mode); if(!m)return -ENOMEM; drm_mode_set_name(m); drm_mode_probed_add(c,m); c->display_info.width_mm=53; c->display_info.height_mm=95; return 1; }
 +static const struct drm_panel_funcs mdv22_funcs = { .prepare=mdv22_prepare,.enable=mdv22_enable,.disable=mdv22_disable,.unprepare=mdv22_unprepare,.get_modes=mdv22_modes };

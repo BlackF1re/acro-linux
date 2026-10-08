@@ -222,10 +222,13 @@ def main() -> int:
     if "mipi_dsi_dcs_set_display_off" in panel:
         raise SystemExit("MDV22 added a Display Off command absent from Sony's exact off table")
 
+    disable = re.search(r"static int mdv22_disable\([^)]*\)\s*\{(.*?)\n\}", panel, re.S)
+    if not disable:
+        raise SystemExit("missing MDV22 disable callback")
+    require(disable.group(1), "mipi_dsi_dcs_enter_sleep_mode(m->dsi);", "MDV22 sleep before video-source disable")
+    require(disable.group(1), "msleep(80);", "Sony MDV22 sleep delay")
     off_sequence = (
-        "mipi_dsi_dcs_enter_sleep_mode(m->dsi);\n"
-        "\tmsleep(80);\n"
-        "\tgpiod_set_value_cansleep(m->power, 0);\n"
+        "gpiod_set_value_cansleep(m->power, 0);\n"
         "\tmsleep(50);\n"
         "\tgpiod_set_value_cansleep(m->reset, 0);\n"
         "\tmsleep(10);\n"

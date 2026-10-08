@@ -16,9 +16,9 @@ Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
  .../qcom-msm8260-sony-hikari-gpu-base.dtsi    |  41 +
  .../qcom-msm8260-sony-hikari-hardware.dtsi    | 722 ++++++++++++++++++
  .../qcom-msm8260-sony-hikari-wireless.dtsi    | 165 ++++
- .../dts/qcom/qcom-msm8260-sony-hikari.dts     | 554 ++++++++++++++
+ .../dts/qcom/qcom-msm8260-sony-hikari.dts     | 556 ++++++++++++++
  arch/arm/boot/dts/qcom/qcom-msm8660.dtsi      |  41 +-
- 7 files changed, 1521 insertions(+), 4 deletions(-)
+ 7 files changed, 1523 insertions(+), 4 deletions(-)
  create mode 100644 arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-gpu-base.dtsi
  create mode 100644 arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-hardware.dtsi
  create mode 100644 arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-wireless.dtsi
@@ -996,7 +996,7 @@ new file mode 100644
 index 0000000000000000000000000000000000000000..c4fc8678a2c8c86b2580360f9b10382cd153536d
 --- /dev/null
 +++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
-@@ -0,0 +1,554 @@
+@@ -0,0 +1,556 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/dts-v1/;
 +
@@ -1429,6 +1429,8 @@ index 0000000000000000000000000000000000000000..c4fc8678a2c8c86b2580360f9b10382c
 +		pm8058_l0: l0 {
 +			regulator-min-microvolt = <1200000>;
 +			regulator-max-microvolt = <1200000>;
++			/* Shared DSI/Timpani rail: Sony keeps it on during sleep. */
++			regulator-always-on;
 +		};
 +	};
 +};

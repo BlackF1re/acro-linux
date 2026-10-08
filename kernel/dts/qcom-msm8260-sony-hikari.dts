@@ -440,6 +440,8 @@
 		pm8058_l0: l0 {
 			regulator-min-microvolt = <1200000>;
 			regulator-max-microvolt = <1200000>;
+			/* Shared DSI/Timpani rail: Sony keeps it on during sleep. */
+			regulator-always-on;
 		};
 	};
 };
