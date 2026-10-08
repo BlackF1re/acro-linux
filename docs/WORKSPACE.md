@@ -21,27 +21,29 @@ to rebuild the kernel. Any maintained Mesa packaging or patch inputs live in
 | Path | Purpose |
 | --- | --- |
 | `repo/` | Canonical project source, kernel patches, scripts, hardware status and concise bring-up docs. |
-| `src/linux-hikari-current/` | Clean materialized kernel source used by the current build workflow. |
-| `src/linux/` | Existing integrated Hikari kernel worktree; preserve local edits and do not reset it during cleanup. |
+| `src/linux-hikari-resume-clean-20261008/` | Source of the physically tested sleep-final kernel; tree matches `kernel/source.lock`. |
+| `src/linux/` | BOOT-era integrated Hikari kernel reference; preserve its local edits. |
 | `src/opensemc-msm8x60/` | Single clean OpenSEMC/Fuji reference checkout, commit `c4784b04c08d30f799b8b14b597aeb2124d2e6e1`. Not used to build production Linux. |
 | `src/reference/android_kernel_sony_msm8660/` | Sony/LineageOS kernel reference for RAM, thermal and CPU-clock facts cited in `docs/SOURCES.md`. |
 | `src/reference/android_device_sony_hikari/` | Sony device-tree/firmware-manifest reference cited in `docs/SOURCES.md`. |
+| `src/sony-hikari-6.2.B.1.96/` | Official Sony release import used to verify Hikari board and power semantics. |
 | `src/busybox/`, `src/kexec-tools-2.0.29/` | Small host-side source dependencies used by the boot/initramfs build tools. |
-| `build/linux-hikari-current/` | Current kernel build objects. |
-| `build/hikari-rootfs-current/`, `build/hikari-root-initramfs-current/` | Current Debian rootfs and initramfs build inputs. |
-| `build/hikari-debian-current/` | Known system loader/update artifacts and recovery copies. Keep hashes and manifests. |
-| `build/hikari-system-release-20261004/hikari-release/` | Older self-contained release backup; its reproducible Kbuild object tree has been removed. |
+| `build/hikari-debian-current/` | Verified immutable BOOT loader ELF and its checksum. |
+| `build/hikari-sleep-final-20261009/` | Current tested SYSTEM kernel, DTB, initramfs, modules, checksums and acceptance logs. |
 | `backups/hikari/` | Verified device backup material. Keep private and do not publish. |
 | `private/hikari-stock-system/` | Private device-specific calibration/firmware inputs. Never publish. |
 
-The historical Mesa checkout and dated Mesa/A220 candidate builds have been
-removed from their source/build locations. The unreferenced KangXperia kernel
-clone, dated power-test bundle and its 2.3 GiB object tree, old release object
-tree, and loose audit logs were also removed from the active workspace. The
-old self-contained release bundle and the current system/rootfs artifacts are
-retained. The device's working `/opt/hikari-mesa-a220` runtime and repository
-Mesa packaging inputs remain because the running GPU stack uses them. Keep one
-OpenSEMC checkout as the legacy reference.
+Obsolete kernel experiment trees and reproducible build outputs have been
+removed. The remaining build directory contains only the loader and current
+tested SYSTEM bundle. Build scripts recreate their output directories as
+needed. Source snapshots from cleanup are in
+`backups/git/workspace-cleanup-20261009/`; the host SSH key and pre-update
+device SYSTEM archive are private backups under
+`backups/hikari/build-cleanup-20261009/`.
+
+The device's working `/opt/hikari-mesa-a220` runtime and repository Mesa
+packaging inputs remain because the running GPU stack uses them. Keep Sony
+and OpenSEMC checkouts as hardware references.
 
 ## How to reproduce the successful device paths
 
