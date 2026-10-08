@@ -19,4 +19,4 @@ POST_PATCH_SERIES=
 HIKARI_INTEGRATION_COMMIT=f7a6e62ff206edff9cee8c04226e85f1102a9a85
 
 # Exact final source tree after subsystem patches and canonical DTS preparation.
-HIKARI_PREPARED_TREE=cf3f7c2b07edfa786c994da2bc973d13764c4f73
+HIKARI_PREPARED_TREE=9978f3ab02f5cbb73a7f2193848c5a71ebc6f39b

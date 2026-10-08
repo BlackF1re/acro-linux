@@ -81,3 +81,7 @@ CONFIG_DEBUG_INFO_NONE=y
 
 # Sony/CAF-style MSM8x60 Scorpion standalone power collapse.
 CONFIG_ARM_QCOM_MSM8660_CPUIDLE=y
+
+# MSM8660 legacy MPM support; its DT node remains disabled pending hardware
+# validation of wake routing and replay.
+CONFIG_QCOM_MPM=y

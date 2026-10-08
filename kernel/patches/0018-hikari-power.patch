@@ -1,29 +1,164 @@
-From b5dd57de8e3fb4c5028cda56c2b85b9fb95d80e0 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
-Date: Wed, 7 Oct 2026 21:40:00 +0700
-Subject: [PATCH] power: enable RPM-coordinated MSM8660 system collapse
+Date: Thu, 8 Oct 2026 03:23:50 +0700
+Subject: [PATCH] power: coordinate MSM8660 collapse, wake and hotplug
 
-Use the prepared conservative RPMRS sleep set before Hikari system collapse and arm SAW in RPM-notified mode. On abort, restore the conservative untimed sleep set; after a completed collapse, return the coordinator to idle after hardware state is restored.
+Keep the Scorpion CPU, SAW, clocks, AVS, RPMRS and PM8058 suspend
+integration together. Use the conservative RPM sleep set and
+RPM-notified system collapse, with standalone CPU idle.
 
-Keep CPU idle on the existing standalone SAW path.
+Adapt the maintained MPM irqchip to Sony MSM8660 message-RAM layout,
+IPC ordering, GPIO wake routing and edge replay. Coordinate MPM with
+RPMRS for PXO OFF/VDD retention profiles, including rollback. Keep the
+DT node disabled pending hardware validation.
+
+Gate CPU1 warm entry on a fresh secondary release and re-enable only
+the wake SGI after ARM tears down per-CPU IPIs for hotplug.
+
+Mask inherited APPS GPIO interrupt forwarding before the receiving
+kernel enables the TLMM summary IRQ after kexec. Preserve pending
+status and modem/direct-connect routing.
+
+Mask and acknowledge unmapped pending PM8xxx sources inherited from
+the previous kernel so their level parent cannot starve child probing.
+
+Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
 ---
- .../dts/qcom/qcom-msm8260-sony-hikari.dts     |  10 +
- arch/arm/mach-qcom/Makefile                   |   1 +
- arch/arm/mach-qcom/msm8660-sleep.S            |  62 ++
- arch/arm/mach-qcom/platsmp.c                  |  91 +++
- drivers/cpuidle/Kconfig.arm                   |  13 +
- drivers/cpuidle/Makefile                      |   1 +
- drivers/cpuidle/cpuidle-qcom-msm8660.c        | 392 ++++++++++++
- drivers/mfd/qcom_rpm.c                        | 559 +++++++++++++++++-
- .../regulator/qcom-msm8660-saw-regulator.c    |  92 +++
- drivers/regulator/qcom_rpm-regulator.c        | 110 ++++
- include/linux/mfd/qcom_rpm.h                  |  61 ++
- include/linux/regulator/qcom-msm8660-saw.h    |  16 +
- 12 files changed, 1399 insertions(+), 9 deletions(-)
- create mode 100644 arch/arm/mach-qcom/msm8660-sleep.S
- create mode 100644 drivers/cpuidle/cpuidle-qcom-msm8660.c
- create mode 100644 include/linux/regulator/qcom-msm8660-saw.h
+ .../interrupt-controller/qcom,msm8660-mpm.yaml     | 106 ++++
+ .../arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts |  10 +
+ arch/arm/boot/dts/qcom/qcom-msm8660.dtsi           |  15 +
+ arch/arm/include/asm/smp.h                         |   1 +
+ arch/arm/kernel/smp.c                              |   8 +
+ arch/arm/mach-qcom/Makefile                        |   1 +
+ arch/arm/mach-qcom/msm8660-sleep.S                 |  69 +++
+ arch/arm/mach-qcom/platsmp.c                       | 109 ++++
+ drivers/cpuidle/Kconfig.arm                        |  13 +
+ drivers/cpuidle/Makefile                           |   1 +
+ drivers/cpuidle/cpuidle-qcom-msm8660.c             | 392 ++++++++++++++
+ drivers/irqchip/irq-qcom-mpm.c                     | 304 ++++++++++-
+ drivers/mfd/qcom-pm8xxx.c                          |  15 +-
+ drivers/mfd/qcom_rpm.c                             | 574 ++++++++++++++++++++-
+ drivers/pinctrl/qcom/pinctrl-msm.c                 |  47 ++
+ drivers/pinctrl/qcom/pinctrl-msm8660.c             |  55 ++
+ drivers/regulator/qcom-msm8660-saw-regulator.c     |  92 ++++
+ drivers/regulator/qcom_rpm-regulator.c             | 110 ++++
+ include/linux/mfd/qcom_rpm.h                       |  61 +++
+ include/linux/regulator/qcom-msm8660-saw.h         |  16 +
+ include/linux/soc/qcom/msm8660-mpm.h               |  19 +
+ 21 files changed, 2006 insertions(+), 12 deletions(-)
 
+diff --git a/Documentation/devicetree/bindings/interrupt-controller/qcom,msm8660-mpm.yaml b/Documentation/devicetree/bindings/interrupt-controller/qcom,msm8660-mpm.yaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..9873f8ec4111a975f1d16f7d542e17a447a26e29
+--- /dev/null
++++ b/Documentation/devicetree/bindings/interrupt-controller/qcom,msm8660-mpm.yaml
+@@ -0,0 +1,106 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/interrupt-controller/qcom,msm8660-mpm.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: Qualcomm MSM8660 legacy MPM wake interrupt controller
++
++maintainers:
++  - BlackF1re <55582873+BlackF1re@users.noreply.github.com>
++
++description: |
++  MSM8660 uses separate request and pending-status windows in RPM message
++  RAM, with 64 wake pins. Unlike later vMPM controllers, it has one edge
++  detection bank, no MPM timer words and a write-one-to-clear request bank.
++  RPM notification uses the APSS IPC register. The message RAM subranges
++  are shared with the RPM resource controller.
++
++allOf:
++  - $ref: /schemas/interrupt-controller.yaml#
++
++properties:
++  compatible:
++    const: qcom,msm8660-mpm
++
++  reg:
++    items:
++      - description: Request window (enable, detect, polarity, clear)
++      - description: Read-only pending status window
++
++  reg-names:
++    items:
++      - const: request
++      - const: status
++
++  interrupts:
++    maxItems: 1
++
++  clocks:
++    maxItems: 1
++
++  clock-names:
++    const: ram
++
++  qcom,ipc:
++    description: APSS IPC register and doorbell bit used to notify RPM.
++    $ref: /schemas/types.yaml#/definitions/phandle-array
++    items:
++      - items:
++          - description: APSS IPC register provider
++          - description: Register offset
++          - description: IPC bit number
++
++  interrupt-controller: true
++
++  '#interrupt-cells':
++    const: 2
++
++  qcom,mpm-pin-count:
++    const: 64
++
++  qcom,mpm-pin-map:
++    description: Mapping of MPM wake pins to GIC SPI interrupt numbers.
++    $ref: /schemas/types.yaml#/definitions/uint32-matrix
++    items:
++      items:
++        - description: MPM pin
++          minimum: 0
++          maximum: 63
++        - description: GIC SPI number (excluding the 32 SGI/PPI entries)
++          minimum: 0
++          maximum: 987
++
++required:
++  - compatible
++  - reg
++  - reg-names
++  - interrupts
++  - clocks
++  - clock-names
++  - qcom,ipc
++  - interrupt-controller
++  - '#interrupt-cells'
++  - qcom,mpm-pin-count
++  - qcom,mpm-pin-map
++
++additionalProperties: false
++
++examples:
++  - |
++    #include <dt-bindings/clock/qcom,gcc-msm8660.h>
++    #include <dt-bindings/interrupt-controller/arm-gic.h>
++    interrupt-controller@1049d8 {
++        compatible = "qcom,msm8660-mpm";
++        reg = <0x001049d8 0x20>, <0x00104df8 0x8>;
++        reg-names = "request", "status";
++        interrupts = <GIC_SPI 20 IRQ_TYPE_EDGE_RISING>;
++        interrupt-parent = <&intc>;
++        clocks = <&gcc RPM_MSG_RAM_H_CLK>;
++        clock-names = "ram";
++        qcom,ipc = <&l2cc 0x8 1>;
++        interrupt-controller;
++        #interrupt-cells = <2>;
++        qcom,mpm-pin-count = <64>;
++        qcom,mpm-pin-map = <25 100>, <26 50>, <27 79>;
++    };
 diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
 index c4fc8678a2c8c86b2580360f9b10382cd153536d..09ca67d0e38b7d9f8c22138a16b62d9bafe54197 100644
 --- a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
@@ -51,6 +186,63 @@ index c4fc8678a2c8c86b2580360f9b10382cd153536d..09ca67d0e38b7d9f8c22138a16b62d9b
  		};
  
  		/* Shared WLAN/Timpani rail; exact voltage from Sony's Fuji BSP. */
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8660.dtsi b/arch/arm/boot/dts/qcom/qcom-msm8660.dtsi
+index f422daa25b4ed3a77cc3240e04047ab7aff90778..6c8f3f74a5a5ea0d77f1ad36c3d8db88cf879d83 100644
+--- a/arch/arm/boot/dts/qcom/qcom-msm8660.dtsi
++++ b/arch/arm/boot/dts/qcom/qcom-msm8660.dtsi
+@@ -360,6 +360,21 @@ l2cc: clock-controller@2082000 {
+ 			reg = <0x02082000 0x1000>;
+ 		};
+ 
++		mpm: interrupt-controller@1049d8 {
++			compatible = "qcom,msm8660-mpm";
++			reg = <0x001049d8 0x20>, <0x00104df8 0x8>;
++			reg-names = "request", "status";
++			qcom,ipc = <&l2cc 0x8 1>;
++			clocks = <&gcc RPM_MSG_RAM_H_CLK>;
++			clock-names = "ram";
++			interrupts = <GIC_SPI 20 IRQ_TYPE_EDGE_RISING>;
++			interrupt-controller;
++			#interrupt-cells = <2>;
++			qcom,mpm-pin-count = <64>;
++			qcom,mpm-pin-map = <25 100>, <26 50>, <27 79>;
++			status = "disabled";
++		};
++
+ 		rpm: rpm@104000 {
+ 			compatible = "qcom,rpm-msm8660";
+ 			reg = <0x00104000 0x1000>;
+diff --git a/arch/arm/include/asm/smp.h b/arch/arm/include/asm/smp.h
+index 8c05a7f374d8b3d69d51e0d8dc11ceaea5611069..9a4100df9c4bab511df2a3e30cb7323483286b28 100644
+--- a/arch/arm/include/asm/smp.h
++++ b/arch/arm/include/asm/smp.h
+@@ -38,6 +38,7 @@ extern void smp_init_cpus(void);
+  * Register IPI interrupts with the arch SMP code
+  */
+ extern void set_smp_ipi_range(int ipi_base, int nr_ipi);
++extern void arch_enable_wakeup_ipi(void);
+ 
+ /*
+  * Called from platform specific assembly code, this is the
+diff --git a/arch/arm/kernel/smp.c b/arch/arm/kernel/smp.c
+index b5fb4697bc3f8d236e99909e7bca5f9e0de5e49e..470a0ffdd4f4173ff96567c58c70cf101489dc9e 100644
+--- a/arch/arm/kernel/smp.c
++++ b/arch/arm/kernel/smp.c
+@@ -570,6 +570,14 @@ void arch_send_wakeup_ipi_mask(const struct cpumask *mask)
+ 	smp_cross_call(mask, IPI_WAKEUP);
+ }
+ 
++/* Re-enable only the wake SGI after hotplug's ipi_teardown(). */
++void arch_enable_wakeup_ipi(void)
++{
++	if (WARN_ON_ONCE(!ipi_irq_base))
++		return;
++	enable_percpu_irq(ipi_irq_base + IPI_WAKEUP, 0);
++}
++
+ void arch_send_call_function_single_ipi(int cpu)
+ {
+ 	smp_cross_call(cpumask_of(cpu), IPI_CALL_FUNC);
 diff --git a/arch/arm/mach-qcom/Makefile b/arch/arm/mach-qcom/Makefile
 index b839201c9802cf66c7b13b1c3444aac3104a3fd6..bc5bd2884d43c26b33dbf1f1351b732ec8a15e72 100644
 --- a/arch/arm/mach-qcom/Makefile
@@ -61,10 +253,10 @@ index b839201c9802cf66c7b13b1c3444aac3104a3fd6..bc5bd2884d43c26b33dbf1f1351b732e
 +obj-$(CONFIG_ARM_QCOM_MSM8660_CPUIDLE) += msm8660-sleep.o
 diff --git a/arch/arm/mach-qcom/msm8660-sleep.S b/arch/arm/mach-qcom/msm8660-sleep.S
 new file mode 100644
-index 0000000000000000000000000000000000000000..ab1031627996152b937b4655cdd3d4241591707d
+index 0000000000000000000000000000000000000000..889da56f16cda788599cc6c70b12818c0dac4cc3
 --- /dev/null
 +++ b/arch/arm/mach-qcom/msm8660-sleep.S
-@@ -0,0 +1,62 @@
+@@ -0,0 +1,69 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +/*
 + * MSM8x60 Scorpion power-collapse resume glue.
@@ -98,7 +290,14 @@ index 0000000000000000000000000000000000000000..ab1031627996152b937b4655cdd3d424
 +	adr_l	r1, msm8660_hotplug_resume
 +	ldr	r2, [r1, r0, lsl #2]
 +	cmp	r2, #0
-+	bne	secondary_startup_arm
++	beq	1f
++
++	/* Sony's hotplug holding pen waits for fresh secondary_data. */
++2:	ldr	r2, [r1, r0, lsl #2]
++	cmp	r2, #2
++	bne	2b
++	b	secondary_startup_arm
++1:
 +
 +	/*
 +	 * adr_l is PC-relative.  Since this code executes at its physical
@@ -128,7 +327,7 @@ index 0000000000000000000000000000000000000000..ab1031627996152b937b4655cdd3d424
 +	.space	8
 +SYM_DATA_END(msm8660_hotplug_resume)
 diff --git a/arch/arm/mach-qcom/platsmp.c b/arch/arm/mach-qcom/platsmp.c
-index eca2fe0f4314b12e6e1220e9409afabbedca2f94..5748eacc0c73a7d062cd4a0a5d70c4abf182e183 100644
+index eca2fe0f4314b12e6e1220e9409afabbedca2f94..1fce9ee10a589ea2d7b5a5688b77042effa32016 100644
 --- a/arch/arm/mach-qcom/platsmp.c
 +++ b/arch/arm/mach-qcom/platsmp.c
 @@ -15,7 +15,9 @@
@@ -141,7 +340,7 @@ index eca2fe0f4314b12e6e1220e9409afabbedca2f94..5748eacc0c73a7d062cd4a0a5d70c4ab
  #include <asm/smp_plat.h>
  
  
-@@ -49,6 +51,90 @@ static void qcom_cpu_die(unsigned int cpu)
+@@ -49,6 +51,101 @@ static void qcom_cpu_die(unsigned int cpu)
  {
  	wfi();
  }
@@ -157,6 +356,7 @@ index eca2fe0f4314b12e6e1220e9409afabbedca2f94..5748eacc0c73a7d062cd4a0a5d70c4ab
 +{
 +	u32 sctlr;
 +	u32 disabled;
++	u32 release;
 +	int ret;
 +
 +	if (WARN_ON_ONCE(cpu != raw_smp_processor_id() || cpu >= 2))
@@ -171,6 +371,8 @@ index eca2fe0f4314b12e6e1220e9409afabbedca2f94..5748eacc0c73a7d062cd4a0a5d70c4ab
 +	sync_cache_w(&msm8660_hotplug_resume[cpu]);
 +
 +	msm8660_hotplug_avsdscr[cpu] = msm8660_avs_disable();
++	/* __cpu_disable() masked all SGIs, including our only wake signal. */
++	arch_enable_wakeup_ipi();
 +
 +	ret = msm8660_saw_set_power_collapse(cpu, true,
 +					     MSM8660_SAW_COLLAPSE_STANDALONE);
@@ -184,14 +386,19 @@ index eca2fe0f4314b12e6e1220e9409afabbedca2f94..5748eacc0c73a7d062cd4a0a5d70c4ab
 +	flush_cache_all();
 +
 +	asm volatile(
-+		"mcr p15, 0, %0, c1, c0, 0\n\t"
++		"mcr p15, 0, %2, c1, c0, 0\n\t"
++		"isb\n\t"
 +		"dsb\n\t"
-+		"wfi\n\t"
++		"1: wfi\n\t"
++		"ldr %0, [%3]\n\t"
++		"cmp %0, #2\n\t"
++		"bne 1b\n\t"
 +		"mcr p15, 0, %1, c1, c0, 0\n\t"
 +		"isb\n\t"
-+		:
-+		: "r" (disabled), "r" (sctlr)
-+		: "memory");
++		: "=&r" (release)
++		: "r" (sctlr), "r" (disabled),
++		  "r" (&msm8660_hotplug_resume[cpu])
++		: "cc", "memory");
 +
 +	/* WFI returned, so the core did not actually collapse. */
 +	ret = msm8660_saw_set_power_collapse(cpu, false,
@@ -202,6 +409,9 @@ index eca2fe0f4314b12e6e1220e9409afabbedca2f94..5748eacc0c73a7d062cd4a0a5d70c4ab
 +
 +restore_avs:
 +	msm8660_avs_restore(msm8660_hotplug_avsdscr[cpu]);
++	/* Failed/aborted collapse must also wait for a requested online. */
++	while (READ_ONCE(msm8660_hotplug_resume[cpu]) != 2)
++		cpu_relax();
 +	WRITE_ONCE(msm8660_hotplug_resume[cpu], 0);
 +	sync_cache_w(&msm8660_hotplug_resume[cpu]);
 +}
@@ -232,7 +442,21 @@ index eca2fe0f4314b12e6e1220e9409afabbedca2f94..5748eacc0c73a7d062cd4a0a5d70c4ab
  #endif
  
  static int scss_release_secondary(unsigned int cpu)
-@@ -371,8 +457,13 @@ static const struct smp_operations smp_msm8660_ops __initconst = {
+@@ -335,6 +432,13 @@ static int qcom_boot_secondary(unsigned int cpu, int (*func)(unsigned int))
+ 
+ static int msm8660_boot_secondary(unsigned int cpu, struct task_struct *idle)
+ {
++#ifdef CONFIG_ARM_QCOM_MSM8660_CPUIDLE
++	/* __cpu_up() has published new secondary_data before this callback. */
++	if (cpu < 2 && READ_ONCE(msm8660_hotplug_resume[cpu])) {
++		WRITE_ONCE(msm8660_hotplug_resume[cpu], 2);
++		sync_cache_w(&msm8660_hotplug_resume[cpu]);
++	}
++#endif
+ 	return qcom_boot_secondary(cpu, scss_release_secondary);
+ }
+ 
+@@ -371,8 +475,13 @@ static const struct smp_operations smp_msm8660_ops __initconst = {
  	.smp_prepare_cpus	= qcom_smp_prepare_cpus,
  	.smp_boot_secondary	= msm8660_boot_secondary,
  #ifdef CONFIG_HOTPLUG_CPU
@@ -674,11 +898,511 @@ index 0000000000000000000000000000000000000000..9995be79b60573d93f13cb4880ac3ea0
 +
 +MODULE_DESCRIPTION("Sony-style MSM8660 Scorpion CPU idle and system suspend");
 +MODULE_LICENSE("GPL");
+diff --git a/drivers/irqchip/irq-qcom-mpm.c b/drivers/irqchip/irq-qcom-mpm.c
+index 8c575d7ce8a179c69c76e602f058f423e9e36f24..9bac9d2efdf04b5ff9cd08a66c6c58fd0a02f608 100644
+--- a/drivers/irqchip/irq-qcom-mpm.c
++++ b/drivers/irqchip/irq-qcom-mpm.c
+@@ -4,6 +4,7 @@
+  * Copyright (c) 2010-2020, The Linux Foundation. All rights reserved.
+  */
+ 
++#include <linux/clk.h>
+ #include <linux/delay.h>
+ #include <linux/err.h>
+ #include <linux/init.h>
+@@ -20,6 +21,7 @@
+ #include <linux/pm_domain.h>
+ #include <linux/slab.h>
+ #include <linux/soc/qcom/irq.h>
++#include <linux/soc/qcom/msm8660-mpm.h>
+ #include <linux/spinlock.h>
+ 
+ /*
+@@ -69,6 +71,10 @@
+ #define MPM_REG_POLARITY	3
+ #define MPM_REG_STATUS		4
+ 
++/* MSM8660 has two banks and a distinct, pre-vMPM request layout. */
++#define MSM8660_MPM_BANKS	2
++#define MSM8660_MPM_CLEAR	3
++
+ /* MPM pin map to GIC hwirq */
+ struct mpm_gic_map {
+ 	int pin;
+@@ -77,6 +83,15 @@ struct mpm_gic_map {
+ 
+ struct qcom_mpm_priv {
+ 	void __iomem *base;
++	void __iomem *status_base;
++	void __iomem *ipc;
++	u32 ipc_value;
++	u32 wake_enable[MSM8660_MPM_BANKS];
++	u32 saved_enable[MSM8660_MPM_BANKS];
++	u32 dual_edge[MSM8660_MPM_BANKS];
++	u32 wake_status[MSM8660_MPM_BANKS];
++	bool msm8660;
++	bool armed;
+ 	raw_spinlock_t lock;
+ 	struct mbox_client mbox_client;
+ 	struct mbox_chan *mbox_chan;
+@@ -87,11 +102,30 @@ struct qcom_mpm_priv {
+ 	struct generic_pm_domain genpd;
+ };
+ 
++/* One APSS MPM instance; published only after the IRQ domain is ready. */
++static struct qcom_mpm_priv *msm8660_mpm;
++
++static unsigned int msm8660_mpm_offset(unsigned int reg, unsigned int index)
++{
++	if (reg == MPM_REG_POLARITY)
++		reg = 2;
++	else if (reg == MPM_REG_RISING_EDGE)
++		reg = 1;
++
++	return (reg * MSM8660_MPM_BANKS + index) * sizeof(u32);
++}
++
+ static u32 qcom_mpm_read(struct qcom_mpm_priv *priv, unsigned int reg,
+ 			 unsigned int index)
+ {
+ 	unsigned int offset = (reg * priv->reg_stride + index + 2) * 4;
+ 
++	if (priv->msm8660) {
++		if (reg == MPM_REG_STATUS)
++			return readl_relaxed(priv->status_base + index * sizeof(u32));
++		return readl_relaxed(priv->base + msm8660_mpm_offset(reg, index));
++	}
++
+ 	return readl_relaxed(priv->base + offset);
+ }
+ 
+@@ -100,6 +134,16 @@ static void qcom_mpm_write(struct qcom_mpm_priv *priv, unsigned int reg,
+ {
+ 	unsigned int offset = (reg * priv->reg_stride + index + 2) * 4;
+ 
++	if (priv->msm8660) {
++		/* Status is read-only; acknowledge through the separate CLEAR bank. */
++		if (reg == MPM_REG_STATUS) {
++			reg = MSM8660_MPM_CLEAR;
++			val = ~0U;
++			offset = (reg * MSM8660_MPM_BANKS + index) * sizeof(u32);
++		} else {
++			offset = msm8660_mpm_offset(reg, index);
++		}
++	}
+ 	writel_relaxed(val, priv->base + offset);
+ 
+ 	/* Ensure the write is completed */
+@@ -160,6 +204,24 @@ static int qcom_mpm_set_type(struct irq_data *d, unsigned int type)
+ 	unsigned int index = pin / 32;
+ 	unsigned int shift = pin % 32;
+ 
++	if (priv->msm8660) {
++		unsigned long flags;
++
++		raw_spin_lock_irqsave(&priv->lock, flags);
++		if (type == IRQ_TYPE_EDGE_BOTH)
++			priv->dual_edge[index] |= BIT(shift);
++		else
++			priv->dual_edge[index] &= ~BIT(shift);
++		raw_spin_unlock_irqrestore(&priv->lock, flags);
++
++		/* Sony: DETECT selects edge/level; POLARITY selects high/low. */
++		mpm_set_type(priv, type & IRQ_TYPE_EDGE_BOTH,
++			     MPM_REG_RISING_EDGE, index, shift);
++		mpm_set_type(priv, type & (IRQ_TYPE_EDGE_RISING | IRQ_TYPE_LEVEL_HIGH),
++			     MPM_REG_POLARITY, index, shift);
++		goto parent_type;
++	}
++
+ 	if (type & IRQ_TYPE_EDGE_RISING)
+ 		mpm_set_type(priv, true, MPM_REG_RISING_EDGE, index, shift);
+ 	else
+@@ -175,6 +237,7 @@ static int qcom_mpm_set_type(struct irq_data *d, unsigned int type)
+ 	else
+ 		mpm_set_type(priv, false, MPM_REG_POLARITY, index, shift);
+ 
++parent_type:
+ 	if (!d->parent_data)
+ 		return 0;
+ 
+@@ -199,6 +262,122 @@ static struct irq_chip qcom_mpm_chip = {
+ 				  IRQCHIP_SKIP_SET_WAKE,
+ };
+ 
++static int msm8660_mpm_set_wake(struct irq_data *d, unsigned int on)
++{
++	struct qcom_mpm_priv *priv = d->chip_data;
++	unsigned int index = d->hwirq / 32;
++	u32 mask = BIT(d->hwirq % 32);
++	unsigned long flags;
++
++	raw_spin_lock_irqsave(&priv->lock, flags);
++	if (on)
++		priv->wake_enable[index] |= mask;
++	else
++		priv->wake_enable[index] &= ~mask;
++	raw_spin_unlock_irqrestore(&priv->lock, flags);
++	return 0;
++}
++
++static void msm8660_mpm_eoi(struct irq_data *d)
++{
++	if (d->parent_data)
++		irq_chip_eoi_parent(d);
++}
++
++static struct irq_chip msm8660_mpm_chip = {
++	.name = "msm8660-mpm",
++	.irq_eoi = msm8660_mpm_eoi,
++	.irq_mask = qcom_mpm_mask,
++	.irq_unmask = qcom_mpm_unmask,
++	.irq_retrigger = irq_chip_retrigger_hierarchy,
++	.irq_set_type = qcom_mpm_set_type,
++	.irq_set_wake = msm8660_mpm_set_wake,
++	.irq_set_affinity = irq_chip_set_affinity_parent,
++	.flags = IRQCHIP_MASK_ON_SUSPEND,
++};
++
++/* Both barriers match Sony's message-RAM -> IPC -> return ordering. */
++static void msm8660_mpm_notify(struct qcom_mpm_priv *priv)
++{
++	/* Complete message-RAM writes before notifying RPM. */
++	wmb();
++	writel_relaxed(priv->ipc_value, priv->ipc);
++	/* Complete the IPC write before arming CPU collapse. */
++	mb();
++}
++
++int qcom_mpm_msm8660_enter_sleep(void)
++{
++	struct qcom_mpm_priv *priv = READ_ONCE(msm8660_mpm);
++	unsigned long flags;
++	int i;
++
++	if (!priv)
++		return -ENODEV;
++	if (WARN_ON_ONCE(!irqs_disabled()))
++		return -EINVAL;
++
++	raw_spin_lock_irqsave(&priv->lock, flags);
++	if (priv->armed) {
++		raw_spin_unlock_irqrestore(&priv->lock, flags);
++		return -EBUSY;
++	}
++	/* A single polarity cannot represent both edges while TLMM is off. */
++	for (i = 0; i < MSM8660_MPM_BANKS; i++) {
++		if (priv->wake_enable[i] & priv->dual_edge[i]) {
++			raw_spin_unlock_irqrestore(&priv->lock, flags);
++			return -EOPNOTSUPP;
++		}
++	}
++	for (i = 0; i < MSM8660_MPM_BANKS; i++) {
++		priv->saved_enable[i] = qcom_mpm_read(priv, MPM_REG_ENABLE, i);
++		priv->wake_status[i] = 0;
++		qcom_mpm_write(priv, MPM_REG_ENABLE, i, priv->wake_enable[i]);
++		/* Replay the full Sony ENABLE -> DETECT -> POLARITY -> CLEAR set. */
++		qcom_mpm_write(priv, MPM_REG_RISING_EDGE, i,
++			       qcom_mpm_read(priv, MPM_REG_RISING_EDGE, i));
++		qcom_mpm_write(priv, MPM_REG_POLARITY, i,
++			       qcom_mpm_read(priv, MPM_REG_POLARITY, i));
++		qcom_mpm_write(priv, MPM_REG_STATUS, i, 0);
++	}
++	priv->armed = true;
++	msm8660_mpm_notify(priv);
++	raw_spin_unlock_irqrestore(&priv->lock, flags);
++	return 0;
++}
++
++static void msm8660_mpm_replay(struct qcom_mpm_priv *priv);
++
++void qcom_mpm_msm8660_exit_sleep(void)
++{
++	struct qcom_mpm_priv *priv = READ_ONCE(msm8660_mpm);
++	unsigned long flags;
++	int i;
++
++	if (!priv)
++		return;
++	if (WARN_ON_ONCE(!irqs_disabled()))
++		return;
++
++	raw_spin_lock_irqsave(&priv->lock, flags);
++	if (!priv->armed)
++		goto unlock;
++	for (i = 0; i < MSM8660_MPM_BANKS; i++) {
++		priv->wake_status[i] = qcom_mpm_read(priv, MPM_REG_STATUS, i) &
++				       priv->wake_enable[i];
++		qcom_mpm_write(priv, MPM_REG_ENABLE, i, 0);
++		qcom_mpm_write(priv, MPM_REG_STATUS, i, 0);
++	}
++	msm8660_mpm_notify(priv);
++	/* Restore the AP-owned runtime buffer, without rearming physical MPM. */
++	for (i = 0; i < MSM8660_MPM_BANKS; i++)
++		qcom_mpm_write(priv, MPM_REG_ENABLE, i, priv->saved_enable[i]);
++	priv->armed = false;
++unlock:
++	raw_spin_unlock_irqrestore(&priv->lock, flags);
++	msm8660_mpm_replay(priv);
++}
++
+ static struct mpm_gic_map *get_mpm_gic_map(struct qcom_mpm_priv *priv, int pin)
+ {
+ 	struct mpm_gic_map *maps = priv->maps;
+@@ -212,6 +391,45 @@ static struct mpm_gic_map *get_mpm_gic_map(struct qcom_mpm_priv *priv, int pin)
+ 	return NULL;
+ }
+ 
++/* Called with local IRQs off, before resume_device_irqs() clears wake arming. */
++static void msm8660_mpm_replay(struct qcom_mpm_priv *priv)
++{
++	int i, bit;
++
++	for (i = 0; i < MSM8660_MPM_BANKS; i++) {
++		unsigned long pending = priv->wake_status[i];
++
++		priv->wake_status[i] = 0;
++		for_each_set_bit(bit, &pending, 32) {
++			unsigned int pin = i * 32 + bit;
++			struct irq_desc *desc = irq_resolve_mapping(priv->domain, pin);
++			struct irq_data *d;
++			int ret;
++
++			if (!desc)
++				continue;
++			d = irq_desc_get_irq_data(desc);
++			/* Levels reassert in hardware; do not duplicate an observed wake. */
++			if (irqd_is_level_type(d) || !irqd_is_wakeup_armed(d))
++				continue;
++			if (get_mpm_gic_map(priv, pin)) {
++				ret = irq_set_irqchip_state(d->irq, IRQCHIP_STATE_PENDING, true);
++			} else {
++				/*
++				 * TLMM INTR_STATUS is W1C, not a pending-set register.
++				 * Its armed edge flow invokes irq_pm_handle_wakeup():
++				 * mark suspended/pending without running device actions.
++				 * Generic IRQ resume then performs software resend.
++				 */
++				ret = generic_handle_irq_safe(d->irq);
++			}
++			if (ret)
++				pr_err_ratelimited("MSM8660 MPM: cannot replay pin %u IRQ %u: %d\n",
++						   pin, d->irq, ret);
++		}
++	}
++}
++
+ static int qcom_mpm_alloc(struct irq_domain *domain, unsigned int virq,
+ 			  unsigned int nr_irqs, void *data)
+ {
+@@ -227,10 +445,14 @@ static int qcom_mpm_alloc(struct irq_domain *domain, unsigned int virq,
+ 	if (ret)
+ 		return ret;
+ 
++	if (pin != GPIO_NO_WAKE_IRQ && pin >= domain->hwirq_max)
++		return -EINVAL;
++
+ 	if (pin == GPIO_NO_WAKE_IRQ)
+ 		return irq_domain_disconnect_hierarchy(domain, virq);
+ 
+ 	ret = irq_domain_set_hwirq_and_chip(domain, virq, pin,
++					    priv->msm8660 ? &msm8660_mpm_chip :
+ 					    &qcom_mpm_chip, priv);
+ 	if (ret)
+ 		return ret;
+@@ -270,6 +492,10 @@ static irqreturn_t qcom_mpm_handler(int irq, void *dev_id)
+ 	unsigned long flags;
+ 	int i, j;
+ 
++	/* Sony consumes the legacy pending banks synchronously on sleep exit. */
++	if (priv->msm8660)
++		return IRQ_HANDLED;
++
+ 	for (i = 0; i < priv->reg_stride; i++) {
+ 		raw_spin_lock_irqsave(&priv->lock, flags);
+ 		enable = qcom_mpm_read(priv, MPM_REG_ENABLE, i);
+@@ -322,6 +548,52 @@ static bool gic_hwirq_is_mapped(struct mpm_gic_map *maps, int cnt, u32 hwirq)
+ 	return false;
+ }
+ 
++static int msm8660_mpm_map(struct platform_device *pdev,
++			   struct qcom_mpm_priv *priv)
++{
++	struct device *dev = &pdev->dev;
++	struct of_phandle_args ipc;
++	struct resource res;
++	struct clk *clk;
++	int i, ret;
++
++	clk = devm_clk_get_enabled(dev, "ram");
++	if (IS_ERR(clk))
++		return PTR_ERR(clk);
++
++	/* These subranges are also owned by qcom_rpm, so do not reserve them. */
++	for (i = 0; i < 2; i++) {
++		ret = of_address_to_resource(dev->of_node, i, &res);
++		if (ret)
++			return ret;
++		if (resource_size(&res) < (i ? 8 : 32))
++			return -EINVAL;
++		if (i)
++			priv->status_base = devm_ioremap(dev, res.start, resource_size(&res));
++		else
++			priv->base = devm_ioremap(dev, res.start, resource_size(&res));
++	}
++	if (!priv->base || !priv->status_base)
++		return -ENOMEM;
++
++	ret = of_parse_phandle_with_fixed_args(dev->of_node, "qcom,ipc", 2, 0, &ipc);
++	if (ret)
++		return ret;
++	ret = of_address_to_resource(ipc.np, 0, &res);
++	of_node_put(ipc.np);
++	if (ret)
++		return ret;
++	if (resource_size(&res) < sizeof(u32) ||
++	    ipc.args[0] > resource_size(&res) - sizeof(u32) ||
++	    !IS_ALIGNED(ipc.args[0], sizeof(u32)) || ipc.args[1] >= 32)
++		return -EINVAL;
++	priv->ipc = devm_ioremap(dev, res.start + ipc.args[0], sizeof(u32));
++	if (!priv->ipc)
++		return -ENOMEM;
++	priv->ipc_value = BIT(ipc.args[1]);
++	return 0;
++}
++
+ static int qcom_mpm_probe(struct platform_device *pdev, struct device_node *parent)
+ {
+ 	struct device_node *np = pdev->dev.of_node;
+@@ -345,6 +617,9 @@ static int qcom_mpm_probe(struct platform_device *pdev, struct device_node *pare
+ 		return ret;
+ 	}
+ 
++	priv->msm8660 = of_device_is_compatible(np, "qcom,msm8660-mpm");
++	if (!pin_cnt || (priv->msm8660 && pin_cnt != 64))
++		return -EINVAL;
+ 	priv->reg_stride = DIV_ROUND_UP(pin_cnt, 32);
+ 
+ 	ret = of_property_count_u32_elems(np, "qcom,mpm-pin-map");
+@@ -370,6 +645,9 @@ static int qcom_mpm_probe(struct platform_device *pdev, struct device_node *pare
+ 		of_property_read_u32_index(np, "qcom,mpm-pin-map", i * 2, &pin);
+ 		of_property_read_u32_index(np, "qcom,mpm-pin-map", i * 2 + 1, &hwirq);
+ 
++		if (pin >= pin_cnt)
++			return -EINVAL;
++
+ 		if (gic_hwirq_is_mapped(priv->maps, i, hwirq)) {
+ 			dev_warn(dev, "failed to map pin %d as GIC hwirq %d is already mapped\n",
+ 				 pin, hwirq);
+@@ -382,6 +660,13 @@ static int qcom_mpm_probe(struct platform_device *pdev, struct device_node *pare
+ 
+ 	raw_spin_lock_init(&priv->lock);
+ 
++	if (priv->msm8660) {
++		ret = msm8660_mpm_map(pdev, priv);
++		if (ret)
++			return ret;
++		goto init_registers;
++	}
++
+ 	/* If we have a handle to an RPM message ram partition, use it. */
+ 	msgram_np = of_parse_phandle(np, "qcom,rpm-msg-ram", 0);
+ 	if (msgram_np) {
+@@ -403,9 +688,11 @@ static int qcom_mpm_probe(struct platform_device *pdev, struct device_node *pare
+ 			return PTR_ERR(priv->base);
+ 	}
+ 
++init_registers:
+ 	for (i = 0; i < priv->reg_stride; i++) {
+ 		qcom_mpm_write(priv, MPM_REG_ENABLE, i, 0);
+-		qcom_mpm_write(priv, MPM_REG_FALLING_EDGE, i, 0);
++		if (!priv->msm8660)
++			qcom_mpm_write(priv, MPM_REG_FALLING_EDGE, i, 0);
+ 		qcom_mpm_write(priv, MPM_REG_RISING_EDGE, i, 0);
+ 		qcom_mpm_write(priv, MPM_REG_POLARITY, i, 0);
+ 		qcom_mpm_write(priv, MPM_REG_STATUS, i, 0);
+@@ -415,6 +702,9 @@ static int qcom_mpm_probe(struct platform_device *pdev, struct device_node *pare
+ 	if (irq < 0)
+ 		return irq;
+ 
++	if (priv->msm8660)
++		goto create_domain;
++
+ 	genpd = &priv->genpd;
+ 	genpd->flags = GENPD_FLAG_IRQ_SAFE;
+ 	genpd->power_off = mpm_pd_power_off;
+@@ -444,10 +734,11 @@ static int qcom_mpm_probe(struct platform_device *pdev, struct device_node *pare
+ 		return ret;
+ 	}
+ 
++create_domain:
+ 	parent_domain = irq_find_host(parent);
+ 	if (!parent_domain) {
+ 		dev_err(dev, "failed to find MPM parent domain\n");
+-		ret = -ENXIO;
++		ret = -EPROBE_DEFER;
+ 		goto free_mbox;
+ 	}
+ 
+@@ -467,11 +758,19 @@ static int qcom_mpm_probe(struct platform_device *pdev, struct device_node *pare
+ 	if (ret)
+ 		goto remove_domain;
+ 
++	if (priv->msm8660) {
++		ret = irq_set_irq_wake(irq, 1);
++		if (ret)
++			goto remove_domain;
++		WRITE_ONCE(msm8660_mpm, priv);
++	}
+ 	return 0;
+ 
+ remove_domain:
+ 	irq_domain_remove(priv->domain);
+ free_mbox:
++	if (priv->msm8660)
++		return ret;
+ 	mbox_free_channel(priv->mbox_chan);
+ remove_genpd:
+ 	pm_genpd_remove(genpd);
+@@ -480,6 +779,7 @@ static int qcom_mpm_probe(struct platform_device *pdev, struct device_node *pare
+ 
+ IRQCHIP_PLATFORM_DRIVER_BEGIN(qcom_mpm)
+ IRQCHIP_MATCH("qcom,mpm", qcom_mpm_probe)
++IRQCHIP_MATCH("qcom,msm8660-mpm", qcom_mpm_probe)
+ IRQCHIP_PLATFORM_DRIVER_END(qcom_mpm)
+ MODULE_DESCRIPTION("Qualcomm Technologies, Inc. MSM Power Manager");
+ MODULE_LICENSE("GPL v2");
+diff --git a/drivers/mfd/qcom-pm8xxx.c b/drivers/mfd/qcom-pm8xxx.c
+index 393db42c46228288c5eb0b591793af2934e951d6..a08be5387a2d3f595a5ae53ce9758f1d4dbc2a2d 100644
+--- a/drivers/mfd/qcom-pm8xxx.c
++++ b/drivers/mfd/qcom-pm8xxx.c
+@@ -141,7 +141,20 @@ static int pm8xxx_irq_block_handler(struct pm_irq_chip *chip, int block)
+ 	for (i = 0; i < 8; i++) {
+ 		if (bits & (1 << i)) {
+ 			pmirq = block * 8 + i;
+-			generic_handle_domain_irq(chip->irqdomain, pmirq);
++			ret = generic_handle_domain_irq(chip->irqdomain, pmirq);
++			if (ret == -EINVAL) {
++				/*
++				 * A previous kernel can leave a source enabled before
++				 * its consumer has an IRQ mapping here. Leaving that
++				 * pending holds the level parent asserted forever.
++				 * The consumer will configure and unmask it later.
++				 */
++				ret = pm8xxx_config_irq(chip, block,
++					(i << PM_IRQF_BITS_SHIFT) |
++					PM_IRQF_MASK_ALL | PM_IRQF_CLR);
++				dev_warn_ratelimited(regmap_get_device(chip->regmap),
++					"masked unmapped PMIC IRQ %d: %d\n", pmirq, ret);
++			}
+ 		}
+ 	}
+ 	return 0;
 diff --git a/drivers/mfd/qcom_rpm.c b/drivers/mfd/qcom_rpm.c
-index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..dd167d7fb3e1896efcb4d0cf51645520c573eaea 100644
+index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..cf0a8369a8d2cf9d9c58293d4e8280fd4a76f6d0 100644
 --- a/drivers/mfd/qcom_rpm.c
 +++ b/drivers/mfd/qcom_rpm.c
-@@ -6,12 +6,17 @@
+@@ -6,13 +6,19 @@
   */
  
  #include <linux/module.h>
@@ -694,9 +1418,11 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..dd167d7fb3e1896efcb4d0cf51645520
  #include <linux/interrupt.h>
 +#include <linux/spinlock.h>
  #include <linux/mfd/qcom_rpm.h>
++#include <linux/soc/qcom/msm8660-mpm.h>
  #include <linux/mfd/syscon.h>
  #include <linux/regmap.h>
-@@ -41,17 +46,21 @@ struct qcom_rpm_data {
+ #include <linux/clk.h>
+@@ -41,17 +47,21 @@ struct qcom_rpm_data {
  struct qcom_rpm {
  	struct device *dev;
  	struct regmap *ipc_regmap;
@@ -718,7 +1444,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..dd167d7fb3e1896efcb4d0cf51645520
  	u32 ack_status;
  
  	const struct qcom_rpm_data *data;
-@@ -62,6 +71,7 @@ struct qcom_rpm {
+@@ -62,6 +72,7 @@ struct qcom_rpm {
  #define RPM_REQ_REG(rpm, i)	((rpm)->req_regs + (i) * 4)
  
  #define RPM_REQUEST_TIMEOUT	(5 * HZ)
@@ -726,7 +1452,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..dd167d7fb3e1896efcb4d0cf51645520
  
  #define RPM_MAX_SEL_SIZE	7
  
-@@ -162,6 +172,14 @@ static const struct qcom_rpm_data apq8064_template = {
+@@ -162,6 +173,14 @@ static const struct qcom_rpm_data apq8064_template = {
  };
  
  static const struct qcom_rpm_resource msm8660_rpm_resource_table[] = {
@@ -741,7 +1467,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..dd167d7fb3e1896efcb4d0cf51645520
  	[QCOM_RPM_CXO_CLK] =			{ 32, 12, 5, 1 },
  	[QCOM_RPM_PXO_CLK] =			{ 33, 13, 6, 1 },
  	[QCOM_RPM_PLL_4] =			{ 34, 14, 7, 1 },
-@@ -445,6 +463,364 @@ static const struct of_device_id qcom_rpm_of_match[] = {
+@@ -445,6 +464,378 @@ static const struct of_device_id qcom_rpm_of_match[] = {
  };
  MODULE_DEVICE_TABLE(of, qcom_rpm_of_match);
  
@@ -1015,11 +1741,19 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..dd167d7fb3e1896efcb4d0cf51645520
 +				    reqs, nreqs);
 +}
 +
++/* Sony uses MPM only when PXO or the APSS digital supply cannot retain wake. */
++static bool msm8660_rpmrs_use_mpm(const struct qcom_rpm_msm8660_rpmrs_limits *limits)
++{
++	return limits->pxo == QCOM_RPM_MSM8660_PXO_OFF ||
++	       limits->vdd_dig <= QCOM_RPM_MSM8660_VDD_RET_HIGH;
++}
++
 +int qcom_rpm_msm8660_rpmrs_enter_sleep_noirq(
 +	u32 sclk_count, const struct qcom_rpm_msm8660_rpmrs_limits *limits)
 +{
 +	const struct qcom_rpm_msm8660_rpmrs_limits safe_limits =
 +		QCOM_RPM_MSM8660_RPMRS_CONSERVATIVE_LIMITS;
++	bool sleep_programmed;
 +	int rollback_ret;
 +	int ret;
 +
@@ -1033,6 +1767,9 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..dd167d7fb3e1896efcb4d0cf51645520
 +		return -EBUSY;
 +
 +	ret = msm8660_rpmrs_program_sleep_noirq(sclk_count, limits);
++	sleep_programmed = !ret;
++	if (!ret && msm8660_rpmrs_use_mpm(limits))
++		ret = qcom_mpm_msm8660_enter_sleep();
 +	if (!ret) {
 +		atomic_set(&msm8660_rpmrs_sleep_state,
 +			   MSM8660_RPMRS_SLEEP_ARMED);
@@ -1050,8 +1787,8 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..dd167d7fb3e1896efcb4d0cf51645520
 +		return ret;
 +	}
 +
-+	/* A rejected/mismatched ACK is consumed; replace any partial sleep set. */
-+	if (ret == -EIO) {
++	/* Roll back a consumed bad ACK or a successful batch followed by MPM failure. */
++	if (ret == -EIO || sleep_programmed) {
 +		rollback_ret = msm8660_rpmrs_program_sleep_noirq(0, &safe_limits);
 +		if (rollback_ret) {
 +			pr_err("MSM8660 RPMRS: sleep rollback failed: %d (entry %d)\n",
@@ -1082,6 +1819,9 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..dd167d7fb3e1896efcb4d0cf51645520
 +	    MSM8660_RPMRS_SLEEP_ARMED)
 +		return -EINVAL;
 +
++	/* Snapshot/replay wake edges and disarm MPM even on an aborted collapse. */
++	qcom_mpm_msm8660_exit_sleep();
++
 +	if (!collapsed) {
 +		/*
 +		 * No SAW/RPM collapse occurred. Leave a conservative, non-timed
@@ -1106,7 +1846,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..dd167d7fb3e1896efcb4d0cf51645520
  int qcom_rpm_write(struct qcom_rpm *rpm,
  		   int state,
  		   int resource,
-@@ -465,6 +841,10 @@ int qcom_rpm_write(struct qcom_rpm *rpm,
+@@ -465,6 +856,10 @@ int qcom_rpm_write(struct qcom_rpm *rpm,
  		return -EINVAL;
  
  	mutex_lock(&rpm->lock);
@@ -1117,7 +1857,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..dd167d7fb3e1896efcb4d0cf51645520
  
  	for (i = 0; i < res->size; i++)
  		writel_relaxed(buf[i], RPM_REQ_REG(rpm, res->target_id + i));
-@@ -477,6 +857,7 @@ int qcom_rpm_write(struct qcom_rpm *rpm,
+@@ -477,6 +872,7 @@ int qcom_rpm_write(struct qcom_rpm *rpm,
  
  	writel_relaxed(BIT(state), RPM_CTRL_REG(rpm, rpm->data->req_ctx_off));
  
@@ -1125,7 +1865,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..dd167d7fb3e1896efcb4d0cf51645520
  	reinit_completion(&rpm->ack);
  	regmap_write(rpm->ipc_regmap, rpm->ipc_offset, BIT(rpm->ipc_bit));
  
-@@ -486,23 +867,148 @@ int qcom_rpm_write(struct qcom_rpm *rpm,
+@@ -486,23 +882,148 @@ int qcom_rpm_write(struct qcom_rpm *rpm,
  	else if (rpm->ack_status & RPM_REJECTED)
  		ret = -EIO;
  
@@ -1279,7 +2019,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..dd167d7fb3e1896efcb4d0cf51645520
  
  	if (ack & RPM_NOTIFICATION) {
  		dev_warn(rpm->dev, "ignoring notification!\n");
-@@ -532,6 +1038,7 @@ static irqreturn_t qcom_rpm_wakeup_interrupt(int irq, void *dev)
+@@ -532,6 +1053,7 @@ static irqreturn_t qcom_rpm_wakeup_interrupt(int irq, void *dev)
  static int qcom_rpm_probe(struct platform_device *pdev)
  {
  	struct device_node *syscon_np;
@@ -1287,7 +2027,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..dd167d7fb3e1896efcb4d0cf51645520
  	struct qcom_rpm *rpm;
  	u32 fw_version[3];
  	int irq_wakeup;
-@@ -546,6 +1053,7 @@ static int qcom_rpm_probe(struct platform_device *pdev)
+@@ -546,6 +1068,7 @@ static int qcom_rpm_probe(struct platform_device *pdev)
  	rpm->dev = &pdev->dev;
  	mutex_init(&rpm->lock);
  	init_completion(&rpm->ack);
@@ -1295,7 +2035,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..dd167d7fb3e1896efcb4d0cf51645520
  
  	/* Enable message RAM clock */
  	rpm->ramclk = devm_clk_get_enabled(&pdev->dev, "ram");
-@@ -572,6 +1080,9 @@ static int qcom_rpm_probe(struct platform_device *pdev)
+@@ -572,6 +1095,9 @@ static int qcom_rpm_probe(struct platform_device *pdev)
  	if (irq_wakeup < 0)
  		return irq_wakeup;
  
@@ -1305,7 +2045,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..dd167d7fb3e1896efcb4d0cf51645520
  	rpm->data = device_get_match_data(&pdev->dev);
  	if (!rpm->data)
  		return -ENODEV;
-@@ -589,14 +1100,17 @@ static int qcom_rpm_probe(struct platform_device *pdev)
+@@ -589,14 +1115,17 @@ static int qcom_rpm_probe(struct platform_device *pdev)
  	}
  
  	rpm->ipc_regmap = syscon_node_to_regmap(syscon_np);
@@ -1326,7 +2066,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..dd167d7fb3e1896efcb4d0cf51645520
  		return -EINVAL;
  	}
  
-@@ -604,9 +1118,28 @@ static int qcom_rpm_probe(struct platform_device *pdev)
+@@ -604,9 +1133,28 @@ static int qcom_rpm_probe(struct platform_device *pdev)
  					 &rpm->ipc_bit);
  	if (ret < 0) {
  		dev_err(&pdev->dev, "no bit in qcom,ipc\n");
@@ -1355,7 +2095,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..dd167d7fb3e1896efcb4d0cf51645520
  	dev_set_drvdata(&pdev->dev, rpm);
  
  	fw_version[0] = readl(RPM_STATUS_REG(rpm, 0));
-@@ -671,7 +1204,14 @@ static int qcom_rpm_probe(struct platform_device *pdev)
+@@ -671,7 +1219,14 @@ static int qcom_rpm_probe(struct platform_device *pdev)
  	if (ret)
  		dev_warn(&pdev->dev, "failed to mark wakeup irq as wakeup\n");
  
@@ -1371,7 +2111,7 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..dd167d7fb3e1896efcb4d0cf51645520
  }
  
  static struct platform_driver qcom_rpm_driver = {
-@@ -690,6 +1230,7 @@ arch_initcall(qcom_rpm_init);
+@@ -690,6 +1245,7 @@ arch_initcall(qcom_rpm_init);
  
  static void __exit qcom_rpm_exit(void)
  {
@@ -1379,6 +2119,151 @@ index 0defb3279af1d3eab9ca2f3763c4fe50131b2e2e..dd167d7fb3e1896efcb4d0cf51645520
  	platform_driver_unregister(&qcom_rpm_driver);
  }
  module_exit(qcom_rpm_exit)
+diff --git a/drivers/pinctrl/qcom/pinctrl-msm.c b/drivers/pinctrl/qcom/pinctrl-msm.c
+index 27f06bbc113c96e0b39fe5d464d6fae3c125c025..111f4e2179aeefcef558ccc065c858de177bc22c 100644
+--- a/drivers/pinctrl/qcom/pinctrl-msm.c
++++ b/drivers/pinctrl/qcom/pinctrl-msm.c
+@@ -1213,6 +1213,18 @@ static int msm_gpio_irq_set_wake(struct irq_data *d, unsigned int on)
+ 	if (d->parent_data && test_bit(d->hwirq, pctrl->skip_wake_irqs))
+ 		return irq_chip_set_wake_parent(d, on);
+ 
++	if (d->parent_data &&
++	    (d->parent_data->domain->flags & IRQ_DOMAIN_FLAG_QCOM_MPM_WAKEUP)) {
++		int ret;
++
++		ret = irq_chip_set_wake_parent(d, on);
++		if (ret)
++			return ret;
++		ret = irq_set_irq_wake(pctrl->irq, on);
++		if (ret)
++			irq_chip_set_wake_parent(d, !on);
++		return ret;
++	}
+ 	return irq_set_irq_wake(pctrl->irq, on);
+ }
+ 
+@@ -1447,6 +1459,39 @@ static const struct irq_chip msm_gpio_irq_chip = {
+ 				   IRQCHIP_IMMUTABLE),
+ };
+ 
++static void msm8660_gpio_quiesce_inherited_irqs(struct msm_pinctrl *pctrl)
++{
++	const struct msm_pingroup *g;
++	u32 cfg, target;
++	unsigned int i, masked = 0;
++
++	if (!of_device_is_compatible(pctrl->dev->of_node,
++				     "qcom,msm8660-pinctrl"))
++		return;
++
++	/*
++	 * Kexec can leave APPS GPIO interrupts enabled by the previous kernel.
++	 * No child IRQ is owned yet, so enabling the summary IRQ would deliver
++	 * these without a handler. Preserve latched status and raw detection;
++	 * each consumer will enable forwarding when its IRQ is installed.
++	 * Leave modem targets and direct-connect routes untouched.
++	 */
++	for (i = 0; i < pctrl->soc->ngpios; i++) {
++		g = &pctrl->soc->groups[i];
++		target = msm_readl_intr_target(pctrl, g);
++		if ((target & GENMASK(2, 0)) != g->intr_target_kpss_val ||
++		    (target & BIT(3)))
++			continue;
++		cfg = msm_readl_intr_cfg(pctrl, g);
++		if (!(cfg & BIT(g->intr_enable_bit)))
++			continue;
++		msm_writel_intr_cfg(cfg & ~BIT(g->intr_enable_bit), pctrl, g);
++		msm_readl_intr_cfg(pctrl, g);
++		masked++;
++	}
++	dev_info(pctrl->dev, "masked %u inherited APPS GPIO IRQs\n", masked);
++}
++
+ static int msm_gpio_init(struct msm_pinctrl *pctrl)
+ {
+ 	struct gpio_chip *chip;
+@@ -1501,6 +1546,8 @@ static int msm_gpio_init(struct msm_pinctrl *pctrl)
+ 	girq->parents[0] = pctrl->irq;
+ 	girq->init_valid_mask = msm_gpio_irq_init_valid_mask;
+ 
++	msm8660_gpio_quiesce_inherited_irqs(pctrl);
++
+ 	ret = devm_gpiochip_add_data(pctrl->dev, &pctrl->chip, pctrl);
+ 	if (ret) {
+ 		dev_err(pctrl->dev, "Failed register gpiochip\n");
+diff --git a/drivers/pinctrl/qcom/pinctrl-msm8660.c b/drivers/pinctrl/qcom/pinctrl-msm8660.c
+index 5b28a1c21a886e9763d114b4bbc32d4419c4f4ff..9a28c82676d57a814c4b557bd86624c9e2ea91aa 100644
+--- a/drivers/pinctrl/qcom/pinctrl-msm8660.c
++++ b/drivers/pinctrl/qcom/pinctrl-msm8660.c
+@@ -955,6 +955,59 @@ static const struct msm_pingroup msm8660_groups[] = {
+ 
+ #define NUM_GPIO_PINGROUPS 173
+ 
++/* Sony 6.2.B.1.96 devices-msm8x60.c: msm_mpm_irqs_m2a. */
++static const struct msm_gpio_wakeirq_map msm8660_mpm_map[] = {
++	{ 61, 1 },
++	{ 87, 4 },
++	{ 88, 5 },
++	{ 89, 6 },
++	{ 90, 7 },
++	{ 91, 8 },
++	{ 34, 9 },
++	{ 38, 10 },
++	{ 42, 11 },
++	{ 46, 12 },
++	{ 50, 13 },
++	{ 54, 14 },
++	{ 58, 15 },
++	{ 63, 16 },
++	{ 160, 17 },
++	{ 162, 18 },
++	{ 144, 19 },
++	{ 146, 20 },
++	{ 123, 29 },
++	{ 172, 30 },
++	{ 99, 31 },
++	{ 96, 32 },
++	{ 67, 33 },
++	{ 71, 34 },
++	{ 105, 35 },
++	{ 117, 36 },
++	{ 29, 37 },
++	{ 30, 38 },
++	{ 31, 39 },
++	{ 37, 40 },
++	{ 40, 41 },
++	{ 41, 42 },
++	{ 45, 43 },
++	{ 51, 44 },
++	{ 52, 45 },
++	{ 57, 46 },
++	{ 73, 47 },
++	{ 93, 48 },
++	{ 94, 49 },
++	{ 103, 50 },
++	{ 104, 51 },
++	{ 106, 52 },
++	{ 115, 53 },
++	{ 124, 54 },
++	{ 125, 55 },
++	{ 126, 56 },
++	{ 127, 57 },
++	{ 128, 58 },
++	{ 129, 59 },
++};
++
+ static const struct msm_pinctrl_soc_data msm8660_pinctrl = {
+ 	.pins = msm8660_pins,
+ 	.npins = ARRAY_SIZE(msm8660_pins),
+@@ -963,6 +1016,8 @@ static const struct msm_pinctrl_soc_data msm8660_pinctrl = {
+ 	.groups = msm8660_groups,
+ 	.ngroups = ARRAY_SIZE(msm8660_groups),
+ 	.ngpios = NUM_GPIO_PINGROUPS,
++	.wakeirq_map = msm8660_mpm_map,
++	.nwakeirq_map = ARRAY_SIZE(msm8660_mpm_map),
+ };
+ 
+ static int msm8660_pinctrl_probe(struct platform_device *pdev)
 diff --git a/drivers/regulator/qcom-msm8660-saw-regulator.c b/drivers/regulator/qcom-msm8660-saw-regulator.c
 index fd5ebaf8cb88515691aaf95b2d13fb3416fe5317..9d97479d03b97c5ca3268b9a048ba7ac94f4b176 100644
 --- a/drivers/regulator/qcom-msm8660-saw-regulator.c
@@ -1741,4 +2626,29 @@ index 0000000000000000000000000000000000000000..c3259cf6787a0667201e271a4403990c
 +int msm8660_saw_set_power_collapse(unsigned int cpu, bool enable,
 +				   enum msm8660_saw_collapse_mode mode);
 +
++#endif
+diff --git a/include/linux/soc/qcom/msm8660-mpm.h b/include/linux/soc/qcom/msm8660-mpm.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..d409211316c3b69c2f52773a33bb2999cee15b32
+--- /dev/null
++++ b/include/linux/soc/qcom/msm8660-mpm.h
+@@ -0,0 +1,19 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef __QCOM_MSM8660_MPM_H
++#define __QCOM_MSM8660_MPM_H
++
++#include <linux/errno.h>
++#include <linux/kconfig.h>
++
++/* Local interrupts must be disabled, as in platform suspend .enter(). */
++#if IS_BUILTIN(CONFIG_QCOM_MPM)
++int qcom_mpm_msm8660_enter_sleep(void);
++void qcom_mpm_msm8660_exit_sleep(void);
++#else
++static inline int qcom_mpm_msm8660_enter_sleep(void)
++{
++	return -ENODEV;
++}
++static inline void qcom_mpm_msm8660_exit_sleep(void) { }
++#endif
 +#endif
