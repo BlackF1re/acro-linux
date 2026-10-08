@@ -174,14 +174,62 @@ resume failure, not verified suspend support.
 
 Further read-only traces narrowed this failure to `gfx3d_clk` enable: OPP
 rate setting and preparation of all four GPU clocks completed. Sony's
-`clock-8x60.c` explicitly makes GFX3D depend on `gmem_axi_clk`, whereas the
-current bulk enables core before memory/bus interfaces. A separate A220-only
-candidate moves core last (and therefore disables it first). It builds and
-passes checkpatch but has **not been physically tested**; it is a hypothesis,
-not an accepted resume fix. Bundle: `/boot/hikari-gpuorder-20261008`, release
-`7.3.0-rc1-hikari-system-gpuorder-20261008-g39c978ab5093`, zImage SHA256
-`2e769e18b3f4da48dab1b32910123814c6b56476873118faf3df94cafbbd80c8`.
-Failure logs are preserved in `/boot/hikari-gpubulk-20261008/results`.
-At the owner's stop request the candidate was unloaded (`kexec_loaded=0`)
-and the phone remained in immutable BOOT. Production BOOT/SYSTEM were not
-modified. Clock ordering and temporary traces remain outside canonical patches.
+`clock-8x60.c` makes GFX3D depend on `gmem_axi_clk`. Enabling the A220 core last
+removed the hard clock hang, but the first physical candidate still failed
+GPU hardware re-init with `-EINVAL` and produced a blue display, underruns and
+flip timeouts. A returned PM-test shell command was insufficient evidence.
+
+The GPU resume stage also follows Sony's `footswitch-8x60.c`: synchronous
+GFX3D resets run with memory, bus, interface and core clocks enabled; an extra
+core reset follows unclamping; GFX3D_CC bit 31 retains core memory while
+clock-gated. Power-off clears retention and asserts resets before gating and
+clamping. Clock preparation occurs at probe, outside noirq callbacks.
+
+The separate `hikari-fsresume-20261008` candidate combines this GPU stage with
+MDP4 fetch/IRQ restoration before modeset. It passed three device/noirq
+`pm_test=platform` freeze cycles, GPU re-init returned zero, and the owner
+confirmed normal image and touchscreen (`VERIFIED_DEVICE`, partial PM
+acceptance). Eight independent S1c24/S1x32 processes produced 448 NEAR and
+zero SEVERE; the S3 texture-varying probe passed 16/16 draws. Phosh retained
+GLES2/FD220 with all mapped Mesa DSOs in `/opt/hikari-mesa-a220`.
+
+Each display restart can still report one primary underrun; there were no
+persistent underruns or flip timeouts on this candidate. Wi-Fi HTAvail and
+MPU3050 runtime-PM errors remain separate unresolved issues. These tests used
+`cpuidle.off=1`: they did not exercise CPU/RPM collapse or validate suspend
+current. The diagnostic kernel contains temporary traces not exported into
+the canonical patches; the trace-free acceptance below checks that result.
+
+Evidence and checksums are saved in `/boot/hikari-fsresume-20261008/results`
+and the corresponding host build directory. Tested release:
+`7.3.0-rc1-hikari-system-fsresume-20261008-g1cf9ba7e425c`; zImage SHA256:
+`1777e55652e4fb9652054ed04c23f74d7fa02cd18d72cf8054d42e33dd16aee3`.
+The GPU stage prepared tree is
+`262603834608deed07d0d44d057c473d360b083e`.
+BOOT and the production SYSTEM bundle remain unchanged.
+
+The display resume stage restores MDP4's base fetch/CSC/port configuration
+and its saved IRQ mask before `drm_mode_config_helper_resume()`. Atomic
+plane state alone did not restore those registers after domain collapse.
+It runs only after the noirq suspend stage was reached and does not
+reinstall IRQ handlers. The combined prepared tree is `da80374e82c2a3ff72dcf1ac86bad9fd082b5f2e`.
+
+The canonical, trace-free series was materialized and built locally, then
+booted through immutable BOOT on 2026-10-08 (`VERIFIED_DEVICE`, device/noirq
+resume only). Release:
+`7.3.0-rc1-hikari-system-resume-clean-20261008-g3fe898c012ff`; zImage SHA256:
+`ea4e33fea63d76765282ddaebb360bb267b1b920a4adb00a8b6cac0576cbbead`.
+Three further `pm_test=platform` freeze cycles passed. Four independent
+transition processes gave 224 NEAR / zero SEVERE; S0 passed 4/4 and S3 passed
+16/16. Hardware Phosh remained active, its screenshot was clean, and IRQ
+errors were zero. Mesa maps and the complete staged environment were saved.
+The six cycles across both candidates cover device/noirq resume, not actual
+CPU/RPM sleep: `cpuidle.off=1` remains on the test command line.
+
+A single primary underrun remains at each display restart, without persistent
+blue scanout, flip timeouts or GPU/MMU faults. Do not classify the entire
+suspend stack as verified from these results. Logs, runtime maps, screenshots
+and checksums are in `/boot/hikari-resume-clean-20261008/results/acceptance`
+and the corresponding host build directory. The phone remains in this test
+SYSTEM with Phosh GLES2 and `pm_test=none`; immutable BOOT and the production
+`hikari-next` kernel are unchanged.

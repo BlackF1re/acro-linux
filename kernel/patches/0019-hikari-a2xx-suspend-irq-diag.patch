@@ -1,7 +1,7 @@
 From 41a936ce75396f7e58dfeaa5d7bd7f079e751019 Mon Sep 17 00:00:00 2001
 From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
 Date: Wed, 7 Oct 2026 00:40:00 +0300
-Subject: [PATCH] drm/msm/adreno: quiesce A2xx IRQ across system suspend
+Subject: [PATCH] drm/msm/adreno: restore A2xx IRQ, clocks and GFX3D power sequencing
 
 Sony KGSL disables the physical GPU interrupt before tearing down AXI and
 clocks, then restores power, hardware state and finally the interrupt on
@@ -11,6 +11,11 @@ RBBM interrupt live while the register block is being powered down.
 Keep the IRQ masked across pm_runtime_force_resume() and msm_gpu_hw_init().
 The latter nests its own disable/enable pair, so hardware is fully
 reinitialized before the outer system-suspend mask is released.
+
+For A220, enable memory and bus interfaces before the core. Carry GFX3D
+synchronous resets with clocks running, including Sony's extra reset after
+unclamp and its core-memory retention bit. Prepare the temporary clock
+references at probe so domain callbacks use only noirq-safe enable/disable.
 
 Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
 ---
@@ -113,5 +118,172 @@ diff --git a/drivers/gpu/drm/msm/adreno/adreno_device.c b/drivers/gpu/drm/msm/ad
 -	return pm_runtime_force_resume(dev);
 +	return 0;
  }
+diff --git a/drivers/gpu/drm/msm/msm_gpu.c b/drivers/gpu/drm/msm/msm_gpu.c
+index de48652eb..29f9dde55 100644
+--- a/drivers/gpu/drm/msm/msm_gpu.c
++++ b/drivers/gpu/drm/msm/msm_gpu.c
+@@ -11,7 +11,7 @@
+ #include "msm_mmu.h"
+ #include "msm_fence.h"
+ #include "msm_gpu_trace.h"
+-//#include "adreno/adreno_gpu.h"
++#include "adreno/adreno_gpu.h"
+ 
+ #include <linux/string_helpers.h>
+ #include <linux/devcoredump.h>
+@@ -875,6 +875,27 @@ static int get_clocks(struct platform_device *pdev, struct msm_gpu *gpu)
+ 	gpu->rbbmtimer_clk = msm_clk_bulk_get_clock(gpu->grp_clks,
+ 		gpu->nr_clocks, "rbbmtimer");
+ 
++	/*
++	 * The MSM8660 GFX3D core depends on the GMEM AXI clock. DT lists
++	 * the core first, but enabling it before its interfaces after domain
++	 * collapse can stall MMSS. Keep core last in the bulk so all bus
++	 * clocks are on before it, and remain on until it is disabled.
++	 */
++	if (adreno_is_revn(to_adreno_gpu(gpu), 220)) {
++		int i;
++
++		for (i = 0; i < gpu->nr_clocks; i++) {
++			struct clk_bulk_data core = gpu->grp_clks[i];
++
++			if (core.clk != gpu->core_clk)
++				continue;
++			memmove(&gpu->grp_clks[i], &gpu->grp_clks[i + 1],
++				(gpu->nr_clocks - i - 1) * sizeof(core));
++			gpu->grp_clks[gpu->nr_clocks - 1] = core;
++			break;
++		}
++	}
++
+ 	return 0;
+ }
+ 
+diff --git a/drivers/clk/qcom/mmcc-msm8660.c b/drivers/clk/qcom/mmcc-msm8660.c
+index f2e6fd287..d5d8501e7 100644
+--- a/drivers/clk/qcom/mmcc-msm8660.c
++++ b/drivers/clk/qcom/mmcc-msm8660.c
+@@ -3159,6 +3159,108 @@ static int mmcc_msm8660_init_mdp_footswitch(struct device *dev,
+ 	return ret;
+ }
+ 
++/* Prepared at probe; power-domain callbacks must not sleep in noirq. */
++static struct clk_bulk_data gfx3d_reset_clks[] = {
++	{ .id = "mem_iface" },
++	{ .id = "bus" },
++	{ .id = "iface" },
++	{ .id = "core" },
++};
++static int (*gfx3d_power_on)(struct generic_pm_domain *domain);
++static int (*gfx3d_power_off)(struct generic_pm_domain *domain);
++
++static void mmcc_msm8660_unprepare_gfx3d(void *data)
++{
++	gfx3d_gdsc.pd.power_on = gfx3d_power_on;
++	gfx3d_gdsc.pd.power_off = gfx3d_power_off;
++	clk_bulk_unprepare(ARRAY_SIZE(gfx3d_reset_clks), gfx3d_reset_clks);
++}
++
++static int mmcc_msm8660_gfx3d_power_on(struct generic_pm_domain *domain)
++{
++	struct gdsc *sc = container_of(domain, struct gdsc, pd);
++	int ret;
++
++	/* Sony footswitch_enable(): clocks must carry synchronous resets. */
++	ret = clk_bulk_enable(ARRAY_SIZE(gfx3d_reset_clks), gfx3d_reset_clks);
++	if (ret)
++		return ret;
++	ret = gfx3d_power_on(domain);
++	if (ret)
++		goto out;
++
++	/* Sony requires this extra core reset after releasing the clamp. */
++	sc->rcdev->ops->assert(sc->rcdev, GFX3D_RESET);
++	udelay(1);
++	sc->rcdev->ops->deassert(sc->rcdev, GFX3D_RESET);
++	udelay(1);
++	ret = regmap_update_bits(sc->regmap, GFX3D_CC_REG, BIT(31), BIT(31));
++out:
++	clk_bulk_disable(ARRAY_SIZE(gfx3d_reset_clks), gfx3d_reset_clks);
++	return ret;
++}
++
++static int mmcc_msm8660_gfx3d_power_off(struct generic_pm_domain *domain)
++{
++	struct gdsc *sc = container_of(domain, struct gdsc, pd);
++	int ret;
++
++	ret = clk_bulk_enable(ARRAY_SIZE(gfx3d_reset_clks), gfx3d_reset_clks);
++	if (ret)
++		return ret;
++	ret = regmap_update_bits(sc->regmap, GFX3D_CC_REG, BIT(31), 0);
++	if (ret)
++		goto out;
++
++	/* Assert with clocks running, then gate before clamping the rail. */
++	sc->rcdev->ops->assert(sc->rcdev, GFX3D_AHB_RESET);
++	sc->rcdev->ops->assert(sc->rcdev, GFX3D_RESET);
++	udelay(1);
++	clk_bulk_disable(ARRAY_SIZE(gfx3d_reset_clks), gfx3d_reset_clks);
++	ret = gfx3d_power_off(domain);
++	if (ret)
++		regmap_update_bits(sc->regmap, GFX3D_CC_REG, BIT(31), BIT(31));
++	return ret;
++out:
++	clk_bulk_disable(ARRAY_SIZE(gfx3d_reset_clks), gfx3d_reset_clks);
++	return ret;
++}
++
++static int mmcc_msm8660_prepare_gfx3d_footswitch(struct device *dev)
++{
++	struct clk_hw *hws[] = {
++		&gmem_axi_clk.clkr.hw,
++		&gfx3d_axi_clk.clkr.hw,
++		&gfx3d_ahb_clk.clkr.hw,
++		&gfx3d_clk.clkr.hw,
++	};
++	int i, ret;
++
++	for (i = 0; i < ARRAY_SIZE(hws); i++) {
++		gfx3d_reset_clks[i].clk = devm_clk_hw_get_clk(dev, hws[i],
++							   gfx3d_reset_clks[i].id);
++		if (IS_ERR(gfx3d_reset_clks[i].clk))
++			return PTR_ERR(gfx3d_reset_clks[i].clk);
++	}
++	if (!clk_get_rate(gfx3d_reset_clks[3].clk)) {
++		ret = clk_set_rate(gfx3d_reset_clks[3].clk, 27000000);
++		if (ret)
++			return ret;
++	}
++	ret = clk_bulk_prepare(ARRAY_SIZE(gfx3d_reset_clks), gfx3d_reset_clks);
++	if (ret)
++		return ret;
++	gfx3d_power_on = gfx3d_gdsc.pd.power_on;
++	gfx3d_power_off = gfx3d_gdsc.pd.power_off;
++	ret = devm_add_action_or_reset(dev, mmcc_msm8660_unprepare_gfx3d, NULL);
++	if (ret)
++		return ret;
++
++	gfx3d_gdsc.pd.power_on = mmcc_msm8660_gfx3d_power_on;
++	gfx3d_gdsc.pd.power_off = mmcc_msm8660_gfx3d_power_off;
++	return 0;
++}
++
+ static int mmcc_msm8660_probe(struct platform_device *pdev)
+ {
+ 	struct regmap *regmap;
+@@ -3198,6 +3300,11 @@ static int mmcc_msm8660_probe(struct platform_device *pdev)
+ 		return dev_err_probe(&pdev->dev, ret,
+ 				     "MDP footswitch initialization failed\n");
+ 
++	ret = mmcc_msm8660_prepare_gfx3d_footswitch(&pdev->dev);
++	if (ret)
++		return dev_err_probe(&pdev->dev, ret,
++				     "GFX3D reset clock preparation failed\n");
++
+ 	return 0;
+ }
+ 
+
 -- 
 2.53.0

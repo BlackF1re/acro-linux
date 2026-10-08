@@ -22,6 +22,10 @@ status and modem/direct-connect routing.
 Mask and acknowledge unmapped pending PM8xxx sources inherited from
 the previous kernel so their level parent cannot starve child probing.
 
+Reinitialize MDP4 fetch/CSC/port state and interrupt enables after noirq
+power loss, before restoring the atomic display state. Keep prepare-only
+aborts on the ordinary complete path.
+
 Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
 ---
  .../interrupt-controller/qcom,msm8660-mpm.yaml     | 106 ++++
@@ -2652,3 +2656,70 @@ index 0000000000000000000000000000000000000000..d409211316c3b69c2f52773a33bb2999
 +static inline void qcom_mpm_msm8660_exit_sleep(void) { }
 +#endif
 +#endif
+
+diff --git a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
+index c73a6f012..70b73752d 100644
+--- a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
++++ b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c
+@@ -539,9 +539,48 @@ static int mdp4_kms_init(struct drm_device *dev)
+ 	return 0;
+ }
+ 
++static int mdp4_suspend_noirq(struct device *dev)
++{
++	struct msm_drm_private *priv = dev_get_drvdata(dev);
++
++	if (priv && priv->kms)
++		to_mdp4_kms(to_mdp_kms(priv->kms))->needs_resume_init = true;
++	return 0;
++}
++
++static void mdp4_pm_complete(struct device *dev)
++{
++	struct msm_drm_private *priv = dev_get_drvdata(dev);
++	struct mdp4_kms *mdp4_kms;
++	struct mdp_kms *mdp_kms;
++	int ret;
++
++	if (!priv || !priv->kms)
++		return;
++	mdp_kms = to_mdp_kms(priv->kms);
++	mdp4_kms = to_mdp4_kms(mdp_kms);
++	if (mdp4_kms->needs_resume_init) {
++		/* Domain collapse loses fetch configuration and IRQ enables. */
++		ret = mdp4_hw_init(priv->kms);
++		if (ret)
++			goto fail;
++		ret = mdp4_enable(mdp4_kms);
++		if (ret)
++			goto fail;
++		mdp4_set_irqmask(mdp_kms, mdp_kms->cur_irq_mask, 0);
++		mdp4_disable(mdp4_kms);
++		mdp4_kms->needs_resume_init = false;
++	}
++	msm_kms_pm_complete(dev);
++	return;
++fail:
++	dev_err(dev, "MDP4 resume initialization failed: %d\n", ret);
++}
++
+ static const struct dev_pm_ops mdp4_pm_ops = {
+ 	.prepare = msm_kms_pm_prepare,
+-	.complete = msm_kms_pm_complete,
++	.suspend_noirq = mdp4_suspend_noirq,
++	.complete = mdp4_pm_complete,
+ };
+ 
+ static int mdp4_setup_interconnect(struct platform_device *pdev)
+diff --git a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.h b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.h
+index 06458d4ee..8d0ddaee3 100644
+--- a/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.h
++++ b/drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.h
+@@ -35,6 +35,7 @@ struct mdp4_kms {
+ 	struct mdp_irq error_handler;
+ 
+ 	bool rpm_enabled;
++	bool needs_resume_init;
+ 
+ 	/* empty/blank cursor bo to use when cursor is "disabled" */
+ 	struct drm_gem_object *blank_cursor_bo;
