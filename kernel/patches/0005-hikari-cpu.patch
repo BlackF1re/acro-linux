@@ -3,8 +3,10 @@ From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
 Date: Mon, 5 Oct 2026 00:05:29 +0700
 Subject: [PATCH] cpu: consolidate final Hikari subsystem support
 
-Repackage the prepared source without changing any byte of hardware
-implementation. Includes final corrections and logging cleanup.
+Repackage the prepared CPU/DVFS source and retain the validated operating
+points. Also expose the MMIO-only Sony-style power-collapse clock transition
+used by Hikari system suspend: CPU/L2 switch to AFAB without changing voltage
+or interconnect votes, then restore their saved SCPLL rates after wake.
 
 Prepared-source-tree: e3d73fd2f7bffefd6e42b0ec789d4e0af81fde45
 Original-author: BlackF1re <plevickij57@gmail.com>
@@ -49,10 +51,9 @@ index 6c7a39b7f8d26ecd0a6836883d218b67902306b7..f92bab95919276f0a8407a720338473f
 +obj-$(CONFIG_ARM_QCOM_MSM8660_CPUFREQ) += qcom-msm8660-cpufreq.o
 diff --git a/drivers/cpufreq/qcom-msm8660-cpufreq.c b/drivers/cpufreq/qcom-msm8660-cpufreq.c
 new file mode 100644
-index 0000000000000000000000000000000000000000..0834032a5afda5c8c0bd6641217e9d58f2f6edc4
 --- /dev/null
 +++ b/drivers/cpufreq/qcom-msm8660-cpufreq.c
-@@ -0,0 +1,1134 @@
+@@ -0,0 +1,1283 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Qualcomm MSM8660 / MSM8260 Scorpion cpufreq bring-up driver.
@@ -80,12 +81,16 @@ index 0000000000000000000000000000000000000000..0834032a5afda5c8c0bd6641217e9d58
 +#include <linux/mutex.h>
 +#include <linux/nvmem-consumer.h>
 +#include <linux/of.h>
++#include <linux/of_address.h>
 +#include <linux/platform_device.h>
 +#include <linux/regmap.h>
 +#include <linux/regulator/consumer.h>
 +#include <linux/slab.h>
++#include <linux/smp.h>
 +
 +#include <dt-bindings/clock/qcom,gcc-msm8660.h>
++
++#include <linux/cpufreq/qcom-msm8660.h>
 +
 +#define DRV_NAME                        "qcom-msm8660-cpufreq"
 +
@@ -110,6 +115,8 @@ index 0000000000000000000000000000000000000000..0834032a5afda5c8c0bd6641217e9d58
 +
 +#define CORE_SRC_MUX                    0
 +#define CORE_SRC_SCPLL                  1
++
++#define ACPU_MUX_SRC_AFAB               1
 +
 +#define SHOT_SWITCH                     4
 +#define COMPLEX_SLEW                    7
@@ -222,6 +229,7 @@ index 0000000000000000000000000000000000000000..0834032a5afda5c8c0bd6641217e9d58
 +        void __iomem *pll[NR_SCORPION_CPUS];
 +        void __iomem *l2_pll;
 +        void __iomem *acc[NR_SCORPION_CPUS];
++        void __iomem *l2_sel;
 +
 +        struct regmap *l2cc;
 +
@@ -359,12 +367,10 @@ index 0000000000000000000000000000000000000000..0834032a5afda5c8c0bd6641217e9d58
 +        writel_relaxed(sel, d->acc[cpu] + ACC_SEL);
 +}
 +
-+static void cpu_program_pll8(struct msm8660_cpufreq *d,
-+                             unsigned int cpu, unsigned int khz)
++static void cpu_program_mux(struct msm8660_cpufreq *d,
++                            unsigned int cpu, u32 src, u32 div)
 +{
-+        u32 sel, ctl, bank, div;
-+
-+        div = khz == 192000 ? 1 : 0;
++        u32 sel, ctl, bank;
 +
 +        sel = readl_relaxed(d->acc[cpu] + ACC_SEL);
 +
@@ -372,10 +378,20 @@ index 0000000000000000000000000000000000000000..0834032a5afda5c8c0bd6641217e9d58
 +        bank = sel & 1;
 +        ctl = readl_relaxed(d->acc[cpu] + ACC_CTL);
 +        ctl &= ~(0xffU << (bank * 8));
-+        ctl |= ((0x30U | div) << (bank * 8));
++        ctl |= (((src << 4) | div) << (bank * 8));
 +        writel_relaxed(ctl, d->acc[cpu] + ACC_CTL);
-+
 +        writel_relaxed(sel ^ 1U, d->acc[cpu] + ACC_SEL);
++}
++
++static void cpu_program_pll8(struct msm8660_cpufreq *d,
++                             unsigned int cpu, unsigned int khz)
++{
++        cpu_program_mux(d, cpu, 3, khz == 192000 ? 1 : 0);
++}
++
++static void cpu_program_afab(struct msm8660_cpufreq *d, unsigned int cpu)
++{
++        cpu_program_mux(d, cpu, ACPU_MUX_SRC_AFAB, 0);
 +}
 +
 +static int cpu_switch_clock(struct msm8660_cpufreq *d,
@@ -556,6 +572,118 @@ index 0000000000000000000000000000000000000000..0834032a5afda5c8c0bd6641217e9d58
 +
 +        d->l2_idx = idx;
 +        return 0;
++}
++
++static u32 l2_source_atomic(struct msm8660_cpufreq *d)
++{
++        return readl_relaxed(d->l2_sel) & CORE_SRC_MASK;
++}
++
++static void l2_select_source_atomic(struct msm8660_cpufreq *d, u32 source)
++{
++        u32 sel;
++
++        sel = readl_relaxed(d->l2_sel);
++        sel &= ~CORE_SRC_MASK;
++        sel |= source;
++        writel_relaxed(sel, d->l2_sel);
++}
++
++static int l2_restore_scpll_atomic(struct msm8660_cpufreq *d, u8 idx)
++{
++        int ret;
++
++        if (idx >= ARRAY_SIZE(l2_levels))
++                return -EINVAL;
++
++        ret = scpll_enable(d->l2_pll, l2_levels[idx].l);
++        if (ret)
++                return ret;
++
++        mb();
++        l2_select_source_atomic(d, CORE_SRC_SCPLL);
++        mb();
++
++        return l2_hw_rate(d) == l2_levels[idx].khz ? 0 : -EIO;
++}
++
++int msm8660_cpufreq_power_collapse_enter(
++                unsigned int cpu, struct msm8660_pc_clock_state *state)
++{
++        struct msm8660_cpufreq *d = READ_ONCE(drv);
++        u32 cpu_src;
++
++        if (!state)
++                return -EINVAL;
++
++        state->active = false;
++
++        if (!d || !READ_ONCE(d->registered))
++                return -ENODEV;
++        if (cpu >= NR_SCORPION_CPUS || cpu != raw_smp_processor_id())
++                return -EINVAL;
++        if (d->cpu_idx[cpu] >= ARRAY_SIZE(opps) ||
++            d->l2_idx >= ARRAY_SIZE(l2_levels))
++                return -EIO;
++
++        /*
++         * PM_SUSPEND_MEM reaches platform .enter() after cpufreq has been
++         * quiesced and IRQs have been disabled.  Match Sony SETRATE_PC:
++         * change clocks only; keep voltage and interconnect votes untouched.
++         */
++        state->cpu_idx = d->cpu_idx[cpu];
++        state->l2_idx = d->l2_idx;
++
++        if (l2_source_atomic(d) != CORE_SRC_SCPLL)
++                return -EIO;
++
++        cpu_src = (readl_relaxed(d->acc[cpu] + ACC_SEL) >> 1) & 0x3;
++        if (cpu_src != CORE_SRC_MUX && cpu_src != CORE_SRC_SCPLL)
++                return -EIO;
++
++        cpu_program_afab(d, cpu);
++        cpu_select_source(d, cpu, CORE_SRC_MUX);
++        mb();
++        if (cpu_src == CORE_SRC_SCPLL) {
++                udelay(1);
++                scpll_disable(d->pll[cpu]);
++        }
++
++        l2_select_source_atomic(d, CORE_SRC_MUX);
++        mb();
++        udelay(1);
++        scpll_disable(d->l2_pll);
++
++        state->active = true;
++        return 0;
++}
++
++int msm8660_cpufreq_power_collapse_exit(
++                unsigned int cpu, struct msm8660_pc_clock_state *state)
++{
++        struct msm8660_cpufreq *d = READ_ONCE(drv);
++        int cpu_ret;
++        int l2_ret;
++
++        if (!state || !state->active)
++                return -EINVAL;
++        if (!d || !READ_ONCE(d->registered))
++                return -ENODEV;
++        if (cpu >= NR_SCORPION_CPUS || cpu != raw_smp_processor_id())
++                return -EINVAL;
++
++        /*
++         * Sony restores the CPU clock first and then the shared L2 vote.
++         * Both operations are MMIO-only here and are safe in the noirq
++         * platform-resume path.
++         */
++        cpu_ret = cpu_switch_clock(d, cpu, opps[state->cpu_idx].khz);
++        l2_ret = l2_restore_scpll_atomic(d, state->l2_idx);
++        state->active = false;
++
++        if (cpu_ret)
++                return cpu_ret;
++        return l2_ret;
 +}
 +
 +static int transition_cpu(struct msm8660_cpufreq *d,
@@ -1024,7 +1152,10 @@ index 0000000000000000000000000000000000000000..0834032a5afda5c8c0bd6641217e9d58
 +static int map_resources(struct platform_device *pdev,
 +                         struct msm8660_cpufreq *d)
 +{
++        struct device_node *l2_np;
++        struct resource l2_res;
 +        struct resource *res;
++        int ret;
 +
 +        /*
 +         * This 0x00903000 SCPLL resource overlaps the modern GCC mapping.
@@ -1050,6 +1181,25 @@ index 0000000000000000000000000000000000000000..0834032a5afda5c8c0bd6641217e9d58
 +        d->acc[1] = devm_platform_ioremap_resource_byname(pdev, "acc1");
 +        if (IS_ERR(d->acc[1]))
 +                return PTR_ERR(d->acc[1]);
++
++        l2_np = of_parse_phandle(pdev->dev.of_node, "qcom,l2cc", 0);
++        if (!l2_np)
++                return -ENODEV;
++
++        ret = of_address_to_resource(l2_np, 0, &l2_res);
++        of_node_put(l2_np);
++        if (ret)
++                return ret;
++
++        /*
++         * The L2 clock source selector must also be reachable in the noirq
++         * suspend path, where regmap locking is deliberately avoided.
++         */
++        d->l2_sel = devm_ioremap(&pdev->dev,
++                                 l2_res.start + KPSS_L2_CLK_SEL,
++                                 sizeof(u32));
++        if (!d->l2_sel)
++                return -ENOMEM;
 +
 +        d->l2cc = syscon_regmap_lookup_by_phandle(pdev->dev.of_node,
 +                                                  "qcom,l2cc");
@@ -1187,6 +1337,29 @@ index 0000000000000000000000000000000000000000..0834032a5afda5c8c0bd6641217e9d58
 +
 +MODULE_DESCRIPTION("MSM8660/8260 dual-core Scorpion cpufreq/DVFS validation driver");
 +MODULE_LICENSE("GPL");
+diff --git a/include/linux/cpufreq/qcom-msm8660.h b/include/linux/cpufreq/qcom-msm8660.h
+new file mode 100644
+--- /dev/null
++++ b/include/linux/cpufreq/qcom-msm8660.h
+@@ -0,0 +1,18 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#ifndef _LINUX_CPUFREQ_QCOM_MSM8660_H
++#define _LINUX_CPUFREQ_QCOM_MSM8660_H
++
++#include <linux/types.h>
++
++struct msm8660_pc_clock_state {
++        u8 cpu_idx;
++        u8 l2_idx;
++        bool active;
++};
++
++int msm8660_cpufreq_power_collapse_enter(
++        unsigned int cpu, struct msm8660_pc_clock_state *state);
++int msm8660_cpufreq_power_collapse_exit(
++        unsigned int cpu, struct msm8660_pc_clock_state *state);
++
++#endif
 diff --git a/drivers/regulator/Kconfig b/drivers/regulator/Kconfig
 index 89789ac7a786c8c4c4a750cdcaa27a205762ac18..8d5058fb436754a109071842d0598b79269ee093 100644
 --- a/drivers/regulator/Kconfig
