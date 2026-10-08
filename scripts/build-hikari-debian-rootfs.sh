@@ -138,6 +138,14 @@ sudo install -D -m 0644 "$repo_root/debian/etc/systemd/system/hikari-console.ser
 	"$rootfs/etc/systemd/system/hikari-console.service"
 sudo install -D -m 0644 "$repo_root/debian/etc/systemd/system/hikari-usb-gadget.service" \
 	"$rootfs/etc/systemd/system/hikari-usb-gadget.service"
+sudo install -D -m 0644 "$repo_root/debian/etc/systemd/logind.conf.d/50-hikari-power.conf" \
+	"$rootfs/etc/systemd/logind.conf.d/50-hikari-power.conf"
+sudo install -D -m 0644 "$repo_root/debian/etc/systemd/sleep.conf.d/50-hikari-sleep.conf" \
+	"$rootfs/etc/systemd/sleep.conf.d/50-hikari-sleep.conf"
+sudo install -D -m 0755 "$repo_root/debian/usr/local/bin/hikari-screen-sleep" \
+	"$rootfs/usr/local/bin/hikari-screen-sleep"
+sudo install -D -m 0644 "$repo_root/debian/etc/xdg/autostart/hikari-screen-sleep.desktop" \
+	"$rootfs/etc/xdg/autostart/hikari-screen-sleep.desktop"
 sudo install -D -m 0644 \
 	"$repo_root/debian/etc/systemd/system/phosh.service.d/10-hikari-renderer.conf" \
 	"$rootfs/etc/systemd/system/phosh.service.d/10-hikari-renderer.conf"

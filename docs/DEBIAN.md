@@ -10,8 +10,12 @@ strace, lsof, tcpdump, usbutils, i2c-tools, gpiod, evtest, rsync and curl.
 Persistent services are limited to systemd/udev, NetworkManager, lightweight
 systemd-timesyncd clock synchronization, Bluetooth and SSH.
 
-Phosh uses the hardware GLES2 runtime. Power-key handling must not be
-confused with verified suspend/resume; see [POWER.md](POWER.md).
+Phosh uses the hardware GLES2 runtime. The event-driven `hikari-screen-sleep`
+session helper requests logind suspend two seconds after screen blanking;
+logind keeps responsibility for inhibitors and system sleep. It uses
+python3-dbus/python3-gi and performs no periodic polling. On the fixed test
+kernel, physical power-key sleep/wake reached CPU/RPM collapse; limitations
+and evidence are in [POWER.md](POWER.md).
 Root SSH and USB console access are intentionally retained by owner request.
 
 ## Wi-Fi and SSH

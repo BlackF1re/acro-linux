@@ -341,3 +341,40 @@ Complete per-cycle logs, interrupt counters, readbacks, maps and screenshot:
 `/boot/hikari-sensor-pm-20261008/results/acceptance`, mirrored on the host.
 This test SYSTEM remains running. Immutable BOOT and the production
 `hikari-next` bundle are unchanged.
+
+### Screen-off to deep sleep acceptance (2026-10-09)
+
+`VERIFIED_VENDOR_SOURCE`: Sony 6.2.B.1.96, commit
+`ae953d9a9f149db0c3a51e2b587074d0d911b7ea`, keeps PM8058 L0 enabled
+at 1.2 V (`vreg-fuji_hikari_row.c`). L0 supplies both DSI and Timpani.
+Turning it off with the panel produced a false GPIO61 headset wake.
+An L0-only hold/release A/B/A restored/eliminated that wake; S4 alone did
+not help. The Hikari DTS now keeps L0 always on, matching Sony.
+
+`VERIFIED_DEVICE`: four L0-only DT cycles and three final-kernel cycles
+slept until their RTC alarm with all GPIO-key wake sources enabled. Panel
+DCS sleep-in (0x10, 80 ms) now runs in `.disable`, before stopping the video
+source; the previous command-DMA timeout no longer occurs.
+
+Phosh 0.46 itself only blanks on short power-key release and inhibits
+logind's key handler. `hikari-screen-sleep` bridges its ScreenSaver
+ActiveChanged signal to ordinary logind Suspend after a two-second debounce;
+it checks the screen is still blank, respects logind inhibitors and suppresses
+requests during suspend/resume. It also covers automatic screen blanking.
+The user-session helper requires python3-dbus/python3-gi; it has no polling.
+The sleep policy selects `mem`/`deep`.
+
+A physical power-key cycle reported `PM: suspend entry (deep)`,
+`collapsed=1`, successful RPMRS entry/exit, and increased power-key IRQs
+without any RTC IRQ increase. The owner confirmed restored screen and touch.
+Post-RTC GPU regression: S0 4/4 EXACT, two independent transition processes
+112 NEAR / zero SEVERE, S3 16/16; hardware Phosh remained active.
+
+Test bundle: `/boot/hikari-sleep-final-20261009`, zImage SHA256
+`9cc293de1b82c7f54c25e15dd3a5b1b14f535d5ce03868f5567a286449ce0d58`;
+prepared tree `b06b7bd1396866954f5869f31c1c562a409e2e6e`.
+Logs are in its `results` directory and mirrored in the host build directory.
+Button integration is currently staged in `/run`; BOOT and `hikari-next`
+are unchanged. Wi-Fi was blocked for this acceptance. A single MDP primary
+underrun still occurs on resume; complete peripheral/wake-source acceptance,
+deepest Sony levels and suspend-current measurement remain outstanding.

@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Hikari screen sleep
+Exec=/usr/local/bin/hikari-screen-sleep
+OnlyShowIn=Phosh;
+NoDisplay=true

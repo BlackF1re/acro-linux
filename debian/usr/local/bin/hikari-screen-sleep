@@ -1,0 +1,72 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+"""Connect Phosh screen blanking to logind's normal suspend policy."""
+import dbus
+from dbus.mainloop.glib import DBusGMainLoop
+from gi.repository import GLib
+
+DBusGMainLoop(set_as_default=True)
+session = dbus.SessionBus()
+system = dbus.SystemBus()
+timer = 0
+sleeping = False
+pending = False
+
+
+def cancel():
+    global timer
+    if timer:
+        GLib.source_remove(timer)
+        timer = 0
+
+
+def finished(*args):
+    global pending
+    pending = False
+
+
+def failed(error):
+    print(f"Suspend refused: {error}", flush=True)
+    finished()
+
+
+def request_sleep():
+    global timer, pending
+    timer = 0
+    if sleeping or pending:
+        return GLib.SOURCE_REMOVE
+    try:
+        saver = session.get_object('org.gnome.ScreenSaver', '/org/gnome/ScreenSaver')
+        if not saver.GetActive(dbus_interface='org.gnome.ScreenSaver'):
+            return GLib.SOURCE_REMOVE
+        manager = system.get_object('org.freedesktop.login1', '/org/freedesktop/login1')
+        pending = True
+        print('Screen blank: requesting logind suspend', flush=True)
+        manager.Suspend(False, dbus_interface='org.freedesktop.login1.Manager',
+                        reply_handler=finished, error_handler=failed, timeout=300)
+    except dbus.DBusException as error:
+        failed(error)
+    return GLib.SOURCE_REMOVE
+
+
+def active_changed(active):
+    global timer
+    cancel()
+    if active and not sleeping and not pending:
+        timer = GLib.timeout_add_seconds(2, request_sleep)
+
+
+def prepare_for_sleep(active):
+    global sleeping
+    sleeping = bool(active)
+    cancel()
+    print(f'PrepareForSleep={sleeping}', flush=True)
+
+
+session.add_signal_receiver(active_changed, signal_name='ActiveChanged',
+                            dbus_interface='org.gnome.ScreenSaver',
+                            bus_name='org.gnome.ScreenSaver', path='/org/gnome/ScreenSaver')
+system.add_signal_receiver(prepare_for_sleep, signal_name='PrepareForSleep',
+                           dbus_interface='org.freedesktop.login1.Manager',
+                           bus_name='org.freedesktop.login1', path='/org/freedesktop/login1')
+GLib.MainLoop().run()

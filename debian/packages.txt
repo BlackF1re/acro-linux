@@ -35,6 +35,8 @@ openssh-server
 phosh
 phosh-mobile-settings
 procps
+python3-dbus
+python3-gi
 rsync
 rfkill
 strace
