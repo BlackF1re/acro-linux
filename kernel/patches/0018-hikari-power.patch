@@ -158,10 +158,28 @@ index 0000000000000000000000000000000000000000..9873f8ec4111a975f1d16f7d542e17a4
 +        qcom,mpm-pin-map = <25 100>, <26 50>, <27 79>;
 +    };
 diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
-index 06f193c..13e53cf 100644
+index 06f193c..7a9e39b 100644
 --- a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
 +++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
-@@ -398,12 +398,22 @@
+@@ -123,6 +123,7 @@
+ 	usb_connector: connector {
+ 		compatible = "gpio-usb-b-connector", "usb-b-connector";
+ 		type = "micro";
++		wakeup-source;
+ 		id-gpios = <&pm8058_gpio 31 GPIO_ACTIVE_HIGH>;
+ 		vbus-gpios = <&pm8058_mpps 11 GPIO_ACTIVE_LOW>;
+ 		vbus-supply = <&usb_otg_vbus>;
+@@ -139,7 +140,8 @@
+ 	usb_hs1: usb@12500000 {
+ 		compatible = "qcom,ci-hdrc";
+ 		reg = <0x12500000 0x200>, <0x12500200 0x200>;
+-		interrupts = <GIC_SPI 100 IRQ_TYPE_LEVEL_HIGH>;
++		interrupts-extended = <&mpm 25 IRQ_TYPE_LEVEL_HIGH>;
++		wakeup-source;
+ 		clocks = <&gcc USB_HS1_H_CLK>, <&gcc USB_HS1_XCVR_CLK>;
+ 		clock-names = "iface", "core";
+ 		assigned-clocks = <&gcc USB_HS1_XCVR_CLK>;
+@@ -398,12 +400,22 @@
  			regulator-min-microvolt = <800000>;
  			regulator-max-microvolt = <1325000>;
  			qcom,switch-mode-frequency = <1600000>;
@@ -184,7 +202,7 @@ index 06f193c..13e53cf 100644
  		};
  
  		/* Shared WLAN/Timpani rail; exact voltage from Sony's Fuji BSP. */
-@@ -554,3 +564,17 @@
+@@ -554,3 +566,17 @@
  		regulator-max-microvolt = <1325000>;
  	};
  };
@@ -3289,3 +3307,233 @@ index 9a27099..88c7f2d 100644
  	.num_sensors	= 1,
  	.ops		= &ops_8660,
  	.feat		= &tsens_8660_feat,
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-hardware.dtsi b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-hardware.dtsi
+index f6d6142..982a2f4 100644
+--- a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-hardware.dtsi
++++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari-hardware.dtsi
+@@ -652,6 +652,7 @@
+ 
+ 	nfc@28 {
+ 		compatible = "nxp,pn544-i2c";
++		wakeup-source;
+ 		reg = <0x28>;
+ 		interrupts-extended = <&pm8058_gpio 27 IRQ_TYPE_EDGE_RISING>;
+ 		enable-gpios = <&pm8058_gpio 16 GPIO_ACTIVE_HIGH>;
+diff --git a/drivers/iio/proximity/apds9702.c b/drivers/iio/proximity/apds9702.c
+index e549a8d..c8356d3 100644
+--- a/drivers/iio/proximity/apds9702.c
++++ b/drivers/iio/proximity/apds9702.c
+@@ -18,6 +18,7 @@
+ #include <linux/module.h>
+ #include <linux/mutex.h>
+ #include <linux/property.h>
++#include <linux/pm_wakeup.h>
+ 
+ #define APDS9702_HIKARI_CONTROL	0xdfbc
+ 
+@@ -122,6 +123,7 @@ static irqreturn_t apds9702_irq(int irq, void *arg)
+ 		mutex_unlock(&data->lock);
+ 		return IRQ_HANDLED;
+ 	}
++	pm_wakeup_event(&data->client->dev, 100);
+ 	detected = apds9702_read_detection(data);
+ 	mutex_unlock(&data->lock);
+ 	if (detected < 0)
+@@ -215,6 +217,36 @@ static void apds9702_remove(struct i2c_client *client)
+ 	apds9702_set_active(data, false);
+ }
+ 
++static int apds9702_suspend(struct device *dev)
++{
++	struct iio_dev *indio_dev = dev_get_drvdata(dev);
++	struct apds9702_data *data = iio_priv(indio_dev);
++	int ret = 0;
++
++	/* I2C core owns the wake IRQ registered from wakeup-source. */
++	mutex_lock(&data->lock);
++	if (data->event_enabled && !device_may_wakeup(dev))
++		ret = apds9702_set_active(data, false);
++	mutex_unlock(&data->lock);
++	return ret;
++}
++
++static int apds9702_resume(struct device *dev)
++{
++	struct iio_dev *indio_dev = dev_get_drvdata(dev);
++	struct apds9702_data *data = iio_priv(indio_dev);
++	int ret = 0;
++
++	mutex_lock(&data->lock);
++	if (data->event_enabled && !device_may_wakeup(dev))
++		ret = apds9702_set_active(data, true);
++	mutex_unlock(&data->lock);
++	return ret;
++}
++
++static DEFINE_SIMPLE_DEV_PM_OPS(apds9702_pm_ops, apds9702_suspend,
++			      apds9702_resume);
++
+ static const struct of_device_id apds9702_of_match[] = {
+ 	{ .compatible = "avago,apds9702" },
+ 	{ }
+@@ -225,6 +257,7 @@ static struct i2c_driver apds9702_driver = {
+ 	.driver = {
+ 		.name = "apds9702",
+ 		.of_match_table = apds9702_of_match,
++		.pm = pm_sleep_ptr(&apds9702_pm_ops),
+ 	},
+ 	.probe = apds9702_probe,
+ 	.remove = apds9702_remove,
+diff --git a/drivers/nfc/pn544/i2c.c b/drivers/nfc/pn544/i2c.c
+index 7fde3ae..82760f2 100644
+--- a/drivers/nfc/pn544/i2c.c
++++ b/drivers/nfc/pn544/i2c.c
+@@ -16,6 +16,7 @@
+ #include <linux/nfc.h>
+ #include <linux/firmware.h>
+ #include <linux/gpio/consumer.h>
++#include <linux/pm_wakeup.h>
+ 
+ #include <linux/unaligned.h>
+ 
+@@ -486,6 +487,7 @@ static irqreturn_t pn544_hci_i2c_irq_thread_fn(int irq, void *phy_id)
+ 	}
+ 
+ 	client = phy->i2c_dev;
++	pm_wakeup_event(&client->dev, 100);
+ 	dev_dbg(&client->dev, "IRQ\n");
+ 
+ 	if (phy->hard_fault != 0)
+@@ -937,6 +939,22 @@ static void pn544_hci_i2c_remove(struct i2c_client *client)
+ 		pn544_hci_i2c_disable(phy);
+ }
+ 
++static int pn544_hci_i2c_suspend(struct device *dev)
++{
++	struct pn544_i2c_phy *phy = i2c_get_clientdata(to_i2c_client(dev));
++
++	/* I2C core arms the wake IRQ; do not duplicate its registration. */
++	if (READ_ONCE(phy->fw_work_state) != FW_WORK_STATE_IDLE)
++		return -EBUSY;
++	if (!READ_ONCE(phy->powered) || !device_may_wakeup(dev))
++		return 0;
++
++	return 0;
++}
++
++static DEFINE_SIMPLE_DEV_PM_OPS(pn544_hci_i2c_pm_ops,
++			      pn544_hci_i2c_suspend, NULL);
++
+ static const struct of_device_id of_pn544_i2c_match[] = {
+ 	{ .compatible = "nxp,pn544-i2c" },
+ 	{ }
+@@ -948,6 +966,7 @@ static struct i2c_driver pn544_hci_i2c_driver = {
+ 		   .name = PN544_HCI_I2C_DRIVER_NAME,
+ 		   .of_match_table = of_match_ptr(of_pn544_i2c_match),
+ 		   .acpi_match_table = ACPI_PTR(pn544_hci_i2c_acpi_match),
++		   .pm = pm_sleep_ptr(&pn544_hci_i2c_pm_ops),
+ 		  },
+ 	.probe = pn544_hci_i2c_probe,
+ 	.id_table = pn544_hci_i2c_id_table,
+diff --git a/drivers/usb/chipidea/core.c b/drivers/usb/chipidea/core.c
+index 3461dd7..53baaef 100644
+--- a/drivers/usb/chipidea/core.c
++++ b/drivers/usb/chipidea/core.c
+@@ -28,6 +28,8 @@
+ #include <linux/slab.h>
+ #include <linux/pm_runtime.h>
+ #include <linux/pm_domain.h>
++#include <linux/property.h>
++#include <linux/pm_wakeup.h>
+ #include <linux/pinctrl/consumer.h>
+ #include <linux/usb/ch9.h>
+ #include <linux/usb/gadget.h>
+@@ -1208,6 +1210,13 @@ static int ci_hdrc_probe(struct platform_device *pdev)
+ 	if (ret)
+ 		goto stop;
+ 
++	device_set_wakeup_capable(&pdev->dev, true);
++	if (device_property_read_bool(&pdev->dev, "wakeup-source")) {
++		ret = devm_device_init_wakeup(&pdev->dev);
++		if (ret)
++			goto stop;
++	}
++
+ 	if (ci->supports_runtime_pm) {
+ 		pm_runtime_set_active(&pdev->dev);
+ 		pm_runtime_enable(&pdev->dev);
+@@ -1219,7 +1228,6 @@ static int ci_hdrc_probe(struct platform_device *pdev)
+ 	if (ci_otg_is_fsm_mode(ci))
+ 		ci_hdrc_otg_fsm_start(ci);
+ 
+-	device_set_wakeup_capable(&pdev->dev, true);
+ 	dbg_create_files(ci);
+ 
+ 	return 0;
+diff --git a/drivers/usb/common/usb-conn-gpio.c b/drivers/usb/common/usb-conn-gpio.c
+index 421c3af..f30e057 100644
+--- a/drivers/usb/common/usb-conn-gpio.c
++++ b/drivers/usb/common/usb-conn-gpio.c
+@@ -17,6 +17,8 @@
+ #include <linux/of.h>
+ #include <linux/pinctrl/consumer.h>
+ #include <linux/platform_device.h>
++#include <linux/property.h>
++#include <linux/pm_wakeup.h>
+ #include <linux/power_supply.h>
+ #include <linux/regulator/consumer.h>
+ #include <linux/string_choices.h>
+@@ -276,6 +278,11 @@ static int usb_conn_probe(struct platform_device *pdev)
+ 
+ 	platform_set_drvdata(pdev, info);
+ 	device_set_wakeup_capable(&pdev->dev, true);
++	if (device_property_read_bool(dev, "wakeup-source")) {
++		ret = devm_device_init_wakeup(dev);
++		if (ret)
++			goto put_role_sw;
++	}
+ 
+ 	/* Perform initial detection */
+ 	info->initial_detection = true;
+diff --git a/Documentation/devicetree/bindings/connector/usb-connector.yaml b/Documentation/devicetree/bindings/connector/usb-connector.yaml
+index 8ca0292..c4a1f1d 100644
+--- a/Documentation/devicetree/bindings/connector/usb-connector.yaml
++++ b/Documentation/devicetree/bindings/connector/usb-connector.yaml
+@@ -15,6 +15,9 @@ description:
+   MUX and USB interface controller.
+ 
+ properties:
++  wakeup-source:
++    type: boolean
++
+   compatible:
+     oneOf:
+       - enum:
+diff --git a/Documentation/devicetree/bindings/net/nfc/nxp,pn544.yaml b/Documentation/devicetree/bindings/net/nfc/nxp,pn544.yaml
+index 18b3a7d..3b73a77 100644
+--- a/Documentation/devicetree/bindings/net/nfc/nxp,pn544.yaml
++++ b/Documentation/devicetree/bindings/net/nfc/nxp,pn544.yaml
+@@ -10,6 +10,9 @@ maintainers:
+   - Krzysztof Kozlowski <krzk@kernel.org>
+ 
+ properties:
++  wakeup-source:
++    type: boolean
++
+   compatible:
+     const: nxp,pn544-i2c
+ 
+diff --git a/Documentation/devicetree/bindings/usb/ci-hdrc-usb2.yaml b/Documentation/devicetree/bindings/usb/ci-hdrc-usb2.yaml
+index 620b564..d947e67 100644
+--- a/Documentation/devicetree/bindings/usb/ci-hdrc-usb2.yaml
++++ b/Documentation/devicetree/bindings/usb/ci-hdrc-usb2.yaml
+@@ -11,6 +11,9 @@ maintainers:
+   - Peng Fan <peng.fan@nxp.com>
+ 
+ properties:
++  wakeup-source:
++    type: boolean
++
+   compatible:
+     oneOf:
+       - enum:

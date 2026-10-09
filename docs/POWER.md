@@ -407,3 +407,18 @@ power-key events there were no suspend entries. The helper had only been
 staged in volatile storage and disappeared on reboot. It and its autostart
 entry are now installed on the existing rootfs, with the mem/deep policy.
 Battery percentages alone do not establish minimum sleep power.
+
+### Wake-source completion (2026-10-09)
+
+USB ID/VBUS and ChipIdea wake are enabled by `wakeup-source`; HSUSB1 uses
+MPM pin 25 (Sony GIC SPI 100). PN544 has a wake vote and rejects suspend during
+firmware download. APDS9702 preserves active wake events and powers down an
+active sensor when wake is disabled. I2C core already owns charger/proximity
+wake IRQs; drivers must not register or arm them a second time.
+
+Device acceptance: kernel `hikari-system-wake2-20261009`, three level-7 RTC
+collapse/resume cycles, including enabled proximity events; suspend success=3,
+fail=0. GPU transition after resume: 56 NEAR, 0 SEVERE; hardware Phosh active.
+No WARN/panic/MMU faults in the accepted run. Transient MDP underruns occurred
+on resume. Actual USB insertion, proximity-edge and NFC-event wake acceptance
+remain unverified; modem, camera and headset-audio bring-up were not included.

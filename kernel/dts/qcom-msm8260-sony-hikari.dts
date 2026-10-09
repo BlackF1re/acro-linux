@@ -123,6 +123,7 @@
 	usb_connector: connector {
 		compatible = "gpio-usb-b-connector", "usb-b-connector";
 		type = "micro";
+		wakeup-source;
 		id-gpios = <&pm8058_gpio 31 GPIO_ACTIVE_HIGH>;
 		vbus-gpios = <&pm8058_mpps 11 GPIO_ACTIVE_LOW>;
 		vbus-supply = <&usb_otg_vbus>;
@@ -139,7 +140,8 @@
 	usb_hs1: usb@12500000 {
 		compatible = "qcom,ci-hdrc";
 		reg = <0x12500000 0x200>, <0x12500200 0x200>;
-		interrupts = <GIC_SPI 100 IRQ_TYPE_LEVEL_HIGH>;
+		interrupts-extended = <&mpm 25 IRQ_TYPE_LEVEL_HIGH>;
+		wakeup-source;
 		clocks = <&gcc USB_HS1_H_CLK>, <&gcc USB_HS1_XCVR_CLK>;
 		clock-names = "iface", "core";
 		assigned-clocks = <&gcc USB_HS1_XCVR_CLK>;
