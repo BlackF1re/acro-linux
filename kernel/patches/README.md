@@ -1,7 +1,7 @@
 # Hikari subsystem patch stack
 
 `../source.lock` pins the upstream base and expected complete prepared tree.
-`series` now contains **19 maintained patches**, including all
+`series` now contains **21 maintained patches**, including all
 previous strict-transform and integration results. `post-series` is empty.
 The materializer applies only this series and checks the exact final tree.
 
@@ -26,6 +26,8 @@ The materializer applies only this series and checks the exact final tree.
 | 0017 | Canonical board DTS and shared SoC DT prerequisites |
 | 0018 | Power management |
 | 0019 | A220 suspend IRQ diagnostic handling |
+| 0020 | FM radio |
+| 0021 | Hikari audio bring-up (Timpani power/control and QDSP6v3 remoteproc; PCM pending) |
 
 `subsystems.json` maps every final source file and original patch to its new
 subsystem. A mixed original patch may contribute to multiple new patches.

@@ -1,0 +1,1063 @@
+From 1dd90e01ccea6586da93b6b511ebab57b72ba26b Mon Sep 17 00:00:00 2001
+From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+Date: Fri, 9 Oct 2026 17:18:32 +0700
+Subject: [PATCH] ASoC: add Hikari Timpani control and Q6v3 audio bring-up
+
+Describe Sony bus and power wiring. Add native runtime-managed Timpani control and an explicitly started QDSP6v3 remoteproc, with fixed DDR/TCM split firmware loading and the Sony reset sequence. PCM, analog routing and microphone bias remain to be implemented and physically validated.
+
+Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+---
+ .../remoteproc/qcom,msm8660-q6v3.yaml         |  43 +++
+ .../bindings/soc/qcom/qcom,apr.yaml           |   8 +
+ .../bindings/sound/qcom,q6core.yaml           |   1 +
+ .../bindings/sound/qcom,timpani.yaml          |  39 ++
+ .../dts/qcom/qcom-msm8260-sony-hikari.dts     |  79 ++++
+ drivers/remoteproc/Kconfig                    |  12 +
+ drivers/remoteproc/Makefile                   |   2 +
+ drivers/remoteproc/qcom_q6v3.c                | 338 ++++++++++++++++++
+ drivers/soc/qcom/apr.c                        |  11 +-
+ sound/soc/codecs/Kconfig                      |   8 +
+ sound/soc/codecs/Makefile                     |   3 +
+ sound/soc/codecs/timpani.c                    | 174 +++++++++
+ sound/soc/qcom/Kconfig                        |   9 +
+ sound/soc/qcom/Makefile                       |   2 +-
+ sound/soc/qcom/qdsp6/q6core.c                 |  53 ++-
+ 15 files changed, 775 insertions(+), 7 deletions(-)
+ create mode 100644 Documentation/devicetree/bindings/remoteproc/qcom,msm8660-q6v3.yaml
+ create mode 100644 Documentation/devicetree/bindings/sound/qcom,timpani.yaml
+ create mode 100644 drivers/remoteproc/qcom_q6v3.c
+ create mode 100644 sound/soc/codecs/timpani.c
+
+diff --git a/Documentation/devicetree/bindings/remoteproc/qcom,msm8660-q6v3.yaml b/Documentation/devicetree/bindings/remoteproc/qcom,msm8660-q6v3.yaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..7072e4a6dc885727020ad074ad3c5e45a7d5a28e
+--- /dev/null
++++ b/Documentation/devicetree/bindings/remoteproc/qcom,msm8660-q6v3.yaml
+@@ -0,0 +1,43 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/remoteproc/qcom,msm8660-q6v3.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: Qualcomm MSM8660 QDSP6v3 audio processor
++
++maintainers:
++  - BlackF1re <55582873+BlackF1re@users.noreply.github.com>
++
++properties:
++  compatible:
++    const: qcom,msm8660-q6v3
++  reg:
++    items:
++      - description: Q6 boot vector and strap registers
++      - description: LCC Q6 function register
++      - description: Q6 tightly coupled memory
++  reg-names:
++    items:
++      - const: q6
++      - const: lcc
++      - const: tcm
++  clocks:
++    maxItems: 1
++  clock-names:
++    const: pll4
++  memory-region:
++    maxItems: 1
++    description: Reserved fixed-address Q6 DDR firmware region
++  smd-edge:
++    $ref: /schemas/remoteproc/qcom,smd-edge.yaml#
++
++required:
++  - compatible
++  - reg
++  - reg-names
++  - clocks
++  - clock-names
++  - memory-region
++
++additionalProperties: false
+diff --git a/Documentation/devicetree/bindings/soc/qcom/qcom,apr.yaml b/Documentation/devicetree/bindings/soc/qcom/qcom,apr.yaml
+index e51acdcaafaf6fb444a23d1c0c8e56692d50e938..be2608614e4eaa6be811e4d821c4a50c1cacff07 100644
+--- a/Documentation/devicetree/bindings/soc/qcom/qcom,apr.yaml
++++ b/Documentation/devicetree/bindings/soc/qcom/qcom,apr.yaml
+@@ -56,6 +56,13 @@ properties:
+         2 = Audio DSP Domain
+         3 = Application Processor Domain
+ 
++  qcom,legacy-no-pdr:
++    type: boolean
++    description:
++      The remote APR endpoint does not implement the QMI service registry
++      used for protection-domain restart notifications. APR services remain
++      available without those optional restart notifications.
++
+   qcom,glink-channels:
+     $ref: /schemas/types.yaml#/definitions/string-array
+     description: Channel name used for the communication
+@@ -100,6 +107,7 @@ patternProperties:
+       compatible:
+         enum:
+           - qcom,q6core
++          - qcom,msm8660-q6core
+           - qcom,q6asm
+           - qcom,q6afe
+           - qcom,q6adm
+diff --git a/Documentation/devicetree/bindings/sound/qcom,q6core.yaml b/Documentation/devicetree/bindings/sound/qcom,q6core.yaml
+index 8642ef9f9142befb3482a04a1164f8b848f1646f..38a76c2ff08dfeaf4eb7113de359c91c78a1e45b 100644
+--- a/Documentation/devicetree/bindings/sound/qcom,q6core.yaml
++++ b/Documentation/devicetree/bindings/sound/qcom,q6core.yaml
+@@ -17,6 +17,7 @@ properties:
+   compatible:
+     enum:
+       - qcom,q6core
++      - qcom,msm8660-q6core
+ 
+ required:
+   - compatible
+diff --git a/Documentation/devicetree/bindings/sound/qcom,timpani.yaml b/Documentation/devicetree/bindings/sound/qcom,timpani.yaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..3d6296bfc84c0b588af71723338c2817fa231a17
+--- /dev/null
++++ b/Documentation/devicetree/bindings/sound/qcom,timpani.yaml
+@@ -0,0 +1,39 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/sound/qcom,timpani.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: Qualcomm Timpani audio companion
++
++maintainers:
++  - BlackF1re <55582873+BlackF1re@users.noreply.github.com>
++
++description: |
++  Timpani has a control interface at I2C address 0x0d and a separate codec
++  register interface at 0x77 on the same bus. The control driver reserves
++  the latter address. Audio samples are exchanged with the Qualcomm DSP.
++
++properties:
++  compatible:
++    const: qcom,timpani
++  reg:
++    const: 0x0d
++  reset-gpios:
++    maxItems: 1
++  vdd-supply:
++    description: Core 1.2 V supply
++  vddio-supply:
++    description: Digital I/O 1.8 V supply
++  va-supply:
++    description: Analog 2.2 V supply
++
++required:
++  - compatible
++  - reg
++  - reset-gpios
++  - vdd-supply
++  - vddio-supply
++  - va-supply
++
++additionalProperties: false
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+index 7a9e39b54985d5645a3e0fca11eace4d40fd36de..411ea61834b9a3066880489759d0ab25a555a3eb 100644
+--- a/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
++++ b/arch/arm/boot/dts/qcom/qcom-msm8260-sony-hikari.dts
+@@ -2,6 +2,7 @@
+ /dts-v1/;
+ 
+ #include <dt-bindings/soc/qcom,gsbi.h>
++#include <dt-bindings/soc/qcom,apr.h>
+ #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/reset/qcom,gcc-msm8660.h>
+ #include <dt-bindings/clock/qcom,mmcc-msm8660.h>
+@@ -41,6 +42,12 @@ reserved-memory {
+ 		#size-cells = <1>;
+ 		ranges;
+ 
++
++		q6_region: adsp@46700000 {
++			reg = <0x46700000 0x01800000>;
++			no-map;
++		};
++
+ 		smem_region: smem@40000000 {
+ 			reg = <0x40000000 0x00200000>;
+ 			no-map;
+@@ -427,6 +434,14 @@ pm8058_s3: s3 {
+ 			bias-pull-down;
+ 		};
+ 
++		/* Sony Hikari Timpani analog codec rail. */
++		pm8058_s4: s4 {
++			regulator-min-microvolt = <2200000>;
++			regulator-max-microvolt = <2200000>;
++			qcom,switch-mode-frequency = <1600000>;
++			bias-pull-down;
++		};
++
+ 		pm8058_l6: l6 {
+ 			regulator-min-microvolt = <3050000>;
+ 			regulator-max-microvolt = <3050000>;
+@@ -510,6 +525,37 @@ usb_otg_guard: usb-otg-guard {
+ 	};
+ };
+ 
++/* Sony Hikari routes its Timpani audio companion through GSBI7 QUP/I2C. */
++&tlmm {
++	gsbi7_i2c_default: gsbi7-i2c-default-state {
++		pins = "gpio59", "gpio60";
++		function = "gsbi7";
++		drive-strength = <12>;
++		bias-disable;
++	};
++};
++
++&gsbi7 {
++	qcom,mode = <GSBI_PROT_I2C>;
++	status = "okay";
++};
++
++&gsbi7_i2c {
++	clock-frequency = <100000>;
++	pinctrl-names = "default";
++	pinctrl-0 = <&gsbi7_i2c_default>;
++	status = "okay";
++
++	timpani: audio-codec@d {
++		compatible = "qcom,timpani";
++		reg = <0x0d>;
++		vdd-supply = <&pm8058_l0>;
++		vddio-supply = <&pm8058_s3>;
++		va-supply = <&pm8058_s4>;
++		reset-gpios = <&pm8058_gpio 20 GPIO_ACTIVE_LOW>;
++	};
++};
++
+ #include "qcom-msm8260-sony-hikari-hardware.dtsi"
+ 
+ #include "qcom-msm8260-sony-hikari-wireless.dtsi"
+@@ -580,3 +626,36 @@ &tlmm {
+ &gcc {
+ 	clocks = <&rpmcc RPM_PXO_A_CLK>, <&cxo_board>;
+ };
++
++/* QDSP6v3 fixed DDR/TCM layout and SMD routing from Sony's MSM8x60 BSP. */
++&soc {
++	adsp: remoteproc@28800000 {
++		compatible = "qcom,msm8660-q6v3";
++		reg = <0x28800000 0x100>, <0x2800001c 0x4>,
++		      <0x28400000 0x20000>;
++		reg-names = "q6", "lcc", "tcm";
++		clocks = <&rpmcc RPM_PLL4_CLK>;
++		clock-names = "pll4";
++		memory-region = <&q6_region>;
++
++		smd-edge {
++			interrupts = <GIC_SPI 90 IRQ_TYPE_EDGE_RISING>;
++			qcom,smd-edge = <1>;
++			qcom,ipc = <&l2cc 0x8 15>;
++
++			apr {
++				compatible = "qcom,apr";
++				qcom,smd-channels = "apr_audio_svc";
++				qcom,domain = <APR_DOMAIN_ADSP>;
++				qcom,legacy-no-pdr;
++				#address-cells = <1>;
++				#size-cells = <0>;
++
++				service@3 {
++					compatible = "qcom,msm8660-q6core";
++					reg = <APR_SVC_ADSP_CORE>;
++				};
++			};
++		};
++	};
++};
+diff --git a/drivers/remoteproc/Kconfig b/drivers/remoteproc/Kconfig
+index 5b56b2dcc725fcf327ec80e5298a8cfe8de30ba9..b49fae8393570d1c56346d9b8c9c30d8003fc3ba 100644
+--- a/drivers/remoteproc/Kconfig
++++ b/drivers/remoteproc/Kconfig
+@@ -14,6 +14,18 @@ config REMOTEPROC
+ 
+ if REMOTEPROC
+ 
++config QCOM_Q6V3
++	tristate "Qualcomm MSM8660 QDSP6v3"
++	depends on ARCH_QCOM && OF
++	select QCOM_SCM
++	select QCOM_MDT_LOADER
++	select QCOM_RPROC_COMMON
++	select RPMSG_QCOM_SMD
++	help
++	  Support the QDSP6v3 audio DSP on MSM8660, including fixed-address
++	  split MDT firmware, Sony reset sequencing and APR over SMD.
++
++
+ config REMOTEPROC_CDEV
+ 	bool "Remoteproc character device interface"
+ 	help
+diff --git a/drivers/remoteproc/Makefile b/drivers/remoteproc/Makefile
+index 689686de0d41e6cc84347deda9d5b56d2cf42d36..1d634a740bf4b6048e08e98f49376c0b4848fb3d 100644
+--- a/drivers/remoteproc/Makefile
++++ b/drivers/remoteproc/Makefile
+@@ -41,3 +41,5 @@ obj-$(CONFIG_TI_K3_DSP_REMOTEPROC)	+= ti_k3_dsp_remoteproc.o ti_k3_common.o
+ obj-$(CONFIG_TI_K3_M4_REMOTEPROC)	+= ti_k3_m4_remoteproc.o ti_k3_common.o
+ obj-$(CONFIG_TI_K3_R5_REMOTEPROC)	+= ti_k3_r5_remoteproc.o ti_k3_common.o
+ obj-$(CONFIG_XLNX_R5_REMOTEPROC)	+= xlnx_r5_remoteproc.o
++
++obj-$(CONFIG_QCOM_Q6V3) += qcom_q6v3.o
+diff --git a/drivers/remoteproc/qcom_q6v3.c b/drivers/remoteproc/qcom_q6v3.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..6d0e03b657e7db0207a347f933406516cfa9e07c
+--- /dev/null
++++ b/drivers/remoteproc/qcom_q6v3.c
+@@ -0,0 +1,338 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* MSM8660 QDSP6v3. Reset ordering from Sony 6.2.B.1.96 pil-q6v3.c.
++ * Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
++ */
++#include <linux/clk.h>
++#include <linux/delay.h>
++#include <linux/elf.h>
++#include <linux/firmware.h>
++#include <linux/firmware/qcom/qcom_scm.h>
++#include <linux/io.h>
++#include <linux/module.h>
++#include <linux/of_reserved_mem.h>
++#include <linux/platform_device.h>
++#include <linux/remoteproc.h>
++#include <linux/soc/qcom/mdt_loader.h>
++#include "qcom_common.h"
++
++#define Q6_FUNC 0x0
++#define STOP_CORE BIT(26)
++#define CLAMP_IO BIT(25)
++#define SS_ARES BIT(23)
++#define ISDB_ARES BIT(22)
++#define ETM_ARES BIT(21)
++#define CORE_ARES BIT(10)
++#define L1_MEM BIT(9)
++#define TCM_CORE BIT(8)
++#define TCM_PERIPH BIT(7)
++#define GFM4_CLK BIT(2)
++#define Q6_RESETS (SS_ARES | ISDB_ARES | ETM_ARES | CORE_ARES)
++#define Q6_MEM (L1_MEM | TCM_CORE | TCM_PERIPH)
++#define Q6_PAS_ID 1
++
++struct q6v3 {
++	struct device *dev;
++	struct clk *pll;
++	void __iomem *q6;
++	void __iomem *lcc;
++	void __iomem *tcm;
++	void __iomem *mem;
++	phys_addr_t tcm_phys;
++	size_t tcm_size;
++	phys_addr_t mem_phys;
++	size_t mem_size;
++	bool secure;
++	bool powered;
++	bool running;
++	struct qcom_scm_pas_context *pas;
++	struct qcom_rproc_subdev smd;
++};
++
++static void q6v3_hold(struct q6v3 *q)
++{
++	u32 val = readl(q->lcc + Q6_FUNC);
++
++	val |= Q6_RESETS | STOP_CORE;
++	val &= ~GFM4_CLK;
++	writel(val, q->lcc + Q6_FUNC);
++	usleep_range(20, 30);
++	val |= GFM4_CLK | Q6_MEM;
++	writel(val, q->lcc + Q6_FUNC);
++	val &= ~(CLAMP_IO | Q6_RESETS);
++	writel(val, q->lcc + Q6_FUNC);
++	/* Core remains stopped while firmware is copied into DDR/TCM. */
++	mb();
++}
++
++static int q6v3_off(struct q6v3 *q)
++{
++	u32 val;
++	int ret;
++
++	if (!q->powered)
++		return 0;
++	if (q->secure) {
++		if (q->running) {
++			ret = qcom_scm_pas_shutdown(Q6_PAS_ID);
++			if (ret)
++				return ret;
++		}
++		qcom_scm_pas_metadata_release(q->pas);
++	} else {
++		val = readl(q->lcc + Q6_FUNC);
++		val |= Q6_RESETS | STOP_CORE;
++		val &= ~GFM4_CLK;
++		writel(val, q->lcc + Q6_FUNC);
++		usleep_range(20, 30);
++		val &= ~Q6_MEM;
++		val |= CLAMP_IO;
++		writel(val, q->lcc + Q6_FUNC);
++	}
++	clk_disable_unprepare(q->pll);
++	q->powered = false;
++	q->running = false;
++	return 0;
++}
++
++static void *q6v3_da_to_va(struct rproc *rproc, u64 da, size_t len,
++			 bool *is_iomem)
++{
++	struct q6v3 *q = rproc->priv;
++
++	if (is_iomem)
++		*is_iomem = true;
++	if (da >= q->mem_phys && da - q->mem_phys <= q->mem_size &&
++	    len <= q->mem_size - (da - q->mem_phys))
++		return (void __force *)(q->mem + da - q->mem_phys);
++	if (da >= q->tcm_phys && da - q->tcm_phys <= q->tcm_size &&
++	    len <= q->tcm_size - (da - q->tcm_phys))
++		return (void __force *)(q->tcm + da - q->tcm_phys);
++	return NULL;
++}
++
++static bool q6v3_segment(const struct elf32_phdr *p)
++{
++	return p->p_type == PT_LOAD && p->p_memsz &&
++	       (p->p_flags & QCOM_MDT_TYPE_MASK) != QCOM_MDT_TYPE_HASH;
++}
++
++static int q6v3_load(struct rproc *rproc, const struct firmware *fw)
++{
++	struct q6v3 *q = rproc->priv;
++	const struct elf32_hdr *eh = (const void *)fw->data;
++	const struct elf32_phdr *ph;
++	const struct firmware *segment;
++	void *metadata;
++	void __iomem *dst;
++	size_t metadata_size;
++	char *name;
++	int i, ret;
++
++	if (fw->size < sizeof(*eh) || memcmp(eh->e_ident, ELFMAG, SELFMAG) ||
++	    eh->e_ident[EI_CLASS] != ELFCLASS32 ||
++	    eh->e_ident[EI_DATA] != ELFDATA2LSB || eh->e_machine != EM_HEXAGON ||
++	    eh->e_phentsize != sizeof(*ph) || eh->e_phoff > fw->size ||
++	    eh->e_phnum > (fw->size - eh->e_phoff) / sizeof(*ph))
++		return -EINVAL;
++	ph = (const void *)(fw->data + eh->e_phoff);
++	if ((eh->e_entry & 0xfff) ||
++	    !q6v3_da_to_va(rproc, eh->e_entry, 1, NULL))
++		return -EINVAL;
++	/* Check every destination before enabling clocks or touching hardware. */
++	for (i = 0; i < eh->e_phnum; i++) {
++		if (!q6v3_segment(&ph[i]))
++			continue;
++		if (ph[i].p_filesz > ph[i].p_memsz ||
++		    (ph[i].p_flags & QCOM_MDT_RELOCATABLE) ||
++		    !q6v3_da_to_va(rproc, ph[i].p_paddr, ph[i].p_memsz, NULL))
++			return -EINVAL;
++	}
++	name = kstrdup(rproc->firmware, GFP_KERNEL);
++	if (!name)
++		return -ENOMEM;
++	if (strlen(name) < 4 || strcmp(name + strlen(name) - 4, ".mdt")) {
++		ret = -EINVAL;
++		goto free_name;
++	}
++	ret = clk_prepare_enable(q->pll);
++	if (ret)
++		goto free_name;
++	q->powered = true;
++	if (q->secure) {
++		metadata = qcom_mdt_read_metadata(fw, &metadata_size,
++						rproc->firmware, q->dev);
++		if (IS_ERR(metadata)) {
++			ret = PTR_ERR(metadata);
++			goto power_off;
++		}
++		ret = qcom_scm_pas_init_image(Q6_PAS_ID, metadata,
++					      metadata_size, q->pas);
++		kfree(metadata);
++		if (ret)
++			goto power_off;
++	} else {
++		q6v3_hold(q);
++	}
++	for (i = 0; i < eh->e_phnum; i++) {
++		if (!q6v3_segment(&ph[i]))
++			continue;
++		dst = (void __force *)q6v3_da_to_va(rproc, ph[i].p_paddr,
++						ph[i].p_memsz, NULL);
++		if (ph[i].p_filesz) {
++			if (i > 99) {
++				ret = -EINVAL;
++				goto power_off;
++			}
++			snprintf(name + strlen(rproc->firmware) - 3, 4, "b%02d", i);
++			ret = request_firmware(&segment, name, q->dev);
++			if (ret)
++				goto power_off;
++			if (segment->size != ph[i].p_filesz) {
++				release_firmware(segment);
++				ret = -EINVAL;
++				goto power_off;
++			}
++			memcpy_toio(dst, segment->data, segment->size);
++			release_firmware(segment);
++		}
++		memset_io(dst + ph[i].p_filesz, 0,
++			  ph[i].p_memsz - ph[i].p_filesz);
++	}
++	/* Make all firmware writes visible before releasing the core. */
++	wmb();
++	rproc->bootaddr = eh->e_entry;
++	kfree(name);
++	return 0;
++power_off:
++	q6v3_off(q);
++free_name:
++	kfree(name);
++	return ret;
++}
++
++static int q6v3_start(struct rproc *rproc)
++{
++	struct q6v3 *q = rproc->priv;
++	u32 val;
++	int ret;
++
++	if (q->secure) {
++		ret = qcom_scm_pas_auth_and_reset(Q6_PAS_ID);
++		if (ret)
++			q6v3_off(q);
++		else
++			q->running = true;
++		return ret;
++	}
++	writel((rproc->bootaddr >> 12) & 0xfffff, q->q6);
++	writel((0x28c << 15) | 0x28b, q->q6 + 0x1c);
++	writel((0x290 << 12) | 0x280, q->q6 + 0x20);
++	/* Commit the boot vector and straps before starting instruction fetch. */
++	mb();
++	val = readl(q->lcc + Q6_FUNC);
++	writel(val & ~STOP_CORE, q->lcc + Q6_FUNC);
++	q->running = true;
++	return 0;
++}
++
++static int q6v3_stop(struct rproc *rproc)
++{
++	return q6v3_off(rproc->priv);
++}
++
++static const struct rproc_ops q6v3_ops = {
++	.start = q6v3_start,
++	.stop = q6v3_stop,
++	.load = q6v3_load,
++	.da_to_va = q6v3_da_to_va,
++};
++
++static int q6v3_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct device_node *node;
++	struct reserved_mem *mem;
++	struct resource *res;
++	struct rproc *rproc;
++	struct q6v3 *q;
++	int ret;
++
++	if (!qcom_scm_is_available())
++		return -EPROBE_DEFER;
++	rproc = devm_rproc_alloc(dev, "msm8660-q6", &q6v3_ops,
++			       "q6.mdt", sizeof(*q));
++	if (!rproc)
++		return -ENOMEM;
++	q = rproc->priv;
++	q->dev = dev;
++	q->q6 = devm_platform_ioremap_resource_byname(pdev, "q6");
++	if (IS_ERR(q->q6))
++		return PTR_ERR(q->q6);
++	q->lcc = devm_platform_ioremap_resource_byname(pdev, "lcc");
++	if (IS_ERR(q->lcc))
++		return PTR_ERR(q->lcc);
++	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "tcm");
++	if (!res)
++		return -EINVAL;
++	q->tcm_phys = res->start;
++	q->tcm_size = resource_size(res);
++	q->tcm = devm_ioremap_resource(dev, res);
++	if (IS_ERR(q->tcm))
++		return PTR_ERR(q->tcm);
++	node = of_parse_phandle(dev->of_node, "memory-region", 0);
++	if (!node)
++		return -EINVAL;
++	mem = of_reserved_mem_lookup(node);
++	of_node_put(node);
++	if (!mem)
++		return -EINVAL;
++	q->mem_phys = mem->base;
++	q->mem_size = mem->size;
++	q->mem = devm_ioremap_wc(dev, mem->base, mem->size);
++	if (!q->mem)
++		return -ENOMEM;
++	q->pll = devm_clk_get(dev, "pll4");
++	if (IS_ERR(q->pll))
++		return dev_err_probe(dev, PTR_ERR(q->pll), "PLL4 unavailable\n");
++	q->secure = qcom_scm_pas_supported(Q6_PAS_ID);
++	if (q->secure) {
++		q->pas = devm_qcom_scm_pas_context_alloc(dev, Q6_PAS_ID,
++						       mem->base, mem->size);
++		if (IS_ERR(q->pas))
++			return PTR_ERR(q->pas);
++	}
++	/* Explicit sysfs start during bring-up; do not boot untested DSP on probe. */
++	rproc->auto_boot = false;
++	platform_set_drvdata(pdev, rproc);
++	qcom_add_smd_subdev(rproc, &q->smd);
++	ret = rproc_add(rproc);
++	if (ret)
++		qcom_remove_smd_subdev(rproc, &q->smd);
++	return ret;
++}
++
++static void q6v3_remove(struct platform_device *pdev)
++{
++	struct rproc *rproc = platform_get_drvdata(pdev);
++	struct q6v3 *q = rproc->priv;
++
++	rproc_del(rproc);
++	qcom_remove_smd_subdev(rproc, &q->smd);
++}
++
++static const struct of_device_id q6v3_match[] = {
++	{ .compatible = "qcom,msm8660-q6v3" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, q6v3_match);
++static struct platform_driver q6v3_driver = {
++	.probe = q6v3_probe,
++	.remove = q6v3_remove,
++	.driver = {
++		.name = "qcom-q6v3",
++		.of_match_table = q6v3_match,
++	},
++};
++module_platform_driver(q6v3_driver);
++MODULE_DESCRIPTION("Qualcomm MSM8660 QDSP6v3 remote processor");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/soc/qcom/apr.c b/drivers/soc/qcom/apr.c
+index ea7f83916d8d8dcbaebcbd594e479d0ce4eb6ec7..7062300fa60a129d5ebcf78e20e4f745ab759952 100644
+--- a/drivers/soc/qcom/apr.c
++++ b/drivers/soc/qcom/apr.c
+@@ -488,6 +488,9 @@ static int of_apr_add_pd_lookups(struct device *dev)
+ 	struct pdr_service *pds;
+ 	int ret;
+ 
++	if (!apr->pdr)
++		return 0;
++
+ 	for_each_child_of_node_scoped(dev->of_node, node) {
+ 		ret = of_property_read_string_index(node, "qcom,protection-domain",
+ 						    0, &service_name);
+@@ -626,9 +629,13 @@ static int apr_probe(struct rpmsg_device *rpdev)
+ 
+ 	apr->pdr = pdr_handle_alloc(apr_pd_status, apr);
+ 	if (IS_ERR(apr->pdr)) {
+-		dev_err(dev, "Failed to init PDR handle\n");
+ 		ret = PTR_ERR(apr->pdr);
+-		goto destroy_wq;
++		if (!of_property_read_bool(dev->of_node, "qcom,legacy-no-pdr")) {
++			dev_err(dev, "Failed to init PDR handle: %d\n", ret);
++			goto destroy_wq;
++		}
++		dev_info(dev, "PDR unavailable on legacy DSP, continuing without restart notifications\n");
++		apr->pdr = NULL;
+ 	}
+ 
+ 	INIT_LIST_HEAD(&apr->rx_list);
+diff --git a/sound/soc/codecs/Kconfig b/sound/soc/codecs/Kconfig
+index f9a47e262a77cbba6f18bde10b2d1a8ff2bfe2e8..aacd30a93766a47816f90b65ebec408684c75a68 100644
+--- a/sound/soc/codecs/Kconfig
++++ b/sound/soc/codecs/Kconfig
+@@ -9,6 +9,14 @@ config SND_SOC_I2C_AND_SPI
+ 	default y if I2C=y
+ 	default y if SPI_MASTER=y
+ 
++config SND_SOC_TIMPANI
++	tristate "Qualcomm Timpani codec control interface"
++	depends on I2C && GPIOLIB
++	select REGMAP_I2C
++	help
++	  Native power/reset and register control for the Qualcomm Timpani
++	  codec used on Sony Fuji boards. PCM requires a Q6v3 AFE backend.
++
+ menu "CODEC drivers"
+ 
+ config SND_SOC_ALL_CODECS
+diff --git a/sound/soc/codecs/Makefile b/sound/soc/codecs/Makefile
+index 3d122ace75adee2d9b4584e2357e49ed2a30037d..ba4f5f45fd2c159d1931572be9804f90ee8d9ef2 100644
+--- a/sound/soc/codecs/Makefile
++++ b/sound/soc/codecs/Makefile
+@@ -897,3 +897,6 @@ obj-$(CONFIG_SND_SOC_LPASS_TX_MACRO)	+= snd-soc-lpass-tx-macro.o
+ 
+ # Mux
+ obj-$(CONFIG_SND_SOC_SIMPLE_MUX)	+= snd-soc-simple-mux.o
++
++obj-$(CONFIG_SND_SOC_TIMPANI) += snd-soc-timpani.o
++snd-soc-timpani-y := timpani.o
+diff --git a/sound/soc/codecs/timpani.c b/sound/soc/codecs/timpani.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..a1d93c06e2d590a6bee5558d1d88259f3a02fb21
+--- /dev/null
++++ b/sound/soc/codecs/timpani.c
+@@ -0,0 +1,174 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* Qualcomm Timpani control interface, as wired on Sony Fuji/Hikari. */
++#include <linux/delay.h>
++#include <linux/gpio/consumer.h>
++#include <linux/i2c.h>
++#include <linux/module.h>
++#include <linux/pm_runtime.h>
++#include <linux/regmap.h>
++#include <linux/regulator/consumer.h>
++#include <sound/soc.h>
++
++struct timpani {
++	struct regmap *core;
++	struct regmap *codec;
++	struct gpio_desc *reset;
++	struct regulator_bulk_data supplies[2];
++};
++
++static int timpani_power_on(struct device *dev)
++{
++	struct timpani *t = dev_get_drvdata(dev);
++	unsigned int version;
++	int ret;
++
++	ret = regulator_bulk_enable(ARRAY_SIZE(t->supplies), t->supplies);
++	if (ret)
++		return ret;
++	/* Sony: release reset, assert for 1 ms, then release again. */
++	gpiod_set_value_cansleep(t->reset, 0);
++	usleep_range(1000, 1500);
++	gpiod_set_value_cansleep(t->reset, 1);
++	usleep_range(1000, 1500);
++	gpiod_set_value_cansleep(t->reset, 0);
++	usleep_range(1000, 1500);
++	ret = regmap_read(t->core, 0x11, &version);
++	if (ret)
++		goto disable;
++	if (!(version & BIT(5))) {
++		ret = -ENODEV;
++		goto disable;
++	}
++	ret = regmap_write(t->core, 0x00, 0x10);
++	if (ret)
++		goto disable;
++	regcache_cache_only(t->codec, false);
++	ret = regcache_sync(t->codec);
++	if (!ret)
++		return 0;
++	regcache_cache_only(t->codec, true);
++disable:
++	gpiod_set_value_cansleep(t->reset, 1);
++	regulator_bulk_disable(ARRAY_SIZE(t->supplies), t->supplies);
++	return ret;
++}
++
++static int timpani_power_off(struct device *dev)
++{
++	struct timpani *t = dev_get_drvdata(dev);
++
++	regcache_cache_only(t->codec, true);
++	regcache_mark_dirty(t->codec);
++	gpiod_set_value_cansleep(t->reset, 1);
++	return regulator_bulk_disable(ARRAY_SIZE(t->supplies), t->supplies);
++}
++
++static void timpani_pm_disable(void *data)
++{
++	struct device *dev = data;
++
++	pm_runtime_disable(dev);
++	if (!pm_runtime_status_suspended(dev))
++		timpani_power_off(dev);
++}
++
++static const struct regmap_config timpani_core_regmap = {
++	.reg_bits = 8,
++	.val_bits = 8,
++	.max_register = 0xff,
++};
++
++static const struct regmap_config timpani_codec_regmap = {
++	.reg_bits = 8,
++	.val_bits = 8,
++	.max_register = 0xff,
++	.cache_type = REGCACHE_MAPLE,
++};
++
++static int timpani_component_probe(struct snd_soc_component *component)
++{
++	struct timpani *t = dev_get_drvdata(component->dev);
++
++	snd_soc_component_init_regmap(component, t->codec);
++	return 0;
++}
++
++/* Routes/DAIs are added once the Q6v3 AFE backend is available. */
++static const struct snd_soc_component_driver timpani_component = {
++	.name = "timpani",
++	.probe = timpani_component_probe,
++};
++
++static int timpani_probe(struct i2c_client *client)
++{
++	struct device *dev = &client->dev;
++	struct i2c_client *codec;
++	struct timpani *t;
++	int ret;
++
++	t = devm_kzalloc(dev, sizeof(*t), GFP_KERNEL);
++	if (!t)
++		return -ENOMEM;
++	i2c_set_clientdata(client, t);
++	t->supplies[0].supply = "vdd";
++	t->supplies[1].supply = "vddio";
++	ret = devm_regulator_bulk_get(dev, ARRAY_SIZE(t->supplies), t->supplies);
++	if (ret)
++		return dev_err_probe(dev, ret, "core supplies unavailable\n");
++	ret = regulator_set_load(t->supplies[0].consumer, 5000);
++	if (ret)
++		return ret;
++	t->reset = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
++	if (IS_ERR(t->reset))
++		return dev_err_probe(dev, PTR_ERR(t->reset), "reset unavailable\n");
++	t->core = devm_regmap_init_i2c(client, &timpani_core_regmap);
++	if (IS_ERR(t->core))
++		return PTR_ERR(t->core);
++	/* The Sony MFD uses 0x0d for control and 0x77 for codec registers. */
++	codec = devm_i2c_new_dummy_device(dev, client->adapter, 0x77);
++	if (IS_ERR(codec))
++		return PTR_ERR(codec);
++	t->codec = devm_regmap_init_i2c(codec, &timpani_codec_regmap);
++	if (IS_ERR(t->codec))
++		return PTR_ERR(t->codec);
++	regcache_cache_only(t->codec, true);
++	ret = timpani_power_on(dev);
++	if (ret)
++		return dev_err_probe(dev, ret, "Timpani identification failed\n");
++	pm_runtime_set_active(dev);
++	pm_runtime_set_autosuspend_delay(dev, 1000);
++	pm_runtime_use_autosuspend(dev);
++	pm_runtime_enable(dev);
++	ret = devm_add_action_or_reset(dev, timpani_pm_disable, dev);
++	if (ret)
++		return ret;
++	ret = devm_snd_soc_register_component(dev, &timpani_component, NULL, 0);
++	if (ret)
++		return ret;
++	pm_runtime_idle(dev);
++	dev_info(dev, "Timpani core identified, codec address 0x77\n");
++	return 0;
++}
++
++static const struct dev_pm_ops timpani_pm_ops = {
++	RUNTIME_PM_OPS(timpani_power_off, timpani_power_on, NULL)
++	SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend, pm_runtime_force_resume)
++};
++
++static const struct of_device_id timpani_match[] = {
++	{ .compatible = "qcom,timpani" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, timpani_match);
++
++static struct i2c_driver timpani_driver = {
++	.probe = timpani_probe,
++	.driver = {
++		.name = "timpani",
++		.of_match_table = timpani_match,
++		.pm = pm_ptr(&timpani_pm_ops),
++	},
++};
++module_i2c_driver(timpani_driver);
++MODULE_DESCRIPTION("Qualcomm Timpani ASoC control interface");
++MODULE_LICENSE("GPL");
+diff --git a/sound/soc/qcom/Kconfig b/sound/soc/qcom/Kconfig
+index e6e24f3b99222d32e81a292af8f31db9db0a55eb..45971d8c387ad0832b8196062683b878cdc116b6 100644
+--- a/sound/soc/qcom/Kconfig
++++ b/sound/soc/qcom/Kconfig
+@@ -8,6 +8,15 @@ menuconfig SND_SOC_QCOM
+ 
+ if SND_SOC_QCOM
+ 
++config SND_SOC_MSM8660_QDSP6_CORE
++	tristate "MSM8660 legacy QDSP6 core protocol"
++	depends on QCOM_APR
++	select SND_SOC_QDSP6_CORE
++	help
++	  Enable legacy firmware/service version queries for QDSP6v3.
++	  This does not yet provide a PCM device.
++
++
+ config SND_SOC_LPASS_CPU
+ 	tristate
+ 	select REGMAP_MMIO
+diff --git a/sound/soc/qcom/Makefile b/sound/soc/qcom/Makefile
+index 985ce2ae286ba1860f338b37aaff0825e659f486..f0e563a402c1cf41dbed21dfc92a19feae88a9fb 100644
+--- a/sound/soc/qcom/Makefile
++++ b/sound/soc/qcom/Makefile
+@@ -46,4 +46,4 @@ obj-$(CONFIG_SND_SOC_X1E80100) += snd-soc-x1e80100.o
+ obj-$(CONFIG_SND_SOC_QCOM_OFFLOAD_UTILS) += snd-soc-qcom-offload-utils.o
+ 
+ #DSP lib
+-obj-$(CONFIG_SND_SOC_QDSP6) += qdsp6/
++obj-y += qdsp6/
+diff --git a/sound/soc/qcom/qdsp6/q6core.c b/sound/soc/qcom/qdsp6/q6core.c
+index 48825756a7abb52ffc3c63c547800e14581ddd8e..133c040811b77af920a9e11b94cbff830fd2a3b8 100644
+--- a/sound/soc/qcom/qdsp6/q6core.c
++++ b/sound/soc/qcom/qdsp6/q6core.c
+@@ -18,6 +18,8 @@
+ #define Q6_READY_TIMEOUT_MS 100
+ #define AVCS_CMD_ADSP_EVENT_GET_STATE		0x0001290C
+ #define AVCS_CMDRSP_ADSP_EVENT_GET_STATE	0x0001290D
++#define ADSP_GET_VERSION_MSM8660 0x00011152
++#define ADSP_GET_VERSION_RSP_MSM8660 0x00011153
+ #define AVCS_GET_VERSIONS       0x00012905
+ #define AVCS_GET_VERSIONS_RSP   0x00012906
+ #define AVCS_CMD_GET_FWK_VERSION	0x001292c
+@@ -63,6 +65,7 @@ struct q6core {
+ 	bool get_state_supported;
+ 	bool get_version_supported;
+ 	bool is_version_requested;
++	bool legacy;
+ };
+ 
+ static struct q6core *g_core;
+@@ -78,6 +81,7 @@ static int q6core_callback(struct apr_device *adev, const struct apr_resp_pkt *d
+ 	case APR_BASIC_RSP_RESULT:{
+ 		result = data->payload;
+ 		switch (result->opcode) {
++		case ADSP_GET_VERSION_MSM8660:
+ 		case AVCS_GET_VERSIONS:
+ 			if (result->status == ADSP_EUNSUPPORTED)
+ 				core->get_version_supported = false;
+@@ -113,11 +117,16 @@ static int q6core_callback(struct apr_device *adev, const struct apr_resp_pkt *d
+ 
+ 		break;
+ 	}
++	case ADSP_GET_VERSION_RSP_MSM8660:
+ 	case AVCS_GET_VERSIONS_RSP: {
+ 		struct avcs_cmdrsp_get_version *v;
+ 
+ 		v = data->payload;
+-
++		if (data->payload_size < sizeof(*v) ||
++		    v->num_services > (data->payload_size - sizeof(*v)) /
++				      sizeof(struct avcs_svc_info))
++			return -EINVAL;
++		kfree(core->svc_version);
+ 		core->svc_version = kmemdup(data->payload,
+ 					    struct_size(v, svc_api_info,
+ 							v->num_services),
+@@ -181,13 +190,14 @@ static int q6core_get_fwk_versions(struct q6core *core)
+ static int q6core_get_svc_versions(struct q6core *core)
+ {
+ 	struct apr_device *adev = core->adev;
+-	struct apr_pkt pkt;
++	struct apr_pkt pkt = {};
+ 	int rc;
+ 
+ 	pkt.hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
+ 				      APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
+ 	pkt.hdr.pkt_size = APR_HDR_SIZE;
+-	pkt.hdr.opcode = AVCS_GET_VERSIONS;
++	pkt.hdr.opcode = core->legacy ? ADSP_GET_VERSION_MSM8660 :
++				     AVCS_GET_VERSIONS;
+ 
+ 	rc = apr_send_pkt(adev, &pkt);
+ 	if (rc < 0)
+@@ -254,7 +264,8 @@ int q6core_get_svc_api_info(int svc_id, struct q6core_svc_api_info *ainfo)
+ 
+ 	mutex_lock(&g_core->lock);
+ 	if (!g_core->is_version_requested) {
+-		if (q6core_get_fwk_versions(g_core) == -ENOTSUPP)
++		if (g_core->legacy ||
++		    q6core_get_fwk_versions(g_core) == -ENOTSUPP)
+ 			q6core_get_svc_versions(g_core);
+ 		g_core->is_version_requested = true;
+ 	}
+@@ -325,6 +336,36 @@ bool q6core_is_adsp_ready(void)
+ }
+ EXPORT_SYMBOL_GPL(q6core_is_adsp_ready);
+ 
++static ssize_t firmware_version_show(struct device *dev,
++				     struct device_attribute *attr, char *buf)
++{
++	struct q6core *core = dev_get_drvdata(dev);
++	int ret;
++
++	mutex_lock(&core->lock);
++	if (!core->get_version_supported) {
++		core->resp_received = false;
++		ret = q6core_get_svc_versions(core);
++		if (ret < 0)
++			goto unlock;
++		if (!core->get_version_supported) {
++			ret = -ETIMEDOUT;
++			goto unlock;
++		}
++	}
++	ret = sysfs_emit(buf, "0x%08x\n", core->svc_version->build_id);
++unlock:
++	mutex_unlock(&core->lock);
++	return ret;
++}
++static DEVICE_ATTR_RO(firmware_version);
++
++static struct attribute *q6core_attrs[] = {
++	&dev_attr_firmware_version.attr,
++	NULL,
++};
++ATTRIBUTE_GROUPS(q6core);
++
+ static int q6core_probe(struct apr_device *adev)
+ {
+ 	g_core = kzalloc_obj(*g_core);
+@@ -335,6 +376,8 @@ static int q6core_probe(struct apr_device *adev)
+ 
+ 	mutex_init(&g_core->lock);
+ 	g_core->adev = adev;
++	g_core->legacy = of_device_is_compatible(adev->dev.of_node,
++					       "qcom,msm8660-q6core");
+ 	init_waitqueue_head(&g_core->wait);
+ 	return 0;
+ }
+@@ -355,6 +398,7 @@ static void q6core_exit(struct apr_device *adev)
+ #ifdef CONFIG_OF
+ static const struct of_device_id q6core_device_id[]  = {
+ 	{ .compatible = "qcom,q6core" },
++	{ .compatible = "qcom,msm8660-q6core" },
+ 	{},
+ };
+ MODULE_DEVICE_TABLE(of, q6core_device_id);
+@@ -366,6 +410,7 @@ static struct apr_driver qcom_q6core_driver = {
+ 	.callback = q6core_callback,
+ 	.driver = {
+ 		.name = "qcom-q6core",
++		.dev_groups = q6core_groups,
+ 		.of_match_table = of_match_ptr(q6core_device_id),
+ 	},
+ };
+-- 
+2.53.0
+
