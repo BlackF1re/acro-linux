@@ -23,7 +23,7 @@ Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
  drivers/gpu/drm/msm/Kconfig                   |   7 +
  drivers/gpu/drm/msm/Makefile                  |   1 +
  drivers/gpu/drm/msm/disp/mdp4/mdp4_crtc.c     |  25 +-
- drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c      | 142 +++++++++---
+ drivers/gpu/drm/msm/disp/mdp4/mdp4_kms.c      | 143 +++++++++---
  drivers/gpu/drm/msm/dsi/dsi.c                 |   9 +-
  drivers/gpu/drm/msm/dsi/dsi.h                 |   9 +-
  drivers/gpu/drm/msm/dsi/dsi_cfg.c             |  29 ++-
@@ -39,7 +39,7 @@ Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
  drivers/gpu/drm/panel/Kconfig                 |   7 +
  drivers/gpu/drm/panel/Makefile                |   1 +
  .../panel/panel-renesas-r63306-tmd-mdv22.c    | 138 +++++++++++
- 24 files changed, 954 insertions(+), 73 deletions(-)
+ 24 files changed, 955 insertions(+), 73 deletions(-)
  create mode 100644 Documentation/devicetree/bindings/display/panel/sony,hikari-r63306-tmd-mdv22.yaml
  create mode 100644 Documentation/devicetree/bindings/mfd/qcom,msm8660-mmss-sfpb.yaml
  create mode 100644 Documentation/devicetree/bindings/phy/qcom,msm8660-dsi-phy-45nm.yaml
@@ -578,6 +578,13 @@ index 9b1d1982e683f357e917e94957f005ff97038867..c73a6f0120bc39b6cad1b0e5cb1845da
  
  	mdp4_kms->clk = devm_clk_get(&pdev->dev, "core_clk");
  	if (IS_ERR(mdp4_kms->clk))
+@@ -666,5 +719,6 @@ static struct platform_driver mdp4_platform_driver = {
+ 	.driver     = {
+ 		.name   = "mdp4",
++		.probe_type = PROBE_FORCE_SYNCHRONOUS,
+ 		.of_match_table = mdp4_dt_match,
+ 		.pm     = &mdp4_pm_ops,
+ 	},
 diff --git a/drivers/gpu/drm/msm/dsi/dsi.c b/drivers/gpu/drm/msm/dsi/dsi.c
 index 3c9f01ed62713313b2cfe8147415bc8733247cb7..71a194855ee0e9111267ffea431fc251ad583143 100644
 --- a/drivers/gpu/drm/msm/dsi/dsi.c
