@@ -401,7 +401,7 @@
 
 			regulator-state-mem {
 				regulator-on-in-suspend;
-				regulator-suspend-microvolt = <1000000>;
+				regulator-suspend-microvolt = <750000>;
 			};
 		};
 
@@ -412,7 +412,7 @@
 
 			regulator-state-mem {
 				regulator-on-in-suspend;
-				regulator-suspend-microvolt = <1000000>;
+				regulator-suspend-microvolt = <500000>;
 			};
 		};
 
@@ -563,4 +563,18 @@
 		regulator-min-microvolt = <800000>;
 		regulator-max-microvolt = <1325000>;
 	};
+};
+
+/* Native Sony MPM wake routes remain live when PXO/TLMM stop. */
+&mpm {
+	status = "okay";
+};
+
+&tlmm {
+	wakeup-parent = <&mpm>;
+};
+
+/* Ordinary APSS clocks vote in ACTIVE; explicit PXO users retain SLEEP. */
+&gcc {
+	clocks = <&rpmcc RPM_PXO_A_CLK>, <&cxo_board>;
 };

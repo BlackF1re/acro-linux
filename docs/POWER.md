@@ -26,10 +26,10 @@ context on wake. CPU idle remains on the standalone SAW path. Five
 conservative CPU/RPM collapse cycles with RTC wake passed on 2026-10-08;
 peripheral resume and deeper sleep levels still need acceptance.
 
-The currently running production image advertises only s2idle. Prior
+The earlier production image advertised only s2idle. Prior
 platform/suspend tests caused Wi-Fi/USB and display underrun regressions.
-Reliable suspend/resume is not established; do not enable automatic suspend
-without a new acceptance test. A 2026-10-08 boot test found that the MSM8660
+Those failures predated the RTC and screen-off acceptance recorded below.
+A 2026-10-08 boot test found that the MSM8660
 cpuidle callback nested context tracking already provided by cpuidle core;
 using `CPU_PM_CPU_IDLE_ENTER_PARAM_RCU()` removed the physical `ct_kernel_exit`
 warning while both WFI and SPC counters advanced. This validates idle entry,
@@ -378,3 +378,32 @@ Button integration is currently staged in `/run`; BOOT and `hikari-next`
 are unchanged. Wi-Fi was blocked for this acceptance. A single MDP primary
 underrun still occurs on resume; complete peripheral/wake-source acceptance,
 deepest Sony levels and suspend-current measurement remain outstanding.
+
+### Sony/Fuji deep-level acceptance (2026-10-09)
+
+`VERIFIED_VENDOR_SOURCE`: Sony 6.2.B.1.96 Fuji's eight RPMRS levels now
+feed selection by sleep votes, latency QoS, RTC deadline and MPM wake
+coverage. Normal/active-only PXO clocks aggregate separate sleep votes;
+PMIC GPIO wake routes are checked through their parent interrupt domains.
+MSM8660 TSENS is powered down in suspend, matching Sony, without a wake vote.
+
+`VERIFIED_DEVICE`: bundle `/boot/hikari-levels5-20261009` completed four
+level-7 collapses (PXO OFF, L2 HSFS_OPEN, MEM/DIG sleep votes 750/500 mV),
+including Phosh screen-blank-triggered sleep. A 5000-us latency constraint
+selected level 5 and also resumed successfully. All five had `collapsed=1`,
+RPMRS entry/exit success and no kernel warning, GPU fault or MDP underrun.
+After resume, 256x256 GPU tests gave S0 4/4 PASS, three independent
+S1c24→S1_32 processes 168 NEAR/0 SEVERE, and S3 16/16 PASS.
+Hardware Phosh and the persistent screen-sleep helper remained running.
+
+Kernel SHA256: `d44dfde0ed7ff317393e385308cf5f143b9bf76521caea857f9025a64798d60d`.
+Prepared tree: `f469600d8e3ca5e454b9eb63a5cd7513eb9fc6e2`.
+Logs are in the bundle's `results/` directory. BOOT and `hikari-next`
+remain untouched. Wi-Fi was blocked; all-peripheral wake coverage, every
+individual level and minimum suspend current are not yet verified.
+
+The preceding overnight discharge was not deep sleep: after the 21:24
+power-key events there were no suspend entries. The helper had only been
+staged in volatile storage and disappeared on reboot. It and its autostart
+entry are now installed on the existing rootfs, with the mem/deep policy.
+Battery percentages alone do not establish minimum sleep power.
