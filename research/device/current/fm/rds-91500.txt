@@ -1,0 +1,2 @@
+Tuned 91.500 MHz
+RDS total=0 recoverable=0

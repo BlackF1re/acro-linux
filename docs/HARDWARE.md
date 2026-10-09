@@ -213,8 +213,11 @@ Record: [sanitized Wi-Fi bring-up](../research/device/current/boot/internal-wifi
 
 - **NFC controller:** NXP **PN544**, I2C `3-0028`, legacy `pn544` and `/dev/pn544`.
   `pm8xxx-nfc` is PM8058 power/interrupt integration, **not a second NFC controller**.
-- **FM:** legacy Qualcomm FM Radio Transceiver driver and `/sys/class/misc/msm_fm`
-  registered; native reception/tuning/audio acceptance is pending.
+- **FM:** the **BCM4330** Bluetooth/Wi-Fi/FM chip provides the tuner over
+  vendor HCI opcode `0xfc15`. The Sony `/sys/class/misc/msm_fm` node is a
+  DSP audio interface, not evidence of a Qualcomm tuner. Native V4L2 tuning
+  and frequency readback have passed; audible reception remains pending.
+  See [FM receiver](FM.md).
 - **GNSS:** exact receiver/transport remains **UNKNOWN**. Sensor/DSP SMD nodes
   do not establish a GNSS receiver or a successful position fix.
 - **Modem:** legacy PIL modem and SMD endpoints, `rmnet0`–`rmnet7`, `rmnet_mux_ctrl`.
@@ -236,7 +239,7 @@ Record: [sanitized Wi-Fi bring-up](../research/device/current/boot/internal-wifi
 - **Bluetooth discovery — Partial.** BCM4330 / UART serdev / BlueZ. Firmware download, HCI power and active discovery passed.
 - **Bluetooth connections / audio — Not verified.** BCM4330 profiles. Pairing, payload transfer and audio profiles need separate physical tests.
 - **NFC — Implemented.** NXP PN544. Native DT/driver path configured; tag transactions not verified.
-- **FM radio — Not verified.** Qualcomm companion audio/FM path. Reception, tuning, antenna and audio routing not accepted.
+- **FM radio — Partial.** BCM4330 native V4L2 `/dev/radio0`; tuning and band scan physically exercised with a headphone antenna. Station identification, RDS and MI2S/audio playback require acceptance.
 - **Cellular modem / network attach — Not verified.** MSM8260 modem. Android observations are not native Linux acceptance.
 - **Mobile data — Not verified.** Cellular packet data. No native network/data-session acceptance.
 - **SMS — Not verified.** Modem messaging. No native send/receive acceptance.
@@ -307,7 +310,7 @@ See [USB details](USB.md).
 | Rear camera | I2C `1-001a`, `sony_sensor_main` | Sony module **KMO13BS0**; exact sensor die **UNKNOWN** |
 | Front camera | I2C `1-0048`, `sony_sensor_sub` | Sony module **STW01BM0**; exact sensor die **UNKNOWN** |
 | Flash | I2C `3-0053`, `lm3560` | TI **LM3560** |
-| Audio/FM companion | I2C `4-000d`, `marimba-core`, `timpani_codec` | Qualcomm **Timpani** legacy path; physical die part number not directly established |
+| Audio companion | I2C `4-000d`, `marimba-core`, `timpani_codec` | Qualcomm **Timpani** legacy path; physical die part number not directly established |
 | Legacy dummy aliases | I2C `4-0066`, `4-0077`, `8-0055`, driver `dummy` | Physical purpose **UNKNOWN** |
 | Headset insertion | TLMM61, `gpio-keys` | High when inserted; `SW_HEADPHONE_INSERT` |
 

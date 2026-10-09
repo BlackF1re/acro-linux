@@ -1,0 +1,3 @@
+driver=bcm4330-fm card=Broadcom BCM4330 FM
+frequency_mhz=102.100
+blocks=0 clean=0 corrected=0 uncorrectable=0

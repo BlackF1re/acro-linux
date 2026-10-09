@@ -210,7 +210,7 @@ reached native Linux acceptance.
 | USB OTG host | EHCI / external VBUS switch | ✅ Working | Powered enumeration and real HID input; return to device mode tested. |
 | USB overcurrent protection | NCP373 / TLMM fault input | 🟡 Partial | Wiring and control implemented; fault-injection acceptance pending. |
 | NFC | NXP PN544 | 🛠️ Source support | Native DT/driver path configured; tag transactions not verified. |
-| FM radio | Qualcomm companion audio/FM path | ⬜ Not verified | Reception, tuning, antenna and audio routing not accepted. |
+| FM radio | BCM4330 / Bluetooth HCI / V4L2 | 🟨 Partial | Tuning and band scan tested; RDS and MI2S/audio playback pending. |
 | Cellular modem / network attach | MSM8260 modem | ⬜ Not verified | Android observations are not native Linux acceptance. |
 | Mobile data | Cellular packet data | ⬜ Not verified | No native network/data-session acceptance. |
 | SMS | Modem messaging | ⬜ Not verified | No native send/receive acceptance. |

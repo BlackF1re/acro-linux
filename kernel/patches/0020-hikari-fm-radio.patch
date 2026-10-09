@@ -1,0 +1,686 @@
+From: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+Date: Fri, 9 Oct 2026 17:00:00 +0700
+Subject: [PATCH] media: expose BCM4330 FM through the native V4L2 radio API
+
+Use the shared Bluetooth HCI transport for the BCM4330 FM register
+protocol. Create an FM child only for BCM4330 serdev controllers after
+firmware setup. Expose tuning, signal strength, bounded hardware seek,
+mute, de-emphasis and RDS block reads to ordinary Linux radio
+applications.
+
+Register facts are derived from Broadcom's GPL brcm_v4l2 implementation;
+Sony Hikari's stock brcm-prop_rx library corroborates the receiver
+identity. The Sony msm_fm misc device is an audio DSP interface, not the
+tuner.
+
+Keep audio routing separate: the Hikari MI2S/Timpani audio path is not
+yet supported, so this patch alone does not provide audible radio
+playback.
+
+Signed-off-by: BlackF1re <55582873+BlackF1re@users.noreply.github.com>
+---
+diff --git a/drivers/bluetooth/hci_bcm.c b/drivers/bluetooth/hci_bcm.c
+index 9a103db7e..72ae0d4e4 100644
+--- a/drivers/bluetooth/hci_bcm.c
++++ b/drivers/bluetooth/hci_bcm.c
+@@ -153,6 +153,7 @@ struct bcm_device {
+ 
+ /* generic bcm uart resources */
+ struct bcm_data {
++	struct platform_device *fm_device;
+ 	struct sk_buff		*rx_skb;
+ 	struct sk_buff_head	txq;
+ 
+@@ -531,6 +532,9 @@ static int bcm_close(struct hci_uart *hu)
+ 
+ 	bt_dev_dbg(hu->hdev, "hu %p", hu);
+ 
++	if (bcm->fm_device)
++		platform_device_unregister(bcm->fm_device);
++
+ 	/* Protect bcm->dev against removal of the device or driver */
+ 	mutex_lock(&bcm_device_lock);
+ 
+@@ -649,6 +653,18 @@ static int bcm_setup(struct hci_uart *hu)
+ 	if (!bcm_request_irq(bcm))
+ 		err = bcm_setup_sleep(hu);
+ 
++	if (!err && IS_ENABLED(CONFIG_RADIO_BCM4330) && hu->serdev &&
++	    of_device_is_compatible(hu->serdev->dev.of_node, "brcm,bcm4330-bt") &&
++	    !bcm->fm_device) {
++		bcm->fm_device = platform_device_register_data(&hu->hdev->dev,
++			"bcm4330-fm", PLATFORM_DEVID_AUTO, &hu->hdev, sizeof(hu->hdev));
++		if (IS_ERR(bcm->fm_device)) {
++			bt_dev_warn(hu->hdev, "FM child registration failed: %ld",
++				    PTR_ERR(bcm->fm_device));
++			bcm->fm_device = NULL;
++		}
++	}
++
+ 	return err;
+ }
+ 
+diff --git a/drivers/media/radio/Kconfig b/drivers/media/radio/Kconfig
+index bbbdd054b..38c4d5e3a 100644
+--- a/drivers/media/radio/Kconfig
++++ b/drivers/media/radio/Kconfig
+@@ -13,6 +13,15 @@ menuconfig RADIO_ADAPTERS
+ 
+ if RADIO_ADAPTERS
+ 
++config RADIO_BCM4330
++	tristate "Broadcom BCM4330 FM receiver over Bluetooth HCI"
++	depends on BT && BT_HCIUART && BT_HCIUART_BCM
++	help
++	  Expose the BCM4330 FM receiver through the standard V4L2 radio API.
++	  The Bluetooth controller must be powered and have valid calibration.
++	  Audio routing uses the separate sound subsystem.
++	  To compile this driver as a module, choose M here.
++
+ config RADIO_MAXIRADIO
+ 	tristate "Guillemot MAXI Radio FM 2000 radio"
+ 	depends on PCI && HAS_IOPORT
+diff --git a/drivers/media/radio/Makefile b/drivers/media/radio/Makefile
+index f54693ebd..9eaa29cda 100644
+--- a/drivers/media/radio/Makefile
++++ b/drivers/media/radio/Makefile
+@@ -37,3 +37,5 @@ obj-$(CONFIG_USB_KEENE) += radio-keene.o
+ obj-$(CONFIG_USB_MA901) += radio-ma901.o
+ obj-$(CONFIG_USB_MR800) += radio-mr800.o
+ obj-$(CONFIG_USB_RAREMONO) += radio-raremono.o
++
++obj-$(CONFIG_RADIO_BCM4330) += radio-bcm4330.o
+diff --git a/drivers/media/radio/radio-bcm4330.c b/drivers/media/radio/radio-bcm4330.c
+new file mode 100644
+index 000000000..c052cb053
+--- /dev/null
++++ b/drivers/media/radio/radio-bcm4330.c
+@@ -0,0 +1,588 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Broadcom BCM4330 FM receiver over the shared Bluetooth HCI transport.
++ * Register protocol: Broadcom GPL brcm_v4l2 driver (opcode 0xfc15).
++ * Hikari uses Broadcom FM, not the Qualcomm Tavarua device in the Sony BSP.
++ */
++#include <linux/delay.h>
++#include <linux/kfifo.h>
++#include <linux/module.h>
++#include <linux/platform_device.h>
++#include <linux/poll.h>
++#include <linux/unaligned.h>
++#include <linux/workqueue.h>
++#include <media/v4l2-ctrls.h>
++#include <media/v4l2-device.h>
++#include <media/v4l2-fh.h>
++#include <media/v4l2-event.h>
++#include <media/v4l2-ioctl.h>
++#include <net/bluetooth/bluetooth.h>
++#include <net/bluetooth/hci_core.h>
++
++#define FM_HCI_OP       0xfc15
++#define FM_SYS          0x00
++#define FM_CTRL         0x01
++#define FM_RDS_CTL      0x02
++#define FM_AUDIO        0x05
++#define FM_SEARCH       0x07
++#define FM_TUNE         0x09
++#define FM_FREQ         0x0a
++#define FM_RSSI         0x0f
++#define FM_MASK         0x10
++#define FM_FLAGS        0x12
++#define FM_RDS_WLINE    0x14
++#define FM_RDS          0x80
++#define FM_STEP         0xfd
++#define FM_MIN_KHZ      87500
++#define FM_MAX_KHZ      108000
++#define FM_MUTED        BIT(1)
++#define FM_DEEMPH75     BIT(6)
++
++struct bcm_fm {
++	struct v4l2_device v4l2;
++	struct video_device vdev;
++	struct v4l2_ctrl_handler ctrls;
++	struct hci_dev *hdev;
++	struct mutex lock;
++	struct delayed_work rds_work;
++	wait_queue_head_t rds_wait;
++	DECLARE_KFIFO(rds, struct v4l2_rds_data, 256);
++	unsigned int users;
++	bool disconnected;
++	bool reading_rds;
++	int rds_error;
++};
++
++/* Command complete contains status, register, direction, then read data. */
++static int bcm_fm_reg(struct bcm_fm *fm, u8 reg, void *data, u8 len, bool read)
++{
++	u8 cmd[5] = { reg, read };
++	struct sk_buff *skb;
++	int ret = 0;
++
++	if (fm->disconnected || hci_dev_test_flag(fm->hdev, HCI_UNREGISTER))
++		return -ENODEV;
++	if (!test_bit(HCI_UP, &fm->hdev->flags))
++		return -ENETDOWN;
++	if (read) {
++		cmd[2] = len;
++	} else {
++		if (len > 2)
++			return -EINVAL;
++		memcpy(cmd + 2, data, len);
++	}
++	skb = hci_cmd_sync(fm->hdev, FM_HCI_OP, read ? 3 : len + 2,
++			   cmd, msecs_to_jiffies(2000));
++	if (IS_ERR(skb))
++		return PTR_ERR(skb);
++	if (skb->len < 3 || skb->data[1] != reg || skb->data[2] != read)
++		ret = -EPROTO;
++	else if (skb->data[0])
++		ret = -EIO;
++	else if (read) {
++		unsigned int size = skb->len - 3;
++
++		if (reg == FM_RDS) {
++			if (size > len || size % 3)
++				ret = -EPROTO;
++			else {
++				memcpy(data, skb->data + 3, size);
++				ret = size;
++			}
++		} else if (size != len) {
++			ret = -EPROTO;
++		} else {
++			memcpy(data, skb->data + 3, len);
++		}
++	}
++	kfree_skb(skb);
++	return ret;
++}
++
++static int bcm_fm_write(struct bcm_fm *fm, u8 reg, u16 val, u8 len)
++{
++	u8 data[2];
++
++	put_unaligned_le16(val, data);
++	return bcm_fm_reg(fm, reg, data, len, false);
++}
++
++static int bcm_fm_read(struct bcm_fm *fm, u8 reg, u16 *val, u8 len)
++{
++	u8 data[2] = { 0 };
++	int ret = bcm_fm_reg(fm, reg, data, len, true);
++
++	if (!ret)
++		*val = get_unaligned_le16(data);
++	return ret;
++}
++
++static int bcm_fm_frequency(struct bcm_fm *fm, u32 *khz)
++{
++	u16 val;
++	int ret = bcm_fm_read(fm, FM_FREQ, &val, 2);
++
++	if (!ret)
++		*khz = val + 64000;
++	return ret;
++}
++
++static int bcm_fm_tune(struct bcm_fm *fm, u32 khz, bool seek, bool upward)
++{
++	u16 flags;
++	unsigned long deadline;
++	int ret;
++
++	/* Consume old completion flags before starting a new operation. */
++	ret = bcm_fm_read(fm, FM_FLAGS, &flags, 2);
++	if (ret)
++		return ret;
++	ret = bcm_fm_write(fm, FM_FREQ, khz - 64000, 2);
++	if (ret)
++		return ret;
++	if (seek) {
++		/* Broadcom search RSSI threshold 20, bit 7 selects upward. */
++		ret = bcm_fm_write(fm, FM_SEARCH, 20 | (upward ? BIT(7) : 0), 1);
++		if (ret)
++			return ret;
++	}
++	ret = bcm_fm_write(fm, FM_TUNE, seek ? 2 : 1, 1);
++	if (ret)
++		return ret;
++	deadline = jiffies + msecs_to_jiffies(seek ? 10000 : 3000);
++	do {
++		msleep(20);
++		ret = bcm_fm_read(fm, FM_FLAGS, &flags, 2);
++		if (ret)
++			return ret;
++		if (flags & BIT(1))
++			return -ENODATA;
++		if (flags & BIT(0)) {
++			kfifo_reset(&fm->rds);
++			/* Discard RDS blocks belonging to the previous station. */
++			return bcm_fm_write(fm, FM_RDS_CTL, BIT(1), 1);
++		}
++	} while (time_before(jiffies, deadline));
++	/* Stop an unfinished search rather than leave it running after timeout. */
++	bcm_fm_write(fm, FM_TUNE, 0, 1);
++	return -ETIMEDOUT;
++}
++
++static int bcm_fm_s_ctrl(struct v4l2_ctrl *ctrl)
++{
++	struct bcm_fm *fm = container_of(ctrl->handler, struct bcm_fm, ctrls);
++	u16 audio;
++	int ret;
++
++	if (!fm->users)
++		return 0;
++	ret = bcm_fm_read(fm, FM_AUDIO, &audio, 2);
++	if (ret)
++		return ret;
++	switch (ctrl->id) {
++	case V4L2_CID_AUDIO_MUTE:
++		audio = (audio & ~FM_MUTED) | (ctrl->val ? FM_MUTED : 0);
++		break;
++	case V4L2_CID_TUNE_DEEMPHASIS:
++		audio = (audio & ~FM_DEEMPH75) |
++			(ctrl->val == V4L2_DEEMPHASIS_75_uS ? FM_DEEMPH75 : 0);
++		break;
++	default:
++		return -EINVAL;
++	}
++	/* Preserve the board's audio routing bits; FM control is not an ALSA path. */
++	return bcm_fm_write(fm, FM_AUDIO, audio, 2);
++}
++
++static const struct v4l2_ctrl_ops bcm_fm_ctrl_ops = {
++	.s_ctrl = bcm_fm_s_ctrl,
++};
++
++static int bcm_fm_querycap(struct file *file, void *priv,
++			 struct v4l2_capability *cap)
++{
++	strscpy(cap->driver, "bcm4330-fm", sizeof(cap->driver));
++	strscpy(cap->card, "Broadcom BCM4330 FM", sizeof(cap->card));
++	strscpy(cap->bus_info, "platform:bcm4330-fm", sizeof(cap->bus_info));
++	return 0;
++}
++
++static int bcm_fm_g_tuner(struct file *file, void *priv, struct v4l2_tuner *t)
++{
++	struct bcm_fm *fm = video_drvdata(file);
++	u16 rssi, ctl, flags;
++	int ret;
++
++	if (t->index)
++		return -EINVAL;
++	ret = bcm_fm_read(fm, FM_RSSI, &rssi, 1);
++	if (ret)
++		return ret;
++	ret = bcm_fm_read(fm, FM_CTRL, &ctl, 1);
++	if (ret)
++		return ret;
++	strscpy(t->name, "FM", sizeof(t->name));
++	t->type = V4L2_TUNER_RADIO;
++	t->capability = V4L2_TUNER_CAP_LOW | V4L2_TUNER_CAP_STEREO |
++		V4L2_TUNER_CAP_RDS | V4L2_TUNER_CAP_RDS_BLOCK_IO |
++		V4L2_TUNER_CAP_HWSEEK_BOUNDED;
++	t->rangelow = FM_MIN_KHZ * 16;
++	t->rangehigh = FM_MAX_KHZ * 16;
++	/* BCM4330 reports signed dBm. Scale -120..-20 dBm to the V4L2 range. */
++	t->signal = clamp_t(int, (s8)rssi + 120, 0, 100) * 65535 / 100;
++	t->audmode = ctl & (BIT(1) | BIT(2)) ? V4L2_TUNER_MODE_STEREO : V4L2_TUNER_MODE_MONO;
++	ret = bcm_fm_read(fm, FM_FLAGS, &flags, 2);
++	if (ret)
++		return ret;
++	t->rxsubchans = flags & BIT(6) ? V4L2_TUNER_SUB_STEREO :
++		V4L2_TUNER_SUB_MONO;
++	return 0;
++}
++
++static int bcm_fm_s_tuner(struct file *file, void *priv, const struct v4l2_tuner *t)
++{
++	struct bcm_fm *fm = video_drvdata(file);
++	u16 ctl;
++	int ret;
++
++	if (t->index)
++		return -EINVAL;
++	ret = bcm_fm_read(fm, FM_CTRL, &ctl, 1);
++	if (ret)
++		return ret;
++	ctl &= ~(BIT(1) | BIT(2) | BIT(3));
++	ctl |= t->audmode == V4L2_TUNER_MODE_MONO ? 0 : BIT(1);
++	return bcm_fm_write(fm, FM_CTRL, ctl, 1);
++}
++
++static int bcm_fm_g_frequency(struct file *file, void *priv, struct v4l2_frequency *f)
++{
++	u32 khz;
++	int ret;
++
++	if (f->tuner)
++		return -EINVAL;
++	f->type = V4L2_TUNER_RADIO;
++	ret = bcm_fm_frequency(video_drvdata(file), &khz);
++	if (!ret)
++		f->frequency = khz * 16;
++	return ret;
++}
++
++static int bcm_fm_s_frequency(struct file *file, void *priv,
++			    const struct v4l2_frequency *f)
++{
++	u32 khz = DIV_ROUND_CLOSEST(clamp_t(u32, f->frequency,
++		FM_MIN_KHZ * 16, FM_MAX_KHZ * 16), 16);
++
++	if (f->tuner || f->type != V4L2_TUNER_RADIO)
++		return -EINVAL;
++	khz = clamp_t(u32, khz, FM_MIN_KHZ, FM_MAX_KHZ);
++	return bcm_fm_tune(video_drvdata(file), khz, false, false);
++}
++
++static int bcm_fm_seek(struct file *file, void *priv, const struct v4l2_hw_freq_seek *s)
++{
++	struct bcm_fm *fm = video_drvdata(file);
++	u32 khz;
++	int ret;
++
++	if (file->f_flags & O_NONBLOCK)
++		return -EWOULDBLOCK;
++	if (s->tuner || s->type != V4L2_TUNER_RADIO || s->wrap_around ||
++	    s->rangelow || s->rangehigh || (s->spacing && s->spacing != 100000))
++		return -EINVAL;
++	ret = bcm_fm_frequency(fm, &khz);
++	if (ret)
++		return ret;
++	ret = bcm_fm_tune(fm, khz, true, s->seek_upward);
++	if (ret)
++		bcm_fm_tune(fm, khz, false, false);
++	return ret;
++}
++
++static void bcm_fm_rds_work(struct work_struct *work)
++{
++	struct bcm_fm *fm = container_of(to_delayed_work(work), struct bcm_fm, rds_work);
++	u8 raw[240];
++	int i, ret;
++
++	mutex_lock(&fm->lock);
++	if (!fm->reading_rds || !fm->users || fm->disconnected)
++		goto out;
++	ret = bcm_fm_reg(fm, FM_RDS, raw, sizeof(raw), true);
++	if (ret < 0) {
++		fm->rds_error = ret;
++		fm->reading_rds = false;
++		wake_up_interruptible(&fm->rds_wait);
++		goto out;
++	}
++	{
++		for (i = 0; i < ret; i += 3) {
++			struct v4l2_rds_data block;
++			u8 type = raw[i] >> 4, quality = (raw[i] >> 2) & 3;
++
++			if (raw[i] == 0x7c && raw[i + 1] == 0xff && raw[i + 2] == 0xff)
++				break;
++			/* Broadcom C' is type 4; V4L2 names it C_ALT. */
++			if (type > V4L2_RDS_BLOCK_C_ALT)
++				continue;
++			block.lsb = raw[i + 2];
++			block.msb = raw[i + 1];
++			block.block = type | (type << 3);
++			if (quality == 3)
++				block.block |= V4L2_RDS_BLOCK_ERROR;
++			else if (quality)
++				block.block |= V4L2_RDS_BLOCK_CORRECTED;
++			kfifo_put(&fm->rds, block);
++		}
++		if (!kfifo_is_empty(&fm->rds))
++			wake_up_interruptible(&fm->rds_wait);
++	}
++	queue_delayed_work(system_freezable_wq, &fm->rds_work, msecs_to_jiffies(100));
++out:
++	mutex_unlock(&fm->lock);
++}
++
++static ssize_t bcm_fm_read_rds(struct file *file, char __user *buf, size_t count,
++			     loff_t *pos)
++{
++	struct bcm_fm *fm = video_drvdata(file);
++	struct v4l2_rds_data block;
++	size_t done = 0;
++	int ret;
++
++	if (count < sizeof(block))
++		return -EINVAL;
++	mutex_lock(&fm->lock);
++	if (fm->disconnected) {
++		mutex_unlock(&fm->lock);
++		return -ENODEV;
++	}
++	if (fm->rds_error) {
++		ret = fm->rds_error;
++		mutex_unlock(&fm->lock);
++		return ret;
++	}
++	if (!fm->reading_rds) {
++		fm->reading_rds = true;
++		queue_delayed_work(system_freezable_wq, &fm->rds_work, 0);
++	}
++	mutex_unlock(&fm->lock);
++	while (count - done >= sizeof(block)) {
++		mutex_lock(&fm->lock);
++		if (fm->disconnected || fm->rds_error) {
++			ret = fm->disconnected ? -ENODEV : fm->rds_error;
++			mutex_unlock(&fm->lock);
++			return done ? done : ret;
++		}
++		ret = kfifo_get(&fm->rds, &block);
++		mutex_unlock(&fm->lock);
++		if (!ret) {
++			if (done)
++				break;
++			if (file->f_flags & O_NONBLOCK)
++				return -EAGAIN;
++			ret = wait_event_interruptible(fm->rds_wait,
++				fm->disconnected || fm->rds_error || !kfifo_is_empty(&fm->rds));
++			if (ret)
++				return ret;
++			continue;
++		}
++		if (copy_to_user(buf + done, &block, sizeof(block)))
++			return done ? done : -EFAULT;
++		done += sizeof(block);
++	}
++	return done;
++}
++
++static __poll_t bcm_fm_poll(struct file *file, struct poll_table_struct *wait)
++{
++	struct bcm_fm *fm = video_drvdata(file);
++	__poll_t mask = v4l2_ctrl_poll(file, wait);
++
++	poll_wait(file, &fm->rds_wait, wait);
++	mutex_lock(&fm->lock);
++	if (fm->disconnected) {
++		mask = EPOLLHUP | EPOLLERR;
++	} else if (fm->rds_error) {
++		mask = EPOLLERR;
++	} else {
++		if (!fm->reading_rds) {
++			fm->reading_rds = true;
++			queue_delayed_work(system_freezable_wq, &fm->rds_work, 0);
++		}
++		if (!kfifo_is_empty(&fm->rds))
++			mask = EPOLLIN | EPOLLRDNORM;
++	}
++	mutex_unlock(&fm->lock);
++	return mask;
++}
++
++static int bcm_fm_open(struct file *file)
++{
++	struct bcm_fm *fm = video_drvdata(file);
++	int ret;
++
++	mutex_lock(&fm->lock);
++	if (fm->disconnected) {
++		ret = -ENODEV;
++		goto out;
++	}
++	ret = v4l2_fh_open(file);
++	if (ret)
++		goto out;
++	if (!fm->users) {
++		fm->rds_error = 0;
++		kfifo_reset(&fm->rds);
++		ret = bcm_fm_write(fm, FM_SYS, 3, 1);
++		if (!ret) {
++			/* Broadcom requires 300 ms after powering the FM core. */
++			msleep(300);
++			ret = bcm_fm_write(fm, FM_RDS_CTL, BIT(1), 1);
++		}
++		if (!ret)
++			ret = bcm_fm_write(fm, FM_RDS_WLINE, 64, 1);
++		if (!ret)
++			ret = bcm_fm_write(fm, FM_STEP, 100, 2);
++		if (!ret)
++			ret = bcm_fm_write(fm, FM_CTRL, BIT(1), 1);
++		if (!ret)
++			ret = bcm_fm_write(fm, FM_MASK, 3, 2);
++		if (ret) {
++			bcm_fm_write(fm, FM_SYS, 0, 1);
++			v4l2_fh_release(file);
++			goto out;
++		}
++	}
++	fm->users++;
++	ret = v4l2_ctrl_handler_setup(&fm->ctrls);
++	if (ret) {
++		if (!--fm->users)
++			bcm_fm_write(fm, FM_SYS, 0, 1);
++		v4l2_fh_release(file);
++	}
++out:
++	mutex_unlock(&fm->lock);
++	return ret;
++}
++
++static int bcm_fm_close(struct file *file)
++{
++	struct bcm_fm *fm = video_drvdata(file);
++
++	mutex_lock(&fm->lock);
++	if (!--fm->users) {
++		fm->reading_rds = false;
++		bcm_fm_write(fm, FM_SYS, 0, 1);
++	}
++	mutex_unlock(&fm->lock);
++	return v4l2_fh_release(file);
++}
++
++static void bcm_fm_release(struct video_device *vdev)
++{
++	struct bcm_fm *fm = container_of(vdev, struct bcm_fm, vdev);
++
++	cancel_delayed_work_sync(&fm->rds_work);
++	v4l2_ctrl_handler_free(&fm->ctrls);
++	v4l2_device_unregister(&fm->v4l2);
++	hci_dev_put(fm->hdev);
++	kfree(fm);
++}
++
++static const struct v4l2_file_operations bcm_fm_fops = {
++	.owner = THIS_MODULE,
++	.open = bcm_fm_open,
++	.release = bcm_fm_close,
++	.unlocked_ioctl = video_ioctl2,
++	.read = bcm_fm_read_rds,
++	.poll = bcm_fm_poll,
++};
++
++static const struct v4l2_ioctl_ops bcm_fm_ioctls = {
++	.vidioc_querycap = bcm_fm_querycap,
++	.vidioc_g_tuner = bcm_fm_g_tuner,
++	.vidioc_s_tuner = bcm_fm_s_tuner,
++	.vidioc_g_frequency = bcm_fm_g_frequency,
++	.vidioc_s_frequency = bcm_fm_s_frequency,
++	.vidioc_s_hw_freq_seek = bcm_fm_seek,
++	.vidioc_subscribe_event = v4l2_ctrl_subscribe_event,
++	.vidioc_unsubscribe_event = v4l2_event_unsubscribe,
++};
++
++static int bcm_fm_probe(struct platform_device *pdev)
++{
++	struct hci_dev **hdev = dev_get_platdata(&pdev->dev);
++	struct bcm_fm *fm;
++	int ret;
++
++	if (!hdev || !*hdev)
++		return -EINVAL;
++	fm = kzalloc_obj(*fm);
++	if (!fm)
++		return -ENOMEM;
++	fm->hdev = hci_dev_hold(*hdev);
++	mutex_init(&fm->lock);
++	init_waitqueue_head(&fm->rds_wait);
++	INIT_KFIFO(fm->rds);
++	INIT_DELAYED_WORK(&fm->rds_work, bcm_fm_rds_work);
++	ret = v4l2_device_register(&pdev->dev, &fm->v4l2);
++	if (ret)
++		goto free;
++	v4l2_ctrl_handler_init(&fm->ctrls, 2);
++	v4l2_ctrl_new_std(&fm->ctrls, &bcm_fm_ctrl_ops, V4L2_CID_AUDIO_MUTE, 0, 1, 1, 1);
++	v4l2_ctrl_new_std_menu(&fm->ctrls, &bcm_fm_ctrl_ops,
++		V4L2_CID_TUNE_DEEMPHASIS, V4L2_DEEMPHASIS_75_uS, BIT(V4L2_DEEMPHASIS_DISABLED),
++		V4L2_DEEMPHASIS_50_uS);
++	ret = fm->ctrls.error;
++	if (ret)
++		goto ctrls;
++	fm->v4l2.ctrl_handler = &fm->ctrls;
++	strscpy(fm->vdev.name, "BCM4330 FM", sizeof(fm->vdev.name));
++	fm->vdev.v4l2_dev = &fm->v4l2;
++	fm->vdev.fops = &bcm_fm_fops;
++	fm->vdev.ioctl_ops = &bcm_fm_ioctls;
++	fm->vdev.release = bcm_fm_release;
++	fm->vdev.lock = &fm->lock;
++	fm->vdev.device_caps = V4L2_CAP_RADIO | V4L2_CAP_TUNER |
++		V4L2_CAP_HW_FREQ_SEEK | V4L2_CAP_RDS_CAPTURE | V4L2_CAP_READWRITE;
++	video_set_drvdata(&fm->vdev, fm);
++	ret = video_register_device(&fm->vdev, VFL_TYPE_RADIO, -1);
++	if (ret)
++		goto ctrls;
++	platform_set_drvdata(pdev, fm);
++	return 0;
++ctrls:
++	v4l2_ctrl_handler_free(&fm->ctrls);
++	v4l2_device_unregister(&fm->v4l2);
++free:
++	hci_dev_put(fm->hdev);
++	kfree(fm);
++	return ret;
++}
++
++static void bcm_fm_remove(struct platform_device *pdev)
++{
++	struct bcm_fm *fm = platform_get_drvdata(pdev);
++
++	mutex_lock(&fm->lock);
++	if (fm->users)
++		bcm_fm_write(fm, FM_SYS, 0, 1);
++	fm->disconnected = true;
++	fm->reading_rds = false;
++	mutex_unlock(&fm->lock);
++	wake_up_interruptible(&fm->rds_wait);
++	cancel_delayed_work_sync(&fm->rds_work);
++	video_unregister_device(&fm->vdev);
++}
++
++static struct platform_driver bcm_fm_driver = {
++	.probe = bcm_fm_probe,
++	.remove = bcm_fm_remove,
++	.driver.name = "bcm4330-fm",
++};
++module_platform_driver(bcm_fm_driver);
++MODULE_ALIAS("platform:bcm4330-fm");
++MODULE_DESCRIPTION("Broadcom BCM4330 V4L2 FM receiver over Bluetooth HCI");
++MODULE_LICENSE("GPL");

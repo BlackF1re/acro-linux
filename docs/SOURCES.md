@@ -125,3 +125,10 @@ items.
 | Source | Revision / path | Extracted information | Use and confidence |
 | --- | --- | --- | --- |
 | KXP JB-MR1 TWRP kernel | Local checkout `ade5c5b9b348162546c26e29a0218a1893351212`, branch `jb-mr1`: `drivers/video/msm/mipi_dsi_host.c` and `drivers/video/msm/mipi_r63306_panels/mipi_tmd_video_wxga_mdv22.c` | The working host treats a missing command-DMA completion as nonfatal and returns the packet length; MDV22 DDB ID00 maps to the same long controller tables as ID01. A working-image register dump independently shows sticky `TRIG_DMA=1`. | `HISTORICAL_SOURCE` joined to `VERIFIED_DEVICE` register evidence; used for the scoped MSM8x60 completion-timeout compatibility rule and to retain the long panel sequence. |
+
+## BCM4330 FM — checked 2026-10-09
+
+[FM.md](FM.md) records the exact Sony and Broadcom revisions, native HCI
+protocol, physical tuning evidence and the separate missing MI2S/audio path.
+Hikari uses BCM4330 FM; the Sony `msm_fm` misc device is an audio interface
+and must not be used to identify the tuner as Qualcomm/Marimba.

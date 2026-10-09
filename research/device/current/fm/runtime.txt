@@ -1,0 +1,5 @@
+7.3.0-rc1-hikari-system-wake2-20261009-gf83137430dc0-dirty
+317c9ebedfa39b1686cc1e7f7b00d71fc7fc068b1ce0e14bef9f41ba7d3ee8a1  /run/hikari-fm-test/radio-bcm4330.ko
+0c1b7e467a1149b80e3bc646ad728100576f7fefc403c8905b2cd923b0e73e14  /run/hikari-fm-test/hci_uart.ko
+--- no soundcards ---
+active
