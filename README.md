@@ -11,7 +11,7 @@
 
 # Xperia acro S · Native Linux
 
-A **mainline-oriented Linux port** for the **Sony Xperia acro S LT26w** (\`Hikari\`): Qualcomm **MSM8260**, dual-core **Scorpion**, **Adreno 220**, Debian **armhf**, and hardware-accelerated **Phosh**. Android userspace and libhybris are not used for the native graphics path.
+A **mainline-oriented Linux port** for the **Sony Xperia acro S LT26w** (`Hikari`): Qualcomm **MSM8260**, dual-core **Scorpion**, **Adreno 220**, Debian **armhf**, and hardware-accelerated **Phosh**. Android userspace and libhybris are not used for the native graphics path.
 
 > [!IMPORTANT]
 > **Hardware bring-up, not a daily-driver phone.** Boot, display, touch, GPU and several peripherals have passed physical tests. Telephony, audio, cameras and full suspend/recovery reliability have **not**. The pinned source, running SYSTEM image and experimental test bundles are not interchangeable evidence.
@@ -37,21 +37,21 @@ A **mainline-oriented Linux port** for the **Sony Xperia acro S LT26w** (\`Hikar
 
 ## Boot design
 
-\`\`\`mermaid
+```mermaid
 flowchart LR
   S["Sony S1Boot"] --> B["Preserved Linux BOOT<br/>USB console + recovery"]
   B -->|"hikari-system / kexec"| M["microSD SYSTEM bundle"]
   M --> D["Debian armhf"]
   D --> G["DRM/MSM + Freedreno<br/>Phosh GLES2"]
   D -->|"reboot (not SMP kexec)"| S
-\`\`\`
+```
 
 > [!WARNING]
 > **Do not rewrite the known-good BOOT or kexec from SMP SYSTEM.** Test kernels belong in separate microSD SYSTEM bundles. Keep rollback material intact; see [boot architecture](docs/BOOT.md) and [recovery gates](docs/RECOVERY.md).
 
 ## Build & verify
 
-\`\`\`sh
+```sh
 # Create a new source checkout; the materializer refuses to reset an existing tree.
 scripts/materialize-hikari-kernel.sh /path/to/new/linux-hikari
 
@@ -60,7 +60,7 @@ KERNEL_SRC=/path/to/new/linux-hikari scripts/build-hikari-debian-kernel.sh
 
 # Repository tests (not physical hardware acceptance).
 python3 -m unittest discover -s tests
-\`\`\`
+```
 
 **[Full build / packaging / transfer →](docs/BUILD.md)** · **[Physical test checklist →](docs/TESTING.md)**
 
@@ -84,12 +84,12 @@ python3 -m unittest discover -s tests
 
 | Path | Purpose |
 |---|---|
-| [\`kernel/\`](kernel/) | Pinned Linux base, consolidated subsystem patches, DTS, kernel configs |
-| [\`debian/\`](debian/), [\`distro/\`](distro/), [\`ui/\`](ui/) | Userspace configuration, Mesa fixes, mobile UI |
-| [\`initramfs/\`](initramfs/) | Independent BOOT and SYSTEM stages |
-| [\`scripts/\`](scripts/), [\`tools/\`](tools/), [\`tests/\`](tests/) | Reconstruction, build, transfer, diagnostics and checks |
-| [\`status/\`](status/), [\`docs/\`](docs/) | Machine-readable acceptance and maintained explanations |
-| [\`research/\`](research/) | Historical experiments and device evidence; not automatic build inputs |
+| [`kernel/`](kernel/) | Pinned Linux base, consolidated subsystem patches, DTS, kernel configs |
+| [`debian/`](debian/), [`distro/`](distro/), [`ui/`](ui/) | Userspace configuration, Mesa fixes, mobile UI |
+| [`initramfs/`](initramfs/) | Independent BOOT and SYSTEM stages |
+| [`scripts/`](scripts/), [`tools/`](tools/), [`tests/`](tests/) | Reconstruction, build, transfer, diagnostics and checks |
+| [`status/`](status/), [`docs/`](docs/) | Machine-readable acceptance and maintained explanations |
+| [`research/`](research/) | Historical experiments and device evidence; not automatic build inputs |
 
 Maintained patches are grouped by subsystem for reproducible reconstruction. Future upstream submissions will need smaller logical series. The original Sony/Android BSP is a **hardware reference**, not the runtime base.
 

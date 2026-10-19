@@ -1,5 +1,17 @@
 # Power management
 
+> [!IMPORTANT]
+> **Latest bounded sleep evidence: 2026-10-09.** Several RTC, power-button and screen-blank-triggered CPU/RPM collapse-resume runs passed, including tested high-depth levels. **This does not establish complete suspend/recovery reliability**: some peripheral wake sources were untested, Wi-Fi was blocked for parts of acceptance, MDP underruns occurred, and suspend current is not yet measured.
+
+| Evidence tier | Result |
+|---|---|
+| **Booted 2026-10-04 SYSTEM** | No cpufreq policy; DVFS source support is not runtime proof |
+| **Sleep-final / levels5 bundles** | Confirmed RTC, power-key and screen-triggered resume in bounded trials |
+| **Wake2 bundle** | Three level-7 RTC cycles; proximity wake enabled, actual edge wake not proven |
+| **Still open** | Peripheral completeness, all wake sources, endurance, minimum current |
+
+See [current status](STATUS.md) and the dated test sections below for the exact kernel/bundle, acceptance conditions and limitations.
+
 ## Current implementation
 
 The native charging/gauge policy is described in [CHARGING.md](CHARGING.md).

@@ -1,5 +1,8 @@
 # Debian SYSTEM
 
+> [!CAUTION]
+> **Development-only authentication:** the checked SSH configuration allows root login with an **empty password**. It is not safe on an untrusted network. Disable empty-password root SSH before normal deployment; provisioned public-key login is available.
+
 The target is Debian trixie `armhf` on the microSD filesystem labelled
 `HIKARI_ROOT`. Debian supplies userspace and packages; the repository's
 kernel patches, DT and exact matching modules remain the BSP.

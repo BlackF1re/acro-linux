@@ -7,12 +7,12 @@
 
 | Evidence | What it establishes |
 |---|---|
-| **Connected SYSTEM — 2026-10-04** | \`7.3.0-rc1-hikari-system-ga701a6f7854a-dirty\`, hardware GLES2 Phosh on FD220 |
+| **Connected SYSTEM — 2026-10-04** | `7.3.0-rc1-hikari-system-ga701a6f7854a-dirty`, hardware GLES2 Phosh on FD220 |
 | **Pinned project source** | Linux **7.3-rc1 line** + maintained subsystem patch series; may differ from the booted image |
-| **GPU userspace** | Tested Mesa under \`/opt/hikari-mesa-a220\`; not Android/libhybris |
+| **GPU userspace** | Tested Mesa under `/opt/hikari-mesa-a220`; not Android/libhybris |
 | **Power experiments — 2026-10-08/09** | Repeated CPU/RPM collapse and RTC/power-key/screen-blank resumes on designated SYSTEM bundles |
 
-The 2026-10-04 running kernel **exposed no cpufreq policy**, despite CPU/L2 DVFS support in maintained source. Its active Phosh used \`WLR_RENDERER=gles2\` with matching EGL/DRI/GBM paths and no logged GPU/MMU fault in that audited boot. Neither observation qualifies untested features.
+The 2026-10-04 running kernel **exposed no cpufreq policy**, despite CPU/L2 DVFS support in maintained source. Its active Phosh used `WLR_RENDERER=gles2` with matching EGL/DRI/GBM paths and no logged GPU/MMU fault in that audited boot. Neither observation qualifies untested features.
 
 ## Acceptance overview
 

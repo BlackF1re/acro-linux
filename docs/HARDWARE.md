@@ -1,5 +1,8 @@
 # Hikari hardware
 
+> [!NOTE]
+> The detailed inventory below is a **2026-10-04/05 snapshot**. Newer 2026-10-09 bounded CPU/RPM sleep tests are recorded in [POWER.md](POWER.md); they do not automatically upgrade every old hardware row to “Working”.
+
 Sony Xperia acro S **LT26w**, codename **Hikari**, Sony **Fuji** platform.
 This page brings together the identified parts, board wiring, memory layout
 and physical test results. Detailed logs stay in the linked research records.

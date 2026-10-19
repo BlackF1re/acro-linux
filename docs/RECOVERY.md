@@ -11,21 +11,21 @@
 | Sony p3 | Confirmed legacy BOOT role; controller and packaged recovery ramdisk inspected offline |
 | TWRP | **TWRP 2.6.3.0 physically reached**; where it resides and whether it survives p3 replacement remain **unknown** |
 | Recovery through p11 | p3 controller references an ELF on **p11**; the actual p11 payload was **not separately inspected** |
-| Bootloader unlock state | Fastboot \`secure: no\` observed, but legacy \`unlocked\` value empty; not complete attestation |
+| Bootloader unlock state | Fastboot `secure: no` observed, but legacy `unlocked` value empty; not complete attestation |
 | Generic p3 restore | **Not established as a validated independent route** |
 
 A private image may contain TA-related, radio/NV or calibration data. Raw partitions, sensitive payloads, firmware and identifiers are **not** committed.
 
 ## Current safe workflow
 
-\`\`\`mermaid
+```mermaid
 flowchart TD
   A["Known-good BOOT"] --> B["Experiment on microSD SYSTEM"]
   B --> C{"Test result"}
   C -->|pass| D["Record build + physical evidence"]
   C -->|fail| E["Hardware reboot → BOOT"]
   E --> F["Preserve logs / restore known-good SD bundle"]
-\`\`\`
+```
 
 - Keep BOOT and the previous working SYSTEM bundle unchanged.
 - **Never** kexec from running SMP SYSTEM into the UP/BOOT environment.
@@ -34,11 +34,11 @@ flowchart TD
 
 ## Original p3 recovery selector
 
-Offline inspection of the confirmed p3 \`bootrec\` controller established:
+Offline inspection of the confirmed p3 `bootrec` controller established:
 
-- It listens to \`/dev/input/event0\` for a **fresh event** during a **three-second** window.
+- It listens to `/dev/input/event0` for a **fresh event** during a **three-second** window.
 - Device/input history maps that event to **Volume Up**.
-- A recovery choice reads an ELF from \`mmcblk0p11\` and starts its ramdisk \`/init\`; the p3-packaged TeamWin ramdisk is replaced in this path.
+- A recovery choice reads an ELF from `mmcblk0p11` and starts its ramdisk `/init`; the p3-packaged TeamWin ramdisk is replaced in this path.
 - The expected key operation is to **repeat Volume Up** across the first 3–5 seconds, not merely hold it before the event device opens.
 
 > [!WARNING]
@@ -49,11 +49,11 @@ Read [sanitized p3 bootrec](../research/device/current/boot/p3-bootrec-sanitized
 <details>
 <summary><strong>Read-only research boundaries</strong></summary>
 
-The read-only legacy investigation saw \`/fstab.semc\` and \`/init.semc.rc\`, but none of the checked conventional Android recovery files. Their absence cannot exclude other Sony FOTA paths.
+The read-only legacy investigation saw `/fstab.semc` and `/init.semc.rc`, but none of the checked conventional Android recovery files. Their absence cannot exclude other Sony FOTA paths.
 
 Private full-user-area backup physically covers p1–p15, but their **contents were not individually interpreted**; no claim is made about unobserved partition roles. p11's exact payload and recovery independence remain unverified.
 
-Android \`ro.bootloader=unknown\` does not establish lock state. Owner-supplied history and fastboot observations are relevant but not complete authorization.
+Android `ro.bootloader=unknown` does not establish lock state. Owner-supplied history and fastboot observations are relevant but not complete authorization.
 
 </details>
 
@@ -71,4 +71,4 @@ Android \`ro.bootloader=unknown\` does not establish lock state. Owner-supplied 
 
 ## Crash logging
 
-Legacy dmesg records a 128 KiB \`ram_console\` allocation at \`0x7ffe0000\`. This does **not** prove a modern kernel can reuse that memory unchanged. Verify pstore/ramoops and bootloader retention before changing reservations; never assume an address is safe.
+Legacy dmesg records a 128 KiB `ram_console` allocation at `0x7ffe0000`. This does **not** prove a modern kernel can reuse that memory unchanged. Verify pstore/ramoops and bootloader retention before changing reservations; never assume an address is safe.
