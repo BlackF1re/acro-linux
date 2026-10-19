@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 260" width="1040" height="260" role="img" aria-labelledby="title desc">
+<title id="title">Xperia acro S — native Linux</title>
+<desc id="desc">Dark blue project banner showing a stylized Xperia phone with Linux terminal and the Hikari project title.</desc>
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#08121f"/><stop offset="0.6" stop-color="#112c40"/><stop offset="1" stop-color="#0f2629"/></linearGradient><linearGradient id="lcd" x2="1" y2="1"><stop stop-color="#0c2638"/><stop offset="1" stop-color="#06423c"/></linearGradient></defs>
+<rect width="1040" height="260" rx="20" fill="url(#bg)"/>
+<g stroke="#7dd3fc" opacity=".12" stroke-width="1"><path d="M0 52H1040M0 104H1040M0 156H1040M0 208H1040M104 0V260M208 0V260M312 0V260M416 0V260M520 0V260M624 0V260M728 0V260M832 0V260M936 0V260"/></g>
+<g transform="translate(95 15) rotate(-5 80 116)">
+  <rect x="0" y="0" width="170" height="230" rx="22" fill="#334155" stroke="#94a3b8" stroke-width="1.5"/>
+  <rect x="5" y="5" width="160" height="220" rx="19" fill="#070f1c"/>
+  <rect x="15" y="31" width="140" height="172" rx="3" fill="url(#lcd)" stroke="#226b73" stroke-width="1.5"/>
+  <rect x="69" y="14" width="33" height="3" rx="1.5" fill="#64748b"/>
+  <text x="23" y="62" font-size="12" fill="#7dd3fc" font-family="monospace">$ uname -m</text>
+  <text x="23" y="78" font-size="12" fill="#d1fae5" font-family="monospace">armv7l</text>
+  <text x="23" y="103" font-size="11" fill="#7dd3fc" font-family="monospace">$ echo HIKARI</text>
+  <text x="23" y="119" font-size="14" font-weight="700" fill="#5eead4" font-family="monospace">SYSTEM</text>
+  <path d="M23 175H43L50 158L60 187L69 170H90L98 160L109 176H143" stroke="#2dd4bf" stroke-width="2.5" fill="none" stroke-linejoin="round"/>
+  <circle cx="85" cy="215" r="4" fill="#475569"/>
+</g>
+<g font-family="DejaVu Sans,Arial,sans-serif">
+<text x="320" y="87" font-size="44" font-weight="700" fill="#f8fafc">Xperia acro S</text>
+<text x="322" y="128" font-size="28" font-weight="600" fill="#93c5fd">Hikari · Native Linux</text>
+<text x="322" y="165" font-size="18" fill="#cbd5e1">MSM8260 / Adreno 220 / Debian armhf</text>
+<rect x="321" y="189" width="187" height="31" rx="15.5" fill="#134e4a" stroke="#2dd4bf" stroke-opacity=".5"/>
+<text x="414" y="210" text-anchor="middle" font-size="13" font-weight="700" fill="#99f6e4">HARDWARE BRING-UP</text>
+<rect x="518" y="189" width="106" height="31" rx="15.5" fill="#172b4f" stroke="#60a5fa" stroke-opacity=".6"/>
+<text x="571" y="210" text-anchor="middle" font-size="13" font-weight="700" fill="#bfdbfe">ARMv7</text>
+</g></svg>

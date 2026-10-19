@@ -1,59 +1,69 @@
-# Build and deployment
+# Build & deployment
 
-## Canonical paths
+> [!IMPORTANT]
+> **Build does not mean flash.** Keep the original BOOT and verified SYSTEM recovery bundle unchanged. New kernels are deployed as independent **microSD SYSTEM** candidates.
 
-Use one maintained source/build set; do not create timestamped copies:
+## Paths in the maintained workspace
 
-- Kernel source: `/home/paul/xperia/src/linux-hikari-current`
-- Kernel objects: `/home/paul/xperia/build/linux-hikari-current`
-- Debian rootfs: `/home/paul/xperia/build/hikari-rootfs-current`
-- initramfs: `/home/paul/xperia/build/hikari-root-initramfs-current`
-- release artifacts: `/home/paul/xperia/build/hikari-debian-current`
-- BusyBox source/build: `/home/paul/xperia/src/busybox`,
-  `/home/paul/xperia/build/busybox-hikari-current`
+| Artifact | Path |
+|---|---|
+| Kernel source | \`/home/paul/xperia/src/linux-hikari-current\` |
+| Kernel objects | \`/home/paul/xperia/build/linux-hikari-current\` |
+| Debian rootfs | \`/home/paul/xperia/build/hikari-rootfs-current\` |
+| Root initramfs | \`/home/paul/xperia/build/hikari-root-initramfs-current\` |
+| Release artifacts | \`/home/paul/xperia/build/hikari-debian-current\` |
+| BusyBox source / build | \`/home/paul/xperia/src/busybox\` · \`/home/paul/xperia/build/busybox-hikari-current\` |
 
-Production kernel source is pinned upstream Linux plus
-[`../kernel/patches/series`](../kernel/patches/series), with its revision in
-[`../kernel/source.lock`](../kernel/source.lock). OpenSEMC is a historical
-hardware reference and is not part of this build.
+These are **owner-workspace paths**, not paths required on every host. Use explicit arguments for a different source checkout. See [Workspace](WORKSPACE.md).
 
-## Build
+## Reconstruct and compile
 
-```sh
+\`\`\`sh
+# Materialize a NEW source directory from pinned upstream + project patches.
+scripts/materialize-hikari-kernel.sh /path/to/new/linux-hikari
+
+# Compile the verified prepared tree.
+KERNEL_SRC=/path/to/new/linux-hikari scripts/build-hikari-debian-kernel.sh
+
+# Optional local test suite (not a physical hardware test).
+python3 -m unittest discover -s tests
+\`\`\`
+
+The materializer refuses to reset an existing tree. The pinned base, patch order and exact source identity are in [\`kernel/source.lock\`](../kernel/source.lock) and [\`kernel/patches/series\`](../kernel/patches/series). Sony/OpenSEMC trees are research references, **not** the production base.
+
+## Assemble a SYSTEM
+
+\`\`\`sh
 scripts/build-hikari-debian-rootfs.sh
 scripts/build-hikari-root-initramfs.sh
 scripts/build-hikari-debian-kernel.sh
 scripts/package-hikari-system-update.sh
-```
+\`\`\`
 
-To create a new source tree, materialize into a new path and pass it explicitly:
+| Artifact | When needed |
+|---|---|
+| SYSTEM bundle | Kernel, DTB, initramfs and **matching** modules |
+| Rootfs stream | Debian base / package / system configuration changes |
+| Single module | \`scripts/build-hikari-module.sh DRIVER_DIR\` — **only** when source/ABI constraints allow |
 
-```sh
-scripts/materialize-hikari-kernel.sh /tmp/linux-hikari
-KERNEL_SRC=/tmp/linux-hikari scripts/build-hikari-debian-kernel.sh
-```
+> [!NOTE]
+> Built-in kernel code, device tree and ABI changes need an appropriately matched SYSTEM boot. Do not mix a newly built kernel with modules from another release.
 
-The kernel helper verifies the complete prepared source tree before building.
-Build outputs and generated images stay outside the repository. A leaf module
-can be rebuilt with `scripts/build-hikari-module.sh DRIVER_DIR`; built-in code,
-DT or ABI changes require a SYSTEM reboot.
+## Transfer and acceptance
 
-## Recovery and deployment
-
-The immutable BOOT loads SYSTEM bundles from microSD through kexec. Keep the
-known-good bundle and recovery files intact. Test updates only through the
-running BOOT transfer path; do not flash or replace BOOT during ordinary
-development. Follow [BOOT.md](BOOT.md), [RECOVERY.md](RECOVERY.md) and
-[TESTING.md](TESTING.md), and verify artifact hashes before a boot test.
-
-```sh
+\`\`\`sh
+# Operate only through the established BOOT USB transfer path.
 scripts/send-hikari-system-update.sh /dev/ttyACM0
 scripts/send-hikari-rootfs-update.sh /dev/ttyACM0
+
+# Then run checks appropriate to the selected target/runtime.
 scripts/check-hikari-debian.sh
 git diff --check
-```
+\`\`\`
 
-The system update includes zImage, DTB, initramfs, kernel release and matching
-modules. The rootfs updater uses a temporary compressed stream. Do not keep
-duplicate rootfs, Mesa source or candidate-build trees after their result has
-been recorded in the relevant subsystem documentation.
+The transfer path stages received artifacts and verifies hashes. Preserve the previously working SD bundle; transfer success alone does **not** establish a working desktop.
+
+**Next:** [Boot architecture](BOOT.md) · [Recovery gate](RECOVERY.md) · [Physical acceptance](TESTING.md)
+
+> [!CAUTION]
+> Never flash BOOT, replace the known-good bundle, kexec directly from SMP SYSTEM, or treat the build scripts as authorization to alter phone partitions.

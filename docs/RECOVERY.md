@@ -1,100 +1,74 @@
-# Recovery and experimental-boot safety
+# Recovery & destructive-operation safety
 
-## Current position
+> [!CAUTION]
+> **A reachable recovery menu is not a verified independent rollback path.** The current BOOT / p3 is the project's recovery anchor; ordinary development must not overwrite it.
 
-The physical-device work was read-only. No external recovery-partition
-payload, bootloader-state payload, or sensitive partition payload has been
-separately inspected, parsed, interpreted, extracted, exposed, or committed.
-Offline p3 analysis did extract its non-sensitive bootrec controller and the
-packaged recovery ramdisk solely to characterize the recovery path; it did not
-inspect p11. Later C2 work sequentially read the complete accessible
-`/dev/block/mmcblk0` user area into private recovery media, so p1--p15 (including potentially
-TA-related, radio/NV, or calibration-bearing bytes) are physically covered by
-that private stream.  The legacy kernel did not expose eMMC boot0, boot1, or
-RPMB nodes; those areas are not covered. The recovery *environment* is
-reachable, but its storage layout and suitability as an independent rollback
-route were not established by that capture.
+## What is actually established?
 
-A follow-up read-only check found the legacy `/fstab.semc` and
-`/init.semc.rc`, but no `/system/etc/recovery.fstab`,
-`/system/etc/install-recovery.sh`, `/system/recovery-from-boot.p`,
-`/recovery.fstab`, or `/cache/recovery/command` in the running system.  This is
-evidence only that those common Android recovery artifacts are absent from the
-checked paths; it neither proves nor rules out a Sony FOTAKernel-style route,
-a separate recovery partition, or recovery code embedded in another boot path.
-One owner-approved, non-destructive recovery entry has now been observed. It
-is **TWRP 2.6.3.0**, directly identified by its recovery binary and runtime
-log; `ro.twrp.boot=1` was also present. See the sanitized [recovery
-characterization](../research/device/current/boot/recovery-characterization.md).
-The older Android-path check remains useful negative evidence only.
+| Evidence | Status / limit |
+|---|---|
+| eMMC user-area backup | Complete accessible user area was read to **private** recovery media; **boot0/boot1/RPMB not covered** |
+| Sony p3 | Confirmed legacy BOOT role; controller and packaged recovery ramdisk inspected offline |
+| TWRP | **TWRP 2.6.3.0 physically reached**; where it resides and whether it survives p3 replacement remain **unknown** |
+| Recovery through p11 | p3 controller references an ELF on **p11**; the actual p11 payload was **not separately inspected** |
+| Bootloader unlock state | Fastboot \`secure: no\` observed, but legacy \`unlocked\` value empty; not complete attestation |
+| Generic p3 restore | **Not established as a validated independent route** |
 
-The known partition-role evidence is intentionally narrow: p3 is referenced as
-legacy `/boot`; p1 has a legacy `tad` reference; p10, p12–p15 have the roles
-documented in [PARTITIONS.md](PARTITIONS.md).  All other unconfirmed roles are
-UNKNOWN.  This is not enough to authorize any write.
+A private image may contain TA-related, radio/NV or calibration data. Raw partitions, sensitive payloads, firmware and identifiers are **not** committed.
 
-The running Android property `ro.bootloader=unknown` is not a lock-state
-attestation. A later physical fastboot session did observe `secure: no`, but
-the legacy S1Boot `unlocked` variable is empty. Owner-provided unlock history
-is consistent evidence, not a replacement for a standard attestation.
+## Current safe workflow
 
-Offline analysis of the confirmed p3 image shows a bootrec controller in its
-ramdisk. On a recovery decision it reads an ELF from `mmcblk0p11`, extracts its
-ramdisk, and executes that ramdisk's `/init`. p3 also contains a packaged
-TeamWin recovery ramdisk, but the controller explicitly replaces it from p11
-on this path. p11 itself was not read or extracted. This proves an external
-FOTA/recovery-payload reference, not the current p11 payload's identity, a
-separate recovery partition, or a route independent of p3. See the
-[sanitized p3 bootrec evidence](../research/device/current/boot/p3-bootrec-sanitized.txt).
+\`\`\`mermaid
+flowchart TD
+  A["Known-good BOOT"] --> B["Experiment on microSD SYSTEM"]
+  B --> C{"Test result"}
+  C -->|pass| D["Record build + physical evidence"]
+  C -->|fail| E["Hardware reboot → BOOT"]
+  E --> F["Preserve logs / restore known-good SD bundle"]
+\`\`\`
 
-## Recovery selection from the original p3
+- Keep BOOT and the previous working SYSTEM bundle unchanged.
+- **Never** kexec from running SMP SYSTEM into the UP/BOOT environment.
+- Use BOOT's USB shell / transfer path for candidate bundles; preserve pstore before discarding evidence.
+- [Boot architecture](BOOT.md) · [Testing](TESTING.md) · [Partition map](PARTITIONS.md)
 
-The original p3 bootrec controller gives a directly derived recovery selector:
-it opens `/dev/input/event0`, waits for a **fresh** event for three seconds,
-and takes the p11 recovery branch if it received one (or if its cache recovery
-flag exists). Direct input evidence identifies that event device as
-`keypad-pmic-fuji`; the matching historical Hikari keypad source maps it to
-**Volume Up**. The operational sequence is therefore repeated Volume-Up
-presses from immediately before normal boot begins through its first 3–5
-seconds. A button held only before bootrec opens the event device may not
-produce the required event. The controller transiently shows red and blue LEDs
-during the window and blue after it chooses recovery.
+## Original p3 recovery selector
 
-This is `VERIFIED_FROM_CURRENT_P3_ARTIFACT` for the controller behaviour, with
-the exact key identity corroborated by a historical source. It is not yet
-`VERIFIED_DEVICE` as a direct S1Boot-to-recovery procedure: the attempted
-sequence subsequently booted legacy Android instead. A later manual TWRP entry
-also came after Android had run, so it could not preserve the secondboot
-post-mortem buffer. See the [post-mortem record](../research/device/current/boot/secondboot-postmortem.md).
+Offline inspection of the confirmed p3 \`bootrec\` controller established:
 
-TWRP is therefore `VERIFIED_DEVICE` as a reachable recovery environment, while
-its physical storage, whether it survives a p3 replacement, and whether it is
-an independent rollback route remain `UNKNOWN`. It must not be used as the
-sole rollback guarantee for a p3 replacement.
+- It listens to \`/dev/input/event0\` for a **fresh event** during a **three-second** window.
+- Device/input history maps that event to **Volume Up**.
+- A recovery choice reads an ELF from \`mmcblk0p11\` and starts its ramdisk \`/init\`; the p3-packaged TeamWin ramdisk is replaced in this path.
+- The expected key operation is to **repeat Volume Up** across the first 3–5 seconds, not merely hold it before the event device opens.
 
-## Mandatory gate before a future write
+> [!WARNING]
+> The input sequence was derived from the **p3 artifact** and matching historical sources, **not accepted as a reproducible S1Boot-to-recovery physical procedure**. An attempt booted Android instead. A separate later entry into TWRP confirms TWRP is reachable, **not independent of p3**.
 
-The project owner must explicitly approve each destructive stage.  A proposed
-stage must include:
+Read [sanitized p3 bootrec](../research/device/current/boot/p3-bootrec-sanitized.txt) and [recovery observations](../research/device/current/boot/recovery-characterization.md).
 
-1. exact connected-device identification and current partition-layout check;
-2. recovery/restore route proved independently of the target being changed;
-3. verified backups of critical accessible storage, with hashes and restore
-   procedure;
-4. single-partition whitelist, expected image hash and format validation;
-5. planned early/persistent/serial diagnostics and a rollback decision point.
+<details>
+<summary><strong>Read-only research boundaries</strong></summary>
 
-Never include TA, bootloader areas, partition tables, modem/baseband, radio/NV,
-calibration, recovery, or unknown partitions in a generic flashing operation.
-The only candidate for a later narrowly-scoped experiment is the confirmed
-legacy boot-role p3, and even that is prohibited until every gate above and
-explicit owner approval are satisfied.
+The read-only legacy investigation saw \`/fstab.semc\` and \`/init.semc.rc\`, but none of the checked conventional Android recovery files. Their absence cannot exclude other Sony FOTA paths.
 
-## Logging plan
+Private full-user-area backup physically covers p1–p15, but their **contents were not individually interpreted**; no claim is made about unobserved partition roles. p11's exact payload and recovery independence remain unverified.
 
-The legacy dmesg records a `ram_console` allocation at `0x7ffe0000` (128 KiB),
-which is evidence of a legacy persistent-log facility, not proof that a modern
-kernel can reuse it unchanged.  Future work should first determine current
-ramoops/pstore support and the bootloader’s preservation behaviour.  It must
-not reserve addresses by assumption or modify the current phone while this
-research authorization remains read-only.
+Android \`ro.bootloader=unknown\` does not establish lock state. Owner-supplied history and fastboot observations are relevant but not complete authorization.
+
+</details>
+
+## Mandatory gate for a future internal write
+
+- [ ] Exact connected-device identity and partition geometry checked.
+- [ ] **Independent** restore path proven without relying on the partition being modified.
+- [ ] Critical accessible storage backed up, checksums checked, restore documented.
+- [ ] One explicit target partition, artifact format/hash, and whitelist.
+- [ ] Early console / persistent logging, stop conditions and rollback decision recorded.
+- [ ] **Separate explicit owner approval for that specific destructive stage.**
+
+> [!IMPORTANT]
+> Only the confirmed legacy boot-role **p3** is even a *candidate* for a future narrow experiment, and it remains **prohibited** until **every gate above** is satisfied. **Never** include TA, bootloader, partition tables, modem/baseband, radio/NV, calibration, recovery or unknown partitions in a generic flash operation.
+
+## Crash logging
+
+Legacy dmesg records a 128 KiB \`ram_console\` allocation at \`0x7ffe0000\`. This does **not** prove a modern kernel can reuse that memory unchanged. Verify pstore/ramoops and bootloader retention before changing reservations; never assume an address is safe.
